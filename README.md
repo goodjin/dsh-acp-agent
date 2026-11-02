@@ -1,4 +1,4 @@
-# @goodjin/dsh-acp-agent
+# @goodjin2/dsh-acp-agent
 
 [English](README.md) | [中文](README.zh.md)
 
@@ -35,14 +35,14 @@ From GitHub Packages:
 echo "//npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN" >> ~/.npmrc
 echo "@goodjin:registry=https://npm.pkg.github.com" >> ~/.npmrc
 
-dsh plugin --profile web add @goodjin/dsh-acp-agent
+dsh plugin --profile web add @goodjin2/dsh-acp-agent
 ```
 
 Or add to your profile's `package.json`:
 
 ```json
 {
-  "dependencies": { "@goodjin/dsh-acp-agent": "^0.1.0" }
+  "dependencies": { "@goodjin2/dsh-acp-agent": "^0.1.0" }
 }
 ```
 

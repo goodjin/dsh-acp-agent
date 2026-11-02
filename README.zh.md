@@ -1,4 +1,4 @@
-# @goodjin/dsh-acp-agent
+# @goodjin2/dsh-acp-agent
 
 [English](README.md) | [中文](README.zh.md)
 
@@ -29,14 +29,14 @@
 ## 安装
 
 ```sh
-dsh plugin --profile web add @goodjin/dsh-acp-agent
+dsh plugin --profile web add @goodjin2/dsh-acp-agent
 ```
 
 或在 profile 的 `package.json` 里加：
 
 ```json
 {
-  "dependencies": { "@goodjin/dsh-acp-agent": "^0.1.0" }
+  "dependencies": { "@goodjin2/dsh-acp-agent": "^0.1.0" }
 }
 
 ```

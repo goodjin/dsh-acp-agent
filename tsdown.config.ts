@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { transform } from 'lightningcss'
 import { defineConfig } from 'tsdown'
 
-const id = '@threadharbor/dsh-acp-agent'
+const id = '@goodjin2/dsh-acp-agent'
 const root = fileURLToPath(new URL('.', import.meta.url))
 const cssPrefix = '\0threadharbor-css:'
 const cssSuffix = '.mjs'
