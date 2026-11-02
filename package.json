@@ -1,6 +1,6 @@
 {
   "name": "@goodjin/dsh-acp-agent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DSH plugin: ACP agent framework with GLM and MiniMax model clients",
   "repository": {
     "type": "git",
@@ -18,26 +18,61 @@
   "main": "./src/entry.ts",
   "types": "./src/entry.ts",
   "exports": {
-    ".": { "types": "./src/entry.ts", "default": "./src/entry.ts" },
-    "./index": { "types": "./src/index.ts", "default": "./src/index.ts" },
-    "./entry": { "types": "./src/entry.ts", "default": "./src/entry.ts" },
-    "./roster-filter": { "types": "./src/roster-filter.ts", "default": "./src/roster-filter.ts" },
-    "./zcode-quota": { "types": "./src/zcode-quota.ts", "default": "./src/zcode-quota.ts" },
-    "./minimaxi-quota": { "types": "./src/minimaxi-quota.ts", "default": "./src/minimaxi-quota.ts" },
-    "./codex-quota": { "types": "./src/usage-codex.ts", "default": "./src/usage-codex.ts" },
-    "./claude-quota": { "types": "./src/usage-claude.ts", "default": "./src/usage-claude.ts" },
-    "./mermaid-asset": { "types": "./src/mermaid-asset.ts", "default": "./src/mermaid-asset.ts" },
+    ".": {
+      "types": "./src/entry.ts",
+      "default": "./src/entry.ts"
+    },
+    "./index": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./entry": {
+      "types": "./src/entry.ts",
+      "default": "./src/entry.ts"
+    },
+    "./client": {
+      "types": "./src/client/index.ts",
+      "default": "./lib/client.js"
+    },
+    "./roster-filter": {
+      "types": "./src/roster-filter.ts",
+      "default": "./src/roster-filter.ts"
+    },
+    "./zcode-quota": {
+      "types": "./src/zcode-quota.ts",
+      "default": "./src/zcode-quota.ts"
+    },
+    "./minimaxi-quota": {
+      "types": "./src/minimaxi-quota.ts",
+      "default": "./src/minimaxi-quota.ts"
+    },
+    "./codex-quota": {
+      "types": "./src/usage-codex.ts",
+      "default": "./src/usage-codex.ts"
+    },
+    "./claude-quota": {
+      "types": "./src/usage-claude.ts",
+      "default": "./src/usage-claude.ts"
+    },
+    "./mermaid-asset": {
+      "types": "./src/mermaid-asset.ts",
+      "default": "./src/mermaid-asset.ts"
+    },
     "./package.json": "./package.json"
   },
   "files": [
-    "src/**/*.ts",
+    "LICENSE",
     "README.md",
-    "LICENSE"
+    "lib/client.js",
+    "lib/client.js.map",
+    "src/**/*.ts",
+    "tsdown.config.ts"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "build:client": "tsc -p tsconfig.json && tsdown"
   },
   "keywords": [
     "deepseek-harness",
@@ -54,20 +89,60 @@
   "publishConfig": {
     "registry": "https://npm.pkg.github.com",
     "access": "public"
-  },  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-chat",
+        "@deepseek-ai/dsh-client-ui-model-selection",
+        "@deepseek-ai/dsh-client-ui-workspace",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
     }
   },
   "dependencies": {
+    "@deepseek-ai/dsh-api-session-controller": "0.2.0-rc.2",
     "@deepseek-ai/schemastery": "^3.18.1",
     "mermaid": "^11.16.0",
-    "proper-lockfile": "^4.1.2"
+    "proper-lockfile": "^4.1.2",
+    "@deepseek-ai/dsh-session": "0.2.0-rc.2"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
     "@types/proper-lockfile": "^4.1.4",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^18.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "@types/node": "^24.0.0",
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-ui-layout": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-chat": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-model-selection": "0.2.0-rc.2",
+    "tsdown": "^0.15.0",
+    "lightningcss": "^1.30.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-client-ui-layout": ">=0.2.0-rc.2 <0.3",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.2.0-rc.2 <0.3",
+    "@deepseek-ai/dsh-client-ui-renderer": ">=0.2.0-rc.2 <0.3",
+    "@deepseek-ai/dsh-client-ui-sidebar": ">=0.2.0-rc.2 <0.3",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.2.0-rc.2 <0.3",
+    "react": "^18.2.0",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.2.0-rc.2 <0.3",
+    "@deepseek-ai/dsh-client-ui-chat": ">=0.2.0-rc.2 <0.3",
+    "@deepseek-ai/dsh-client-ui-model-selection": ">=0.2.0-rc.2 <0.3"
   }
 }

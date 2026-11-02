@@ -6,13 +6,25 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin tha
 
 ## What it does
 
+**Host side** (loads in the DSH process):
+
 - **ACP agent framework** — transports (stdio, WebSocket), per-agent dialects, frame projection, terminal & file sub-protocols
 - **GLM (ZCode) model client** — decrypts local ZCode login, calls GLM Coding Plan, streams responses
 - **MiniMax model client** — reads/refreshes MiniMax Code credentials, calls managed gateway
 - **Preset dispatch** — registers external agents as DSH presets, takes over sessions, routes turns, handles model switching
-- **Quota pills** — host-side GLM/MiniMax/Codex/Claude quota endpoints for the composer's quota display
+- **Quota endpoints** — host-side GLM/MiniMax/Codex/Claude quota routes (credentials never leave the host process)
 - **Roster filter** — hides marked presets from the new-session picker
 - **Mermaid asset** — serves the Mermaid rendering runtime on demand
+
+**Browser side** (`./client` entry, auto-loaded by DSH Web via the `dsh.client` declaration):
+
+- **Quota pills** — the GLM/MiniMax/Codex/Claude pills under the composer, polling the host routes
+- **Model visibility panel** — settings section to hide providers and models from the pickers
+- **Model label** — the composer's model chip
+- **Switch feedback** — handover notice and switch progress bar when the conversation moves to a new session
+- **Turn recovery** — the expand button for interrupted no-text turns; resend for requests that never entered the transcript
+- **ACP process view** — terminal/file step rendering for external agent turns
+- **Markdown turn & Mermaid** — read/expand deliverable text files in the conversation; render ```mermaid blocks
 
 ## Install
 
