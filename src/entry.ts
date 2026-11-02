@@ -76,6 +76,21 @@ export const Config: Schema<Config> = Schema.object({
   presetId: Schema.string().required(),
   /** Which agent this is; picks the frame dialect. */
   agent: Schema.string().required(),
+  /**
+   * 只挂名、不干活：这一行只为浏览器半边存在。
+   *
+   * DSH 不是看到 package.json 的 `dsh.client` 就装载浏览器包，它扫的是 Loader
+   * 的行；只有行的 name 恰好等于包名（裸包名）时，那个包才会被认成一行客户端
+   * 插件（`ClientModuleRegistry.resolveMeta` 经 `locatePkgJson` 解析，子路径行
+   * 不算）。本包的浏览器半边因此需要一条自己的行，而那条行不能挂 ACP 预设——
+   * 它没有 presetId 可以接管会话。带上这个字段的行在 `apply` 里立刻返回；
+   * presetId 与 agent 只是为了让 schema 通过。
+   *
+   * 2026-11-02 现场：挂载行从 threadharbor 搬进本仓库自带的 cordis.patch.yml
+   * 时漏了这一行，`window.__DSH_BOOT__` 里就没有本包——设置里的「屏蔽提供方与
+   * 模型」、配额胶囊、ACP 过程视图一起安静消失，宿主日志一个字都没有。
+   */
+  clientOnly: Schema.boolean(),
   url: Schema.string(),
   command: Schema.string(),
   /**
@@ -133,6 +148,8 @@ export const Config: Schema<Config> = Schema.object({
 export type Config = {
   presetId: string
   agent: string
+  /** 只挂名的行：见 schema 里的同名字段，apply 读到它就什么都不做。 */
+  clientOnly?: boolean
   url?: string
   command?: string
   /**
@@ -170,6 +187,9 @@ export type Config = {
  * run before the rest of the host has settled.
  */
 export function apply(ctx: unknown, config: Config): void {
+  // 只挂名的行（浏览器半边的 Loader 行）：调度、审批、会话接管一概不碰。
+  // 早于 markRosterHidden 返回，免得把一个不存在的 preset id 塞进名册标记里。
+  if (config.clientOnly === true) return
   if (config.hideFromRoster === true) markRosterHidden(config.presetId)
   const host = ctx as {
     on(event: 'agent/created', handler: (payload: { agent: unknown }) => void): unknown

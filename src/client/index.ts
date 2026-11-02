@@ -76,8 +76,15 @@ function safeRegister(label: string, fn: () => void | (() => void), log: Log): v
   }
 }
 
-export function apply(ctx: any, _config: unknown, log: Log): () => void {
+export function apply(ctx: any, _config: unknown, log?: Log): () => void {
   const t: RuntimeT = (key, params) => fallbackT(key, params)
+  // cordis 只把 (ctx, config) 交给插件，第三个参数从来没有人传。少了这个兜底，
+  // 任何一处 safeRegister 报错都会在 catch 里再抛一个 TypeError——整条客户端
+  // entry 变成 failed，而 boot 的 activation audit 会连带把整个页面判成失败。
+  // 也就是说：一个本可以只丢一个表面的错误，会变成打不开界面。
+  const say: Log = typeof log === 'function'
+    ? log
+    : (message: string) => { console.warn(`[threadharbor] ${message}`) }
 
   // Register locale dictionaries
   const registerLocale = propertyOf(ctx, 'locale')
@@ -92,7 +99,7 @@ export function apply(ctx: any, _config: unknown, log: Log): () => void {
   safeRegister('model label', () => {
     const dispose = registerModelLabel(ctx)
     return dispose
-  }, log)
+  }, say)
 
   // Quota pills below composer
   safeRegister('quota pills', () => {
@@ -100,54 +107,54 @@ export function apply(ctx: any, _config: unknown, log: Log): () => void {
     const poller = createQuotaPoller({ fetchQuota })
     const dispose = registerQuotaDockPills(ctx.slots, poller, {})
     return dispose
-  }, log)
+  }, say)
 
   // Interrupted turn recovery
   safeRegister('interrupted turn recovery', () => {
     return registerInterruptedTurnRecovery(ctx)
-  }, log)
+  }, say)
 
   // Markdown turn readers
   safeRegister('markdown turn', () => {
     const readers = createMarkdownTurnReaders(ctx)
     const dispose = registerMarkdownTurn(ctx, readers)
     return dispose
-  }, log)
+  }, say)
 
   // Mermaid diagrams
   safeRegister('mermaid', () => {
     startMermaidDiagrams(ctx); return () => {}
-  }, log)
+  }, say)
 
   // Handover card (agent switch notification)
   safeRegister('handover card', () => {
     const dispose = registerAgentSwitchHandoverSurface(ctx)
     return dispose
-  }, log)
+  }, say)
 
   // Lost input surface
   safeRegister('lost input', () => {
     return registerLostInputSurface(ctx)
-  }, log)
+  }, say)
 
   // ACP process view
   safeRegister('acp process surface', () => {
     return registerAcpProcessSurface(ctx)
-  }, log)
+  }, say)
 
   // Switch progress bar
   safeRegister('switch progress', () => {
     const store = createSwitchProgressStore()
     startSwitchProgressSurface({ ctx: ctx, store, slots: (ctx).slots })
     return () => {}
-  }, log)
+  }, say)
 
   // ACP visibility: store + catalog + filter + settings section
   safeRegister('acp visibility', () => {
     const storage = { getItem: (k: string) => localStorage.getItem(k), setItem: (k: string, v: string) => localStorage.setItem(k, v) }
-    const visibility = startAcpVisibility(storage, (msg) => log(`acp visibility: ${msg}`))
+    const visibility = startAcpVisibility(storage, (msg) => say(`acp visibility: ${msg}`))
     const catalog = createAcpCatalogStore(ctx)
-    const report: Log = (msg) => log(`acp visibility: ${msg}`)
+    const report: Log = (msg) => say(`acp visibility: ${msg}`)
 
     // Install picker filter
     mountAcpVisibilityFilter(ctx, visibility, report)
@@ -160,7 +167,7 @@ export function apply(ctx: any, _config: unknown, log: Log): () => void {
     registerAcpVisibilitySection(slots as never, face as never, () => t('acpVisibility.label'))
 
     return () => {}
-  }, log)
+  }, say)
 
   return () => {}
 }

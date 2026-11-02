@@ -12,6 +12,18 @@
 # 用法：把下面的 insert 段合并进你的 profile 的 cordis.patch.yml。
 
 - insert:
+    # 浏览器半边的挂载行。DSH 不按 package.json 的 dsh.client 自动装载浏览器包：
+    # 客户端模块系统扫的是 Loader 的行，只有 name 恰好等于包名（裸包名）时那个包
+    # 才会进 window.__DSH_BOOT__（子路径行，比如下面的 /roster-filter，不算）。
+    # 这一行只挂名不干活（clientOnly），presetId/agent 只为过 schema 校验。
+    # 少了它：设置里的「屏蔽提供方与模型」、配额胶囊、ACP 过程视图一起消失，
+    # 宿主日志一个字都没有。
+    - id: acp-agent-client
+      name: '@goodjin2/dsh-acp-agent'
+      config:
+        clientOnly: true
+        presetId: acp-agent-client
+        agent: codex
     # 名册过滤器不点名。每个要藏起的 preset 在自己的 binding 上打
     # hideFromRoster: true；过滤器只认这个标记（以及行上的同名字段）。
     # 新增 agent 只要打标记，不必改过滤器配置。内部 list() 仍不过滤。
