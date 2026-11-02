@@ -1,7 +1,7 @@
 /**
  * Agent-related locale keys extracted from dsh-client for the ACP agent plugin.
  * Only keys used by the browser-side agent UI (quota pills, visibility panel,
- * model label, handover, switch progress, recovery, markdown turn, mermaid).
+ * model label, handover, switch progress, recovery, markdown turn).
  */
 
 export type ProgressKey = Extract<ClientLocaleKey, `progress.${string}`>
@@ -38,7 +38,6 @@ export type ClientLocaleKey =
   | 'markdownTurn.newSession' | 'markdownTurn.newSessionPromptHeader' | 'markdownTurn.newSessionFailed'
   | 'markdownTurn.copyFailed' | 'markdownTurn.filesAll' | 'markdownTurn.filesAllAria'
   | 'markdownTurn.filesCollapseAria'
-  | 'mermaid.label' | 'mermaid.diagram' | 'mermaid.source' | 'mermaid.toggleNamed'
   | 'acpVisibility.label' | 'acpVisibility.title' | 'acpVisibility.intro'
   | 'acpVisibility.summary' | 'acpVisibility.summaryNone' | 'acpVisibility.reset'
   | 'acpVisibility.reload' | 'acpVisibility.retry' | 'acpVisibility.loading'
@@ -127,10 +126,6 @@ export const zh: Record<ClientLocaleKey, string> = {
   'markdownTurn.filesAll': '全部 {count} 个文件',
   'markdownTurn.filesAllAria': '展开全部 {count} 个文件',
   'markdownTurn.filesCollapseAria': '收起文件列表',
-  'mermaid.label': 'Mermaid',
-  'mermaid.diagram': '图表',
-  'mermaid.source': '源码',
-  'mermaid.toggleNamed': '切换 Mermaid 图与源码',
   'acpVisibility.label': '提供方与模型',
   'acpVisibility.title': '屏蔽提供方与模型',
   'acpVisibility.intro': '被屏蔽的提供方不会出现在模型选择里（输入框的模型入口与 /model 弹窗）；提供方未被屏蔽时，也可以只屏蔽它下面的个别模型。屏蔽只作用于选择列表：官方设置里的「模型」照旧列出全部、密钥不受影响，随时可以恢复。选择保存在这台机器上，换浏览器不会丢。',
@@ -233,10 +228,6 @@ export const en: Record<ClientLocaleKey, string> = {
   'markdownTurn.filesAll': 'All {count} files',
   'markdownTurn.filesAllAria': 'Show all {count} files',
   'markdownTurn.filesCollapseAria': 'Collapse the file list',
-  'mermaid.label': 'Mermaid',
-  'mermaid.diagram': 'Diagram',
-  'mermaid.source': 'Source',
-  'mermaid.toggleNamed': 'Switch between the Mermaid diagram and its source',
   'acpVisibility.label': 'Providers & models',
   'acpVisibility.title': 'Hide providers and models',
   'acpVisibility.intro': 'A hidden provider disappears from the model pickers (the composer model menu and the /model popup); while a provider stays listed, individual models can be hidden too. Hiding only affects the pickers: the official Models settings keep listing everything and no key is touched, so restoring never asks for a key again. This choice is stored on this machine and survives a browser switch.',

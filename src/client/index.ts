@@ -36,7 +36,6 @@ import { AgentSwitchHandoverCard, agentSwitchHandoverDefinition, registerAgentSw
 import { registerLostInputSurface } from './lost-input.ts'
 import { registerAcpProcessSurface } from './acp-process-surface.tsx'
 import { createSwitchProgressStore, startSwitchProgressSurface } from './switch-progress.ts'
-import { startMermaidDiagrams } from './mermaid.ts'
 import { NAMESPACE, fallbackT, zh } from './locales.ts'
 import type { RuntimeT } from './locales.ts'
 import { createElement } from 'react'
@@ -119,11 +118,6 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
     const readers = createMarkdownTurnReaders(ctx)
     const dispose = registerMarkdownTurn(ctx, readers)
     return dispose
-  }, say)
-
-  // Mermaid diagrams
-  safeRegister('mermaid', () => {
-    startMermaidDiagrams(ctx); return () => {}
   }, say)
 
   // Handover card (agent switch notification)

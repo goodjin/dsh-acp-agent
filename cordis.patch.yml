@@ -2,7 +2,7 @@
 #
 # 这是 ACP 接入层 + 模型客户端 + preset 框架的浏览器/宿主组合行。它把外部 agent
 # （codex/claude/grok/cursor/zcode/minimax/qoder 走 ACP，zcode/minimaxi 是模型插件）
-# 接进 DSH，并提供名册过滤器、各家配额胶囊后端与 mermaid 资源。
+# 接进 DSH，并提供名册过滤器与各家配额胶囊后端。
 #
 # 历史上这些挂载行住在 threadharbor（@goodjin2/dsh-threadharbor）的
 # cordis.patch.yml 里。2026-11 调整边界：threadharbor 收敛为纯多主机插件
@@ -49,11 +49,8 @@
     # 机器上没有凭据，胶囊安静地不出现（上游接口自带 429 冷却，缓存 2 分钟）。
     - id: threadharbor-claude-quota
       name: '@goodjin2/dsh-acp-agent/claude-quota'
-    # Mermaid 运行时的同源静态路由：会话区里的 ```mermaid 代码块在第一次出现时
-    # 才注入 <script> 加载这个文件（客户端包不内联 3.5 MB 的 mermaid）；资产
-    # 来自本包的 mermaid 依赖，与页面同一登录准入，缓存走 ETag/304。
-    - id: threadharbor-mermaid-asset
-      name: '@goodjin2/dsh-acp-agent/mermaid-asset'
+    # Mermaid 渲染已迁往 @goodjin2/dsh-chat-area（浏览器渲染 + /threadharbor/mermaid.js
+    # 宿主路由都在那边），本包不再提供 mermaid 资产或渲染。
     # /commit-merge-push 已独立出仓（goodjin/dsh-command-commit-merge-push），
     # 由 profile 单独安装挂载，不随本仓库分发。
     - id: acp-codex

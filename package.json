@@ -54,10 +54,6 @@
       "types": "./src/usage-claude.ts",
       "default": "./src/usage-claude.ts"
     },
-    "./mermaid-asset": {
-      "types": "./src/mermaid-asset.ts",
-      "default": "./src/mermaid-asset.ts"
-    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -113,7 +109,6 @@
   "dependencies": {
     "@deepseek-ai/dsh-api-session-controller": "0.2.0-rc.2",
     "@deepseek-ai/schemastery": "^3.18.1",
-    "mermaid": "^11.16.0",
     "proper-lockfile": "^4.1.2",
     "@deepseek-ai/dsh-session": "0.2.0-rc.2"
   },
