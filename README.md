@@ -16,7 +16,13 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin tha
 
 ## Install
 
+From GitHub Packages:
+
 ```sh
+# Set up auth (one-time)
+echo "//npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN" >> ~/.npmrc
+echo "@goodjin:registry=https://npm.pkg.github.com" >> ~/.npmrc
+
 dsh plugin --profile web add @goodjin/dsh-acp-agent
 ```
 
@@ -36,6 +42,13 @@ Then add the agent presets you want to your profile's `cordis.patch.yml`. See th
 - Node ≥ 22.19 (or ≥ 24)
 - For GLM: ZCode desktop app installed and logged in
 - For MiniMax: MiniMax Code installed and logged in
+
+## Publish
+
+```sh
+gh auth refresh -h github.com -s write:packages
+NODE_AUTH_TOKEN=$(gh auth token) npm publish --registry https://npm.pkg.github.com
+```
 
 ## License
 

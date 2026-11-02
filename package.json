@@ -52,9 +52,9 @@
   "author": "goodjin",
   "license": "MIT",
   "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
     "access": "public"
-  },
-  "dsh": {
+  },  "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
