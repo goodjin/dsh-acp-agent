@@ -43,6 +43,8 @@ dsh plugin --profile web add @goodjin2/dsh-acp-agent
 
 然后在 profile 的 `cordis.patch.yml` 里加入你需要的 agent preset 行。详细配置见[安装指南](https://github.com/goodjin/threadharbor/blob/main/docs/install-plugins.zh.md)。
 
+本仓库自带 `cordis.patch.yml`，含七条 agent preset 行与宿主侧的 `roster-filter` / `zcode-quota` / `mermaid-asset` 挂载（2026-11 从 threadharbor 伞仓迁来）。
+
 ## 要求
 
 - DSH ≥ 0.2.1-rc.2

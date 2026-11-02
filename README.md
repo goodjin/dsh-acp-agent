@@ -46,7 +46,7 @@ Or add to your profile's `package.json`:
 }
 ```
 
-Then add the agent presets you want to your profile's `cordis.patch.yml`. See the [installation guide](https://github.com/goodjin/threadharbor/blob/main/docs/install-plugins.zh.md) for details.
+Then add the agent presets you want to your profile's `cordis.patch.yml`. This repo ships its own `cordis.patch.yml` with the seven agent preset rows plus the host-side `roster-filter` / `zcode-quota` / `mermaid-asset` mounts (moved here from the threadharbor umbrella in 2026-11). See the [installation guide](https://github.com/goodjin/threadharbor/blob/main/docs/install-plugins.zh.md) for details.
 
 ## Requirements
 

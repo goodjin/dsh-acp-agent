@@ -63,6 +63,7 @@
   "files": [
     "LICENSE",
     "README.md",
+    "cordis.patch.yml",
     "lib/client.js",
     "lib/client.js.map",
     "src/**/*.ts",
