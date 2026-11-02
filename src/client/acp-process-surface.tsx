@@ -1,5 +1,4 @@
-import { createElement, useCallback, useEffect, useState } from 'react'
-import type { ComponentType } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConversationNodeDefinition, ConversationViewDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -9,13 +8,28 @@ import { acpProcessDefinition } from './acp-process-segments.ts'
 import { wrapChatView } from './acp-process-view.ts'
 import type { SegmentChatData } from './acp-process-view.ts'
 import type { ProcessSegment } from './acp-process-segments.ts'
-import { AnswerCard } from './answer-card.tsx'
-import { createMarkdownTurnReaders } from './markdown-turn-sources.ts'
-import type { MarkdownTurnReaders } from './markdown-turn-sources.ts'
-import { NAMESPACE, fallbackT } from './locales.ts'
-import type { RuntimeT } from './locales.ts'
 import { defaultLinkOpenMode, httpLinkHref, openInBrowser } from './link-open.ts'
 import styles from './acp-process.module.css'
+
+/**
+ * ACP 进程段的宿主半边。
+ *
+ * 这里只做两件 ACP 专属的事：
+ * 1. 把 chat 视图的 builder 包一层（`wrapChatView`），把带 ACP 段的助手步投影成
+ *    带 `acpProcessSegment` 的节点；并注册 `acpProcessDefinition` 折叠 ACP 事件。
+ * 2. 把进程段渲染器 `AcpProcessComponent` 注册进座位
+ *    {@link SEGMENT_RENDERER_SLOT}，由 `@goodjin2/dsh-chat-area` 的
+ *    `assistant-step` 包装在渲染时取用（见 conversation-surfaces.tsx 的说明）。
+ *
+ * 通用的答案卡片与会话尾部文件卡片 2026-11 迁去了 chat-area；本包不再包
+ * `assistant-step`、也不再管答案步。
+ */
+
+/**
+ * ACP 进程段渲染器的座位名。必须与 chat-area 的 `conversation-surfaces.tsx` 里的
+ * `SEGMENT_RENDERER_SLOT` 字面一致（跨包不能共享常量）。
+ */
+export const SEGMENT_RENDERER_SLOT = 'conversation.chat.node.acp-segment-renderer'
 
 /**
  * 文本块渲染结果：http(s) 链接 hover 时浮出「右侧打开 / 浏览器打开」两个按钮，
@@ -106,32 +120,6 @@ function LinkTextBlock({ text, labels }: { readonly text: string; readonly label
   )
 }
 
-/**
- * 当前会话编号。chat 节点的 view props 不带 sessionId，但会话根节点把它标在
- * `data-conversation-session` 上（和 markdown-turn 找滚动层同一套 DOM 读法）。
- * 拿不到返回 undefined，结果卡的编辑入口据此不放。
- */
-function currentSessionIdFromDom(): string | undefined {
-  if (typeof document === 'undefined') return undefined
-  const node = document.querySelector('[data-conversation-session]')
-  const value = node?.getAttribute('data-conversation-session')
-  return value === null || value === '' ? undefined : value
-}
-
-/** 绑定本插件词典的 t：宿主 locale 服务给出 bind，缺席则 undefined。 */
-function localeBindOf(ctx: Surface): RuntimeT | undefined {
-  const service = ctx.get('locale')
-  if (service === null || typeof service !== 'object') return undefined
-  const bind = (service as { bind?: unknown }).bind
-  if (typeof bind !== 'function') return undefined
-  try {
-    const bound = (bind as (ns: string) => unknown)(NAMESPACE)
-    return typeof bound === 'function' ? (bound as RuntimeT) : undefined
-  } catch {
-    return undefined
-  }
-}
-
 /** The segment is one presentation unit; individual deltas never create separate rows. */
 export function AcpProcessBlock({ segment, t }: { readonly segment: ProcessSegment; readonly t: ChatNodeViewProps<'assistant-step'>['t'] }) {
   // The running host adds these shared Chat labels after the pinned 0.2.0 types.
@@ -159,21 +147,22 @@ type Registry = {
   events: { register(definition: ConversationNodeDefinition): () => void }
 }
 
-/** Reuse the registered native renderer and all its injected hooks for ordinary messages. */
+/**
+ * 注册 ACP 进程表面：包 chat 视图（注入 `acpProcessSegment`）+ 注册进程段渲染器到
+ * chat-area 的挂钩座位。
+ *
+ * 本函数**不再**包 `assistant-step`——那一层（含通用答案卡片）归 chat-area，它会来
+ * 这个座位取 `AcpProcessComponent` 渲染带 `acpProcessSegment` 的节点。
+ */
 export function registerAcpProcessSurface(ctx: Surface): void {
   const ui = ctx.get('uiConversation') as Registry | undefined
   const slots = ctx.slots as Pick<SlotCore, 'entries' | 'subscribe'> & {
-    register(options: { name: string; key: string; priority: number; locale?: string; inject?: StoredEntry['inject'] }, component: unknown): () => void
+    register(options: { name?: string; key?: string; priority?: number; id?: string; order?: number; locale?: string; inject?: StoredEntry['inject'] }, component: unknown): () => void
+    inject(key: string, callback: () => unknown): unknown
   }
   if (typeof ui?.views?.entries !== 'function' || typeof ui.views.subscribe !== 'function'
     || typeof ui.events?.register !== 'function' || typeof slots?.entries !== 'function'
     || typeof slots.subscribe !== 'function' || typeof slots.register !== 'function') return
-  // 结果卡的编辑功能复用文件阅读区那套 readers：发送到会话 / 新建会话都走这里。
-  const readers: MarkdownTurnReaders = createMarkdownTurnReaders(() => ctx.get('remote'))
-  // 结果卡文案（编辑/发送/取消/复制等）走本插件词典，不是 chat 节点自带的 t——
-  // 后者不认 answerCard.* / markdownTurn.*，会把 key 原样显示出来。绑定本插件的
-  // NAMESPACE，拿到能翻译这些键的 t；服务缺席时退化到词典原文（fallbackT）。
-  const dshT: RuntimeT = localeBindOf(ctx) ?? fallbackT
   ctx.effect(() => {
     let active: ConversationViewDefinition | undefined
     let restore: (() => void) | undefined
@@ -190,47 +179,16 @@ export function registerAcpProcessSurface(ctx: Surface): void {
     }
     const unsubscribeView = ui.views.subscribe(attachView)
     attachView()
-    let removeRenderer: (() => void) | undefined
-    let originalComponent: unknown
-    let installing = false
-    const attachRenderer = (): void => {
-      if (installing) return
-      const entry = slots.entries('conversation.chat.node').find(candidate => candidate.options.key === 'assistant-step' && (candidate.options.priority ?? 0) >= 0)
-      if (entry === undefined || entry.component === originalComponent) return
-      installing = true
-      try {
-        removeRenderer?.()
-        originalComponent = entry.component
-        const Native = entry.component as ComponentType<ChatNodeViewProps<'assistant-step'>>
-        const Renderer = (props: ChatNodeViewProps<'assistant-step'>) => {
-          const segment = (props.node.data as SegmentChatData).acpProcessSegment
-          if (segment !== undefined) return <AcpProcessBlock segment={segment} t={props.t} />
-          // The turn-process projection marks the finalized answer step. Wrapping it
-          // here boxes the final answer for every session type (plain DSH and ACP);
-          // thinking stays inside and keeps its native fold/expand behavior.
-          const answerStep = props.turnProcess?.spec.answerStep
-          const isAnswer = answerStep != null && answerStep === props.node.data.step
-          const native = createElement(Native, props)
-          if (!isAnswer) return native
-          const hasProse = props.node.data.blocks.some(block =>
-            (block.kind === 'text' || block.kind === 'reasoning') &&
-            (block.text?.trim() ?? '') !== '')
-          return hasProse
-            ? <AnswerCard blocks={props.node.data.blocks} sessionId={currentSessionIdFromDom()} readers={readers} t={dshT as (key: string) => string}>{native}</AnswerCard>
-            : native
-        }
-        removeRenderer = slots.register({
-          name: 'conversation.chat.node', key: 'assistant-step', priority: -20,
-          ...(entry.locale === undefined ? {} : { locale: entry.locale }),
-          ...(entry.inject === undefined ? {} : { inject: entry.inject }),
-        }, Renderer)
-      } finally { installing = false }
-    }
-    const unsubscribeRenderer = slots.subscribe('conversation.chat.node', attachRenderer)
-    attachRenderer()
+
+    // 把进程段渲染器接进 chat-area 的 assistant-step 包装：它渲染时按座位名取来用。
+    const removeHook = slots.inject(SEGMENT_RENDERER_SLOT, () => slots.register(
+      { id: 'threadharbor-acp-segment-renderer', order: 0 },
+      AcpProcessBlock,
+    ))
+
     return () => {
-      unsubscribeView(); unsubscribeRenderer()
-      restore?.(); removeDefinition?.(); removeRenderer?.()
+      unsubscribeView(); restore?.(); removeDefinition?.()
+      if (typeof removeHook === 'function') removeHook()
     }
   }, 'threadharbor ACP process segments')
 }

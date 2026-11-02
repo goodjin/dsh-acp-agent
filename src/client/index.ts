@@ -25,8 +25,6 @@ import type { PropsRuntime, SlotCore, SlotMap } from '@deepseek-ai/dsh-client-ui
 import { registerModelLabel } from './model-label.tsx'
 import { createQuotaPoller, registerQuotaDockPills, routeQuotaFetcher } from './quota-pill.ts'
 import { registerInterruptedTurnRecovery } from './interrupted-turn-recovery.ts'
-import { createMarkdownTurnReaders } from './markdown-turn-sources.ts'
-import { registerMarkdownTurn } from './markdown-turn.tsx'
 import { registerAcpVisibilitySection } from './acp-visibility-panel.tsx'
 import { startAcpVisibility } from './acp-visibility.ts'
 import type { AcpVisibilityStore } from './acp-visibility.ts'
@@ -111,13 +109,6 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
   // Interrupted turn recovery
   safeRegister('interrupted turn recovery', () => {
     return registerInterruptedTurnRecovery(ctx)
-  }, say)
-
-  // Markdown turn readers
-  safeRegister('markdown turn', () => {
-    const readers = createMarkdownTurnReaders(ctx)
-    const dispose = registerMarkdownTurn(ctx, readers)
-    return dispose
   }, say)
 
   // Handover card (agent switch notification)
