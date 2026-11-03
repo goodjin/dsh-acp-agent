@@ -116,19 +116,27 @@ export async function detectNamespace(
  * 目录与原因，不含任何令牌；要不要给授权链接由上层决定（见 login.ts）。
  */
 export class MiniMaxLoginRequiredError extends Error {
-  constructor(
-    /** `missing`：这台机器上根本没有 MiniMax Code 登录；`expired`：有登录，但刷新失败。 */
-    readonly reason: 'missing' | 'expired',
-    readonly dataDir: string,
-    readonly region?: AuthRegion,
-    readonly buildEnv?: AuthBuildEnv,
-  ) {
+  /** `missing`：这台机器上根本没有 MiniMax Code 登录；`expired`：有登录，但刷新失败。 */
+  readonly reason: 'missing' | 'expired'
+  readonly dataDir: string
+  readonly region: AuthRegion | undefined
+  readonly buildEnv: AuthBuildEnv | undefined
+
+  // 注意：**不要**用构造函数参数属性（`constructor(readonly reason: …)`）。
+  // DSH 载入插件的 .ts 走 Node 的 strip-only 类型擦除，参数属性不是可擦除语法，
+  // 整个模块会 import 失败——行拿不到 fiber，宿主与浏览器半边一起消失，而日志里
+  // 一个字都没有（2026-11-03 现场：设置里的屏蔽页与模型前缀同时不见了）。
+  constructor(reason: 'missing' | 'expired', dataDir: string, region?: AuthRegion, buildEnv?: AuthBuildEnv) {
     super(reason === 'missing'
       ? `no MiniMax Code login under ${dataDir}. Open MiniMax Code, log in, then try again — `
         + 'this plugin answers with the same login, so there is no separate key to configure.'
       : `the MiniMax Code login under ${dataDir} can no longer be refreshed (expired or revoked). `
         + 'Log in again with MiniMax Code — or open the authorization link this plugin prints — '
         + 'and the next call picks the new login up; there is no separate key to configure.')
+    this.reason = reason
+    this.dataDir = dataDir
+    this.region = region
+    this.buildEnv = buildEnv
     this.name = 'MiniMaxLoginRequiredError'
   }
 }

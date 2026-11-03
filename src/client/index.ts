@@ -35,7 +35,7 @@ import { AgentSwitchHandoverCard, agentSwitchHandoverDefinition, registerAgentSw
 import { registerLostInputSurface } from './lost-input.ts'
 import { registerAcpProcessSurface } from './acp-process-surface.tsx'
 import { createSwitchProgressStore, startSwitchProgressSurface } from './switch-progress.ts'
-import { NAMESPACE, fallbackT, zh } from './locales.ts'
+import { NAMESPACE, en, fallbackT, zh } from './locales.ts'
 import type { RuntimeT } from './locales.ts'
 import { createElement } from 'react'
 
@@ -84,12 +84,27 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
     ? log
     : (message: string) => { console.warn(`[threadharbor] ${message}`) }
 
-  // Register locale dictionaries
+  // 注册本插件的词典。
+  //
+  // 签名是 `register(namespace, { locale: dict })`：早先按 `register({ [NS]: {...} })`
+  // 单参数调用，namespace 位置收到的是对象、第二参数是 undefined，内部
+  // `Object.entries(undefined)` 直接抛 TypeError——被下面这层 try 吞掉，于是座位里
+  // 的 `t` 永远解析不到词条，界面上看到的是 `quota.fiveHour.label` 这样的键名。
+  // 词典本身带 disposer，挂到 ctx.effect 上，热替换时随插件一起撤。
   const registerLocale = propertyOf(ctx, 'locale')
   if (registerLocale !== undefined && typeof registerLocale === 'object') {
     const register = propertyOf(registerLocale, 'register')
     if (typeof register === 'function') {
-      (register as Function).call(registerLocale, { [NAMESPACE]: { zh: { ...zh }, en: {} } })
+      try {
+        const dispose = (register as Function).call(registerLocale, NAMESPACE, { zh: { ...zh }, en: { ...en } })
+        const effect = boundMethod(ctx, 'effect')
+        if (typeof dispose === 'function' && effect !== undefined) {
+          (effect as Function).call(ctx, () => dispose, 'threadharbor: locale dictionaries')
+        }
+      } catch (error) {
+        // 重复注册（同一命名空间已有该语言）也会抛：说一声，别静默。
+        say(`locale dictionaries: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   }
 
