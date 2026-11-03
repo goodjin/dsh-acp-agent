@@ -165,7 +165,10 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
   safeRegister('acp visibility', () => {
     const storage = { getItem: (k: string) => localStorage.getItem(k), setItem: (k: string, v: string) => localStorage.setItem(k, v) }
     const visibility = startAcpVisibility(storage, (msg) => say(`acp visibility: ${msg}`))
-    const catalog = createAcpCatalogStore(ctx)
+    // 目录 store 要的是「读一次目录」的函数，不是 ctx：早先这里传了 ctx，于是
+    // store 里 `read()` 调的是那个对象 → TypeError，设置页永远显示
+    // 「读取模型目录失败：e is not a function」（2026-11-03 现场，压缩后的名字）。
+    const catalog = createAcpCatalogStore(catalogReaderOf(ctx))
     const report: Log = (msg) => say(`acp visibility: ${msg}`)
 
     // Install picker filter

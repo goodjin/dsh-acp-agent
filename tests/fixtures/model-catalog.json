@@ -1,0 +1,364 @@
+{
+ "default": {
+  "provider": "deepseek-account",
+  "model": "deepseek-flash",
+  "reasoningEffort": "high"
+ },
+ "routableProviders": [
+  "deepseek-account",
+  "acp:acp-codex",
+  "acp:acp-claude"
+ ],
+ "groups": [
+  {
+   "id": "deepseek-account",
+   "name": "DeepSeek Account",
+   "models": [
+    {
+     "id": "deepseek-flash",
+     "name": "DeepSeek-V4.1-Flash",
+     "reasoning": {
+      "efforts": [
+       {
+        "id": "off",
+        "name": "Off",
+        "description": "Use for simple tasks that do not need reasoning."
+       },
+       {
+        "id": "low",
+        "name": "Low",
+        "description": "Prefer for routine or latency-sensitive tasks."
+       },
+       {
+        "id": "high",
+        "name": "High",
+        "description": "The default balance for most tasks."
+       },
+       {
+        "id": "max",
+        "name": "Max",
+        "description": "Reserve for the hardest quality-first tasks."
+       }
+      ],
+      "defaultEffort": "high"
+     }
+    },
+    {
+     "id": "deepseek-v4-pro",
+     "name": "DeepSeek-V4-Pro",
+     "description": "Stronger agentic coding, knowledge, and difficult reasoning; suited to complex or quality-critical tasks at higher cost.",
+     "reasoning": {
+      "efforts": [
+       {
+        "id": "off",
+        "name": "Off",
+        "description": "Use for simple tasks that do not need reasoning."
+       },
+       {
+        "id": "low",
+        "name": "Low",
+        "description": "Prefer for routine or latency-sensitive tasks."
+       },
+       {
+        "id": "high",
+        "name": "High",
+        "description": "The default balance for most tasks."
+       },
+       {
+        "id": "max",
+        "name": "Max",
+        "description": "Reserve for the hardest quality-first tasks."
+       }
+      ],
+      "defaultEffort": "high"
+     }
+    }
+   ]
+  },
+  {
+   "id": "acp:acp-codex",
+   "name": "Codex",
+   "models": [
+    {
+     "id": "gpt-6.1-sol",
+     "name": "6.1 Sol",
+     "description": "Latest workhorse model for coding and everyday work. Fast responses with lighter reasoning",
+     "reasoning": {
+      "efforts": [
+       {
+        "id": "low",
+        "name": "Low"
+       },
+       {
+        "id": "medium",
+        "name": "Medium"
+       },
+       {
+        "id": "high",
+        "name": "High"
+       },
+       {
+        "id": "xhigh",
+        "name": "xHigh"
+       },
+       {
+        "id": "max",
+        "name": "Max"
+       },
+       {
+        "id": "ultra",
+        "name": "Ultra"
+       }
+      ]
+     }
+    },
+    {
+     "id": "gpt-6-astra",
+     "name": "6 Astra",
+     "description": "Frontier intelligence for the most demanding tasks. Fast responses with lighter reasoning",
+     "reasoning": {
+      "efforts": [
+       {
+        "id": "low",
+        "name": "Low"
+       },
+       {
+        "id": "medium",
+        "name": "Medium"
+       },
+       {
+        "id": "high",
+        "name": "High"
+       },
+       {
+        "id": "xhigh",
+        "name": "xHigh"
+       },
+       {
+        "id": "max",
+        "name": "Max"
+       },
+       {
+        "id": "ultra",
+        "name": "Ultra"
+       }
+      ]
+     }
+    },
+    {
+     "id": "gpt-6.1-terra",
+     "name": "6.1 Terra",
+     "description": "GPT-6.1 Terra Codex model. Fast responses with lighter reasoning",
+     "reasoning": {
+      "efforts": [
+       {
+        "id": "low",
+        "name": "Low"
+       },
+       {
+        "id": "medium",
+        "name": "Medium"
+       },
+       {
+        "id": "high",
+        "name": "High"
+       },
+       {
+        "id": "xhigh",
+        "name": "xHigh"
+       },
+       {
+        "id": "max",
+        "name": "Max"
+       },
+       {
+        "id": "ultra",
+        "name": "Ultra"
+       }
+      ]
+     }
+    },
+    {
+     "id": "gpt-6-sol",
+     "name": "6 Sol",
+     "description": "Previous generation workhorse model. Fast responses with lighter reasoning",
+     "reasoning": {
+      "efforts": [
+       {
+        "id": "low",
+        "name": "Low"
+       },
+       {
+        "id": "medium",
+        "name": "Medium"
+       },
+       {
+        "id": "high",
+        "name": "High"
+       },
+       {
+        "id": "xhigh",
+        "name": "xHigh"
+       },
+       {
+        "id": "max",
+        "name": "Max"
+       },
+       {
+        "id": "ultra",
+        "name": "Ultra"
+       }
+      ]
+     }
+    },
+    {
+     "id": "gpt-6-luna",
+     "name": "6 Luna",
+     "description": "Fast and affordable model for easier tasks. Fast responses with lighter reasoning",
+     "reasoning": {
+      "efforts": [
+       {
+        "id": "low",
+        "name": "Low"
+       },
+       {
+        "id": "medium",
+        "name": "Medium"
+       },
+       {
+        "id": "high",
+        "name": "High"
+       },
+       {
+        "id": "xhigh",
+        "name": "xHigh"
+       },
+       {
+        "id": "max",
+        "name": "Max"
+       }
+      ]
+     }
+    },
+    {
+     "id": "gpt-5.6-sol",
+     "name": "5.6 Sol",
+     "description": "Older generation workhorse model. Fast responses with lighter reasoning",
+     "reasoning": {
+      "efforts": [
+       {
+        "id": "low",
+        "name": "Low"
+       },
+       {
+        "id": "medium",
+        "name": "Medium"
+       },
+       {
+        "id": "high",
+        "name": "High"
+       },
+       {
+        "id": "xhigh",
+        "name": "xHigh"
+       },
+       {
+        "id": "max",
+        "name": "Max"
+       },
+       {
+        "id": "ultra",
+        "name": "Ultra"
+       }
+      ]
+     }
+    },
+    {
+     "id": "gpt-5.6-terra",
+     "name": "5.6 Terra",
+     "description": "Older balanced model for straightforward work. Fast responses with lighter reasoning",
+     "reasoning": {
+      "efforts": [
+       {
+        "id": "low",
+        "name": "Low"
+       },
+       {
+        "id": "medium",
+        "name": "Medium"
+       },
+       {
+        "id": "high",
+        "name": "High"
+       },
+       {
+        "id": "xhigh",
+        "name": "xHigh"
+       },
+       {
+        "id": "max",
+        "name": "Max"
+       },
+       {
+        "id": "ultra",
+        "name": "Ultra"
+       }
+      ]
+     }
+    },
+    {
+     "id": "gpt-5.6-luna",
+     "name": "5.6 Luna",
+     "description": "Older fast and efficient model. Fast responses with lighter reasoning",
+     "reasoning": {
+      "efforts": [
+       {
+        "id": "low",
+        "name": "Low"
+       },
+       {
+        "id": "medium",
+        "name": "Medium"
+       },
+       {
+        "id": "high",
+        "name": "High"
+       },
+       {
+        "id": "xhigh",
+        "name": "xHigh"
+       },
+       {
+        "id": "max",
+        "name": "Max"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "acp:acp-claude",
+   "name": "Claude",
+   "models": [
+    {
+     "id": "default",
+     "name": "Default (recommended)",
+     "description": "IQuest-Q1[1m]"
+    },
+    {
+     "id": "opus",
+     "name": "IQuest-Q1",
+     "description": "Custom Opus model"
+    }
+   ]
+  }
+ ],
+ "failures": [
+  {
+   "id": "acp:acp-grok",
+   "name": "Grok",
+   "message": "boom"
+  }
+ ]
+}
