@@ -148,6 +148,19 @@ describe('auditRows', () => {
     expect(row?.status).toBe('disabled')
   })
 
+  it('disabled 表达式求值抛错时：failed 并带上原文，不让审计整条崩掉', async () => {
+    const broken: LoaderEntryLike = {
+      options: { id: 'acp-cursor', name: '@deepseek-ai/dsh-agent-preset' },
+      get disabled(): boolean {
+        throw new Error('disabled expression failed')
+      },
+    }
+    const rows = await auditRows(withRows({ 'acp-cursor': broken }))
+    const row = rows.find(entry => entry.id === 'acp-cursor')
+    expect(row?.status).toBe('failed')
+    expect(row?.detail).toContain('disabled expression failed')
+  })
+
   it('只看本包的行：别的插件的条目混在树里也不进账', async () => {
     const rows = await auditRows([...allMounted(), mounted('some-other-row', '@someone/other-plugin')])
     expect(rows).toHaveLength(EXPECTED_ROWS.length)

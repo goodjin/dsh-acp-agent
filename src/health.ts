@@ -168,7 +168,21 @@ export async function auditRows(
       continue
     }
     const name = entry.options.name
-    if (entry.disabled === true) {
+    // `disabled` 是个 getter：插件的 disabled 表达式（`!!js`）求值失败会抛，宿主自己
+    // 的 auditStartupEntries 也为这个单独包了一层。这里同样不能让它把整条审计带崩。
+    let disabled = false
+    try {
+      disabled = entry.disabled === true
+    } catch (error) {
+      rows.push({
+        ...expected,
+        status: 'failed',
+        name,
+        detail: `disabled 表达式求值失败：${messageOf(error)}`,
+      })
+      continue
+    }
+    if (disabled) {
       rows.push({ ...expected, status: 'disabled', name, detail: '这一行被 disabled 关掉了' })
       continue
     }
