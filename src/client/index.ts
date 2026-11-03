@@ -23,7 +23,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PropsRuntime, SlotCore, SlotMap } from '@deepseek-ai/dsh-client-ui-slots'
 
 import { registerModelLabel } from './model-label.tsx'
-import { createQuotaPoller, registerQuotaDockPills, routeQuotaFetcher } from './quota-pill.ts'
+import { createQuotaPoller, QUOTA_PILL_SPECS, registerQuotaDockPills, routeQuotaFetcher } from './quota-pill.ts'
 import type { QuotaPillServices } from './quota-pill.ts'
 import { registerInterruptedTurnRecovery } from './interrupted-turn-recovery.ts'
 import { registerAcpVisibilitySection } from './acp-visibility-panel.tsx'
@@ -116,8 +116,6 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
 
   // Quota pills below composer
   safeRegister('quota pills', () => {
-    const fetchQuota = routeQuotaFetcher(fetch)
-    const poller = createQuotaPoller({ fetchQuota })
     // 这两个服务由别的插件提供，apply 这一刻未必已经起来：快照下来会永久是
     // undefined，胶囊就判断不了当前模型而整枚不显示——而且只在装配顺序不利时
     // 复现（2026-11-03 的症状）。用 getter 让每次渲染读到当下的服务实例。
@@ -129,8 +127,32 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
         return ctx.get('sessions') as QuotaPillServices['sessions']
       },
     }
-    const dispose = registerQuotaDockPills(ctx.slots, poller, services)
-    return dispose
+    // 四套口径（GLM / MiniMax / Codex / Claude）**各建一只轮询器、各挂一条
+    // dock**：路由、出现条件、文案各归各，模型前缀互不相认。
+    //
+    // 轮询器必须 start：不 start 它一次也不问，快照永远是 undefined，胶囊整行
+    // 不渲染——哪一家都不出现（2026-11 现场：迁进本仓时这段装配丢了，只剩 GLM
+    // 一条，而且那只轮询器从没开跑）。取数失败也要说一句，别静默。
+    const disposers: (() => void)[] = []
+    for (const spec of QUOTA_PILL_SPECS) {
+      const poller = createQuotaPoller({
+        fetchQuota: routeQuotaFetcher(fetch, spec.routePath),
+        report: message => { say(`${spec.dockId}: ${message}`) },
+      })
+      poller.start()
+      disposers.push(() => { poller.dispose() })
+      disposers.push(registerQuotaDockPills(ctx.slots, poller, services, spec))
+      // 回到页面时补问一次：轮询间隔五分钟，标签页睡着时它不跑。
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        const onVisible = (): void => {
+          if (document.visibilityState === 'visible') void poller.refresh()
+        }
+        window.addEventListener('visibilitychange', onVisible)
+        disposers.push(() => { window.removeEventListener('visibilitychange', onVisible) })
+      }
+    }
+    // 收尾：停掉四只轮询器、撤掉四条 dock 条目。
+    ctx.effect(() => () => { for (const dispose of disposers.splice(0)) dispose() }, 'threadharbor: quota pills')
   }, say)
 
   // Interrupted turn recovery
