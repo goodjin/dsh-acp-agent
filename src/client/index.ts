@@ -24,6 +24,7 @@ import type { PropsRuntime, SlotCore, SlotMap } from '@deepseek-ai/dsh-client-ui
 
 import { registerModelLabel } from './model-label.tsx'
 import { createQuotaPoller, registerQuotaDockPills, routeQuotaFetcher } from './quota-pill.ts'
+import type { QuotaPillServices } from './quota-pill.ts'
 import { registerInterruptedTurnRecovery } from './interrupted-turn-recovery.ts'
 import { registerAcpVisibilitySection } from './acp-visibility-panel.tsx'
 import { startAcpVisibility } from './acp-visibility.ts'
@@ -102,10 +103,16 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
   safeRegister('quota pills', () => {
     const fetchQuota = routeQuotaFetcher(fetch)
     const poller = createQuotaPoller({ fetchQuota })
-    // Pass the required services so quota pills can check the current model
-    const services = {
-      modelDirectories: ctx.get('modelDirectories'),
-      sessions: ctx.get('sessions'),
+    // 这两个服务由别的插件提供，apply 这一刻未必已经起来：快照下来会永久是
+    // undefined，胶囊就判断不了当前模型而整枚不显示——而且只在装配顺序不利时
+    // 复现（2026-11-03 的症状）。用 getter 让每次渲染读到当下的服务实例。
+    const services: Partial<QuotaPillServices> = {
+      get modelDirectories() {
+        return ctx.get('modelDirectories') as QuotaPillServices['modelDirectories']
+      },
+      get sessions() {
+        return ctx.get('sessions') as QuotaPillServices['sessions']
+      },
     }
     const dispose = registerQuotaDockPills(ctx.slots, poller, services)
     return dispose

@@ -1,6 +1,6 @@
 {
   "name": "@goodjin2/dsh-acp-agent",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "DSH plugin: ACP agent framework with GLM and MiniMax model clients",
   "repository": {
     "type": "git",

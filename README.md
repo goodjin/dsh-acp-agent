@@ -23,8 +23,26 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin tha
 - **Model label** — the composer's model chip
 - **Switch feedback** — handover notice and switch progress bar when the conversation moves to a new session
 - **Turn recovery** — the expand button for interrupted no-text turns; resend for requests that never entered the transcript
-- **ACP process view** — terminal/file step rendering for external agent turns
-- **Markdown turn & Mermaid** — read/expand deliverable text files in the conversation; render ```mermaid blocks
+- **ACP process view** — terminal/file step rendering for external agent turns. It
+  works standalone and, when `@goodjin2/dsh-chat-area` is installed, plugs into that
+  package's `assistant-step` wrapper through the seat
+  `conversation.chat.node.acp-segment-renderer` (chat-area owns the declaration).
+
+## 0.3.0 — what moved out
+
+Generic conversation-area UI moved to [`@goodjin2/dsh-chat-area`](https://github.com/threadharbor/dsh-chat-area)
+in 2026-11: the answer card, the conversation file cards, the Mermaid renderer and
+its host route, and the short session-ID bar. This package keeps the ACP side and
+no longer exports `./mermaid-asset` — if your profile still lists
+`@goodjin2/dsh-acp-agent/mermaid-asset`, replace it with
+`@goodjin2/dsh-chat-area/mermaid-asset` (or drop it; chat-area's own bundle patch
+declares it).
+
+Browser layering, when both packages are installed: `assistant-step` renders the
+**lowest** priority entry, so chat-area wraps at `-50` and this package at `-40`
+(fallback for acp-agent-only installs). Only chat-area declares the seat; a second
+declaration throws and is swallowed, which used to make the result depend on
+assembly order.
 
 ## Install
 
@@ -46,7 +64,7 @@ Or add to your profile's `package.json`:
 }
 ```
 
-Then add the agent presets you want to your profile's `cordis.patch.yml`. This repo ships its own `cordis.patch.yml` with the seven agent preset rows plus the host-side `roster-filter` / `zcode-quota` / `mermaid-asset` mounts (moved here from the threadharbor umbrella in 2026-11). See the [installation guide](https://github.com/goodjin/threadharbor/blob/main/docs/install-plugins.zh.md) for details.
+Then add the agent presets you want to your profile's `cordis.patch.yml`. This repo ships its own `cordis.patch.yml` with the seven agent preset rows, the browser-half roster row (`acp-agent-client`, a bare package-name row — DSH only treats rows named exactly that way as client entries), and the host-side `roster-filter` / `zcode-quota` / `minimaxi-quota` / `codex-quota` / `claude-quota` mounts (moved here from the threadharbor umbrella in 2026-11). See the [installation guide](https://github.com/goodjin/threadharbor/blob/main/docs/install-plugins.zh.md) for details.
 
 ## Requirements
 

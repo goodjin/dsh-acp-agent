@@ -162,14 +162,30 @@ type NodeSlots = {
 type AssistantStepProps = Record<string, any>
 
 /**
+ * 本包兜底 wrap 的优先级。跨包只能靠字面量对齐：chat-area 用 -50 并恒在外层，
+ * 本包用 -40（数值更低=更外层，插槽取「大闸里最低优先级的渲染」）。
+ * 改这里就得改 chat-area 的 `ACP_AGENT_FALLBACK_PRIORITY`，两边各有测试钉住。
+ */
+export const ASSISTANT_STEP_FALLBACK_PRIORITY = -40
+
+/**
  * 注册 ACP 进程表面：包 chat 视图（注入 `acpProcessSegment`）+ 包 `assistant-step`
- * 渲染 ACP 段（独立运行时）+ 注册进程段渲染器到座位（chat-area 装在时复用）。
+ * 渲染 ACP 段（独立运行时）+ 把 ACP 段渲染器挂到跨包座位。
  *
- * 本函数**同时**做两件事：
- * 1. 包 `assistant-step`（priority -40），遇到 `acpProcessSegment` 渲染 `AcpProcessBlock`，
- *    非 ACP 段调原生——保证只装 acp-agent 时 ACP 段能完整渲染。
- * 2. 注册 `AcpProcessBlock` 到 `SEGMENT_RENDERER_SLOT` 座位——chat-area 装在时，它的
- *    wrap 会优先处理 ACP 段（priority -30），acp-agent 的注册作为兜底。
+ * 本函数做两件事，且**只有 chat-area 声明座位**：
+ * 1. 包 `assistant-step`（priority -40），遇到 `acpProcessSegment` 渲染
+ *    `AcpProcessBlock`，非 ACP 段调原生——保证只装 acp-agent 时 ACP 段完整渲染。
+ * 2. 把 `AcpProcessBlock` 注册进 `SEGMENT_RENDERER_SLOT`；座位由
+ *    `@goodjin2/dsh-chat-area` 声明（它包 `assistant-step` 用 -50，恒在本层之外），
+ *    它渲染 ACP 段时就从这里取组件。
+ *
+ * 为什么本包**不**声明座位：一个插槽只能有一个声明者，后声明的会抛
+ * 「already-declared child key」。两边都声明时结果取决于装配顺序——一种顺序答案
+ * 卡片正常，另一种顺序它整块消失、还抛一条被 try/catch 吞掉的错误。座位是
+ * chat-area 的插槽契约，声明权归它。
+ *
+ * 优先级约定（跨包，只能靠字面量与测试对表）：chat-area -50 < 本包 -40，
+ * 「数值最低的渲染」，所以 chat-area 在外层；只装本包时座位没人声明，本层生效。
  */
 export function registerAcpProcessSurface(ctx: Surface): void {
   const ui = ctx.get('uiConversation') as Registry | undefined
@@ -195,11 +211,10 @@ export function registerAcpProcessSurface(ctx: Surface): void {
     attachView()
 
     // 包 `assistant-step`：遇到 ACP 段渲染 `AcpProcessBlock`，非 ACP 段调原生。
-    // priority -40 让 chat-area 的 wrap（priority -30）优先；chat-area 没装时这层生效。
+    // priority -40：chat-area 用 -50（更低=更外层）先分派，本层只在它缺席时生效。
     let removeWrap: (() => void) | undefined
     let originalComponent: unknown
     let installing = false
-    let seatDeclared = false
     const attachWrap = (): void => {
       if (installing) return
       const entry = slots.entries('conversation.chat.node').find(
@@ -217,20 +232,17 @@ export function registerAcpProcessSurface(ctx: Surface): void {
           return createElement(Native, props)
         }
         removeWrap = slots.register({
-          name: 'conversation.chat.node', key: 'assistant-step', priority: -40,
-          ...(seatDeclared ? {} : { children: { [SEGMENT_RENDERER_SLOT]: { kind: 'list', scope: 'session' } } }),
+          name: 'conversation.chat.node', key: 'assistant-step', priority: ASSISTANT_STEP_FALLBACK_PRIORITY,
           ...(entry.locale === undefined ? {} : { locale: entry.locale }),
           ...(entry.inject === undefined ? {} : { inject: entry.inject }),
         }, Renderer)
-        seatDeclared = true
       } finally { installing = false }
     }
     const unsubscribeWrap = slots.subscribe('conversation.chat.node', attachWrap)
     attachWrap()
 
-    // 把进程段渲染器注册进座位：chat-area 装在时它的 wrap 会优先处理 ACP 段，
-    // acp-agent 的注册作为兜底（chat-area 的 wrap 遇到座位有渲染器就用，没有就退回原生，
-    // 但原生已经被 acp-agent 的 wrap 包过了，所以实际不会走到原生）。
+    // 把 ACP 段渲染器挂到座位：座位由 chat-area 声明，它在外层渲染时从这里取组件。
+    // 只装本包时座位永远没人声明，这个 inject 就一直不触发——无害，本包的 wrap 兜底。
     const removeHook = slots.inject(SEGMENT_RENDERER_SLOT, () => slots.register(
       { id: 'threadharbor-acp-segment-renderer', order: 0 },
       AcpProcessBlock,
