@@ -159,7 +159,7 @@ async function readMembership(
   const subscribed = [personal?.['has_token_plan'], commerceData['has_token_plan']]
     .some(fact => fact === true)
   const level = text(personal?.['token_plan_tier']) ?? text(commerceData['token_plan_tier'])
-  const credit = creditOf(personal) ?? creditOf(commerceData)
+  const credit = creditOf(personal, commerceData)
   return {
     subscribed,
     ...(groupId === undefined ? {} : { groupId }),
@@ -168,10 +168,39 @@ async function readMembership(
   }
 }
 
-/** The Token Plan credit from a workspace/membership answer, when present. */
-function creditOf(value: Record<string, unknown> | undefined): MiniMaxCredit | undefined {
-  const summary = record(value?.['op_credit_summary'])
-  const remaining = finite(summary?.['total_remaining_amount']) ?? finite(value?.['total_remains_credit'])
+/**
+ * The Token Plan credit (balance), read the way the MiniMax Code desktop app
+ * reads it (its own projection, measured 2026-11-03 against the installed app):
+ *
+ * 1. the membership answer's `op_credit_summary.total_remaining_amount` — which
+ *    upstream now sends as a **string** ("22000"), not a number;
+ * 2. the workspace's `opcredit_balance`;
+ * 3. the membership's `opcredit_balance`;
+ * 4. the legacy `total_remains_credit`, membership first, then workspace.
+ *
+ * Two traps this order dodges (both hit us on 2026-11-03, the pill said 0 while
+ * the account had 22,000):
+ *
+ * - a number parser that only accepts numbers throws away the string answer;
+ * - the personal workspace's legacy `total_remains_credit` is a legitimate **0**
+ *   (the account migrated to open-platform billing, so the old field stopped
+ *   moving), and `??` never looks past a 0 — it would swallow the real balance.
+ *
+ * @param workspace - the personal workspace record of `get_user_extra_info`.
+ * @param membership - the commerce membership answer.
+ * @returns the credit balance, when any of those fields carries one.
+ */
+function creditOf(
+  workspace: Record<string, unknown> | undefined,
+  membership: Record<string, unknown> | undefined,
+): MiniMaxCredit | undefined {
+  const summary = record(membership?.['op_credit_summary'])
+  const remaining =
+    numberOf(summary?.['total_remaining_amount'])
+    ?? numberOf(workspace?.['opcredit_balance'])
+    ?? numberOf(membership?.['opcredit_balance'])
+    ?? numberOf(membership?.['total_remains_credit'])
+    ?? numberOf(workspace?.['total_remains_credit'])
   return remaining === undefined ? undefined : { remaining }
 }
 
@@ -352,6 +381,21 @@ function scrub(text: string, secret: string): string {
 
 function finite(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+/**
+ * A number, or a string that spells one (upstream sends some money-shaped
+ * fields as strings: `op_credit_summary.total_remaining_amount` is "22000").
+ * Thousands separators are tolerated, the way the desktop app's own parser
+ * does; anything else is not a number.
+ */
+function numberOf(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim().replace(/,/g, '')
+  if (trimmed === '') return undefined
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 function text(value: unknown): string | undefined {
