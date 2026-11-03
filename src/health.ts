@@ -25,6 +25,10 @@
  * `failed` / `pending` / `absent` 都算未挂载。
  */
 
+import { appendFileSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
+
 /** fiber 状态：cordis 的取值，这里只读来分类，不写。 */
 const FIBER_PENDING = 0
 const FIBER_ACTIVE = 2
@@ -281,6 +285,10 @@ export interface InstallHealthDeps {
   cancel?: (handle: unknown) => void
   /** 重导入取原始错误；默认开。 */
   captureImportErrors?: boolean
+  /** 日志文件路径；默认 `$DSH_HOME/logs/acp-agent-health.log`。 */
+  logPath?: string
+  /** 写日志文件的实现；默认建目录后追加一行。 */
+  writeLog?: (path: string, text: string) => void
 }
 
 /** 最小宿主面：只取用得上的几项，缺了也要能载入（非 web 面没有 webServer）。 */
@@ -320,6 +328,24 @@ function reporter(ctx: HealthContext): (message: string) => void {
   }
 }
 
+/** 日志文件名：一次开机一行，落在 DSH home 的 logs 目录下。 */
+const LOG_FILE_NAME = 'acp-agent-health.log'
+/** 超过这个大小的文件重写为只留本次一行：免得几百次开机把文件堆大。 */
+const LOG_MAX_BYTES = 64 * 1024
+
+/** DSH home 的默认位置（与 dsh-home-paths 同一约定：`$DSH_HOME`，否则 `~/.dsh`）。 */
+function defaultLogPath(): string {
+  const home = process.env.DSH_HOME ?? join(homedir(), '.dsh')
+  return join(home, 'logs', LOG_FILE_NAME)
+}
+
+/** 写一行到日志文件（建目录、必要时截断）。 */
+function appendLog(path: string, text: string): void {
+  mkdirSync(dirname(path), { recursive: true })
+  if (existsSync(path) && statSync(path).size > LOG_MAX_BYTES) writeFileSync(path, text)
+  else appendFileSync(path, text)
+}
+
 /**
  * 装载自报门面：排一次 boot 审计，并挂上只读路由。
  *
@@ -332,6 +358,24 @@ export function installHealth(ctx: HealthContext, deps: InstallHealthDeps = {}):
   const cancel = deps.cancel ?? ((handle: unknown) => {
     if (handle !== undefined) clearTimeout(handle as ReturnType<typeof setTimeout>)
   })
+  const logPath = deps.logPath ?? defaultLogPath()
+  const writeLog = deps.writeLog ?? appendLog
+
+  /**
+   * 自报 = 说一行 + 落一行。
+   *
+   * 桌面版从 Finder 起，宿主的 stderr 没人接（同一台机器上真出过事：boot 时插件行
+   * 载入失败，stderr 里其实有一句 warning，但 ~/.dsh/logs 下没有任何新文件）。所以那一行
+   * 同时写进 {@link defaultLogPath}，事后 `tail` 一下就能看见，不必开终端重跑。
+   */
+  const announceLine = (message: string): void => {
+    say(message)
+    try {
+      writeLog(logPath, `${new Date().toISOString()} ${message}\n`)
+    } catch {
+      // 写盘失败（权限、只读 home）不该把自报本身带走：stderr 与 logger 那两份已经出去了。
+    }
+  }
 
   /** 现算一份账目，不说话（路由每次要新鲜的）。 */
   const collect = async (): Promise<AuditRow[]> => {
@@ -350,13 +394,13 @@ export function installHealth(ctx: HealthContext, deps: InstallHealthDeps = {}):
   /** boot 后那一次：算完必须说一行，成功也说。 */
   const announce = async (): Promise<void> => {
     if (loaderOf(ctx) === undefined) {
-      say('acp-agent health: 拿不到 loader 服务，无法核对本包的行（自报门面失效）')
+      announceLine('acp-agent health: 拿不到 loader 服务，无法核对本包的行（自报门面失效）')
       return
     }
     try {
-      say(summarizeAudit(await collect()))
+      announceLine(summarizeAudit(await collect()))
     } catch (error) {
-      say(`acp-agent health: 核对失败：${messageOf(error)}`)
+      announceLine(`acp-agent health: 核对失败：${messageOf(error)}`)
     }
   }
 

@@ -71,6 +71,10 @@ and serves the same ledger as JSON at `GET /threadharbor/health`:
 services), `absent` (the composed row never reached the loader tree) or `disabled` (turned off
 on purpose — not a failure). No tokens or credentials are in that payload.
 
+The same line is appended, timestamped, to `$DSH_HOME/logs/acp-agent-health.log` — one line
+per boot. That file is the point of the exercise: the desktop app hands the host's stderr to
+nobody, so after an incident this is what you can read without rerunning anything.
+
 Why it exists: on 2026-11-03 a constructor parameter property in `src/minimaxi/credential.ts`
 made every row importing it fail under DSH's strip-only TypeScript loader. The host half and
 the browser half vanished together with nothing visible in any log; the cause was only found

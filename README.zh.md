@@ -66,6 +66,9 @@ acp-agent health: 12/13 行已挂载；未挂载 1 行 — threadharbor-minimaxi
 `absent`（装配的行根本没进 Loader 树）、`disabled`（人主动关的，不算故障）之一。
 应答里没有任何令牌或凭据。
 
+同一行还会带时间戳追加到 `$DSH_HOME/logs/acp-agent-health.log`（每次开机一行）。这个文件
+才是重点：桌面版不接宿主的 stderr，出事之后要能直接读它，不用重跑任何东西。
+
 为什么有这一层：2026-11-03，`src/minimaxi/credential.ts` 里一句构造函数参数属性让所有
 引用它的行在 DSH 的 strip-only 载入下全部失败，宿主半边与浏览器半边一起消失，任何日志里
 都看不见；当时只能靠「某条配额路由存不存在」这种副作用查出来。现在有两道挡在前面的闸门：

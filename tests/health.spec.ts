@@ -11,8 +11,9 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -369,6 +370,68 @@ describe('installHealth / apply', () => {
       apply(ctx)
       await flush()
       expect(warnings.join('\n')).toContain('acp-agent')
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+})
+
+describe('那一行落到看得见的地方', () => {
+  it('同时写进日志文件：桌面版从 Finder 起、stderr 没人接，也能事后看', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      const written: { path: string; text: string }[] = []
+      const { ctx } = rig()
+      installHealth(ctx, {
+        schedule: run => run(),
+        logPath: '/tmp/whatever/logs/acp-agent-health.log',
+        writeLog: (path, text) => void written.push({ path, text }),
+      })
+      await flush()
+      expect(written).toHaveLength(1)
+      expect(written[0]?.path).toContain('acp-agent-health.log')
+      expect(written[0]?.text).toContain(`${EXPECTED_ROWS.length}/${EXPECTED_ROWS.length}`)
+      // 一行一次开机：带时间戳、单行、以换行收尾。
+      expect(written[0]?.text).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
+      expect(written[0]?.text.trimEnd().split('\n')).toHaveLength(1)
+      expect(written[0]?.text.endsWith('\n')).toBe(true)
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
+  it('默认落在 $DSH_HOME/logs 下，目录不存在会先建出来', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'dsh-health-'))
+    const previous = process.env.DSH_HOME
+    process.env.DSH_HOME = home
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      const { ctx } = rig()
+      installHealth(ctx, { schedule: run => run() })
+      await flush()
+      const file = join(home, 'logs', 'acp-agent-health.log')
+      expect(existsSync(file)).toBe(true)
+      expect(readFileSync(file, 'utf8')).toContain('acp-agent health')
+    } finally {
+      stderr.mockRestore()
+      if (previous === undefined) delete process.env.DSH_HOME
+      else process.env.DSH_HOME = previous
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  it('写盘失败不带走那一次自报：stderr 上仍然有那一行', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      const { ctx, warnings } = rig()
+      installHealth(ctx, {
+        schedule: run => run(),
+        writeLog: () => {
+          throw new Error('EACCES: permission denied')
+        },
+      })
+      await flush()
+      expect(warnings.join('\n')).toContain('acp-agent health')
     } finally {
       stderr.mockRestore()
     }
