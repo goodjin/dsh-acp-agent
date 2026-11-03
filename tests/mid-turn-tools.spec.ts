@@ -586,7 +586,7 @@ describe('空参数占位帧', () => {
 })
 
 describe('Cursor 的编辑过程使用真实帧', () => {
-  const frames = JSON.parse(readFileSync(new URL('../../dsh-acp-agent/tests/fixtures/captured-frames.cursor-edit.json', import.meta.url), 'utf8')) as AcpFrame[]
+  const frames = JSON.parse(readFileSync(new URL('./fixtures/captured-frames.cursor-edit.json', import.meta.url), 'utf8')) as AcpFrame[]
   const edits = frames.filter(frame => (frame.params as { update: { toolCallId: string } }).update.toolCallId === 'edit-call\n1')
 
   it('等待编辑文件路径到达再登记卡片，完成帧到达就落结果，不等整轮结束', async () => {
