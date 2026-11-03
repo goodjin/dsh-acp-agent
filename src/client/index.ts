@@ -94,7 +94,7 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
 
   // Model label in composer
   safeRegister('model label', () => {
-    const dispose = registerModelLabel(ctx)
+    const dispose = registerModelLabel(ctx.slots)
     return dispose
   }, say)
 
@@ -102,7 +102,12 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
   safeRegister('quota pills', () => {
     const fetchQuota = routeQuotaFetcher(fetch)
     const poller = createQuotaPoller({ fetchQuota })
-    const dispose = registerQuotaDockPills(ctx.slots, poller, {})
+    // Pass the required services so quota pills can check the current model
+    const services = {
+      modelDirectories: ctx.get('modelDirectories'),
+      sessions: ctx.get('sessions'),
+    }
+    const dispose = registerQuotaDockPills(ctx.slots, poller, services)
     return dispose
   }, say)
 
