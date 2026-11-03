@@ -12,6 +12,17 @@
 # 用法：把下面的 insert 段合并进你的 profile 的 cordis.patch.yml。
 
 - insert:
+    # 自报门面：boot 之后打一行「几行挂上、缺哪几行、为什么缺」，并把同一份账目挂到
+    # 只读路由 /threadharbor/health。
+    #
+    # 为什么要有这一行：2026-11-03 一句参数属性让主入口在 strip-only 载入时直接失败，
+    # 整个插件的宿主半边与浏览器半边一起消失（设置里的屏蔽页、模型前缀、配额胶囊全没了），
+    # 能看见的地方一个字都没有——当时是靠「某条配额路由存不存在」这种副作用才查出来的。
+    # 它故意不 import 包内任何东西，所以主入口坏掉时它照样能载入并说话。
+    #
+    # 放第一位：它排的那次核对在 boot 之后跑，位置靠前只是让它在别人坏掉时也一定存在。
+    - id: threadharbor-health
+      name: '@goodjin2/dsh-acp-agent/health'
     # 浏览器半边的挂载行。DSH 不按 package.json 的 dsh.client 自动装载浏览器包：
     # 客户端模块系统扫的是 Loader 的行，只有 name 恰好等于包名（裸包名）时那个包
     # 才会进 window.__DSH_BOOT__（子路径行，比如下面的 /roster-filter，不算）。

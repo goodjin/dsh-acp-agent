@@ -43,7 +43,34 @@ dsh plugin --profile web add @goodjin2/dsh-acp-agent
 
 然后在 profile 的 `cordis.patch.yml` 里加入你需要的 agent preset 行。详细配置见[安装指南](https://github.com/goodjin/threadharbor/blob/main/docs/install-plugins.zh.md)。
 
-本仓库自带 `cordis.patch.yml`，含七条 agent preset 行与宿主侧的 `roster-filter` / `zcode-quota` / `mermaid-asset` 挂载（2026-11 从 threadharbor 伞仓迁来）。
+本仓库自带 `cordis.patch.yml`，含七条 agent preset 行、浏览器半边的登记行
+（`acp-agent-client`，只有恰好叫这个包名的行才会被当成客户端行），宿主侧的
+`roster-filter` / `zcode-quota` / `minimaxi-quota` / `codex-quota` / `claude-quota`
+挂载，以及下面这条自报行（2026-11 从 threadharbor 伞仓迁来）。
+
+## 不会静默消失：自报门面
+
+载不进来的模块会连同它那一行一起消失，而它自己报不了这件事。所以本包带一个不 import
+包内任何东西的叶子模块（`./health`，行 `threadharbor-health`）——别人全坏了，它照样载入
+并说话。
+
+boot 之后它打一行，点名缺哪几行、为什么缺：
+
+```
+acp-agent health: 12/13 行已挂载；未挂载 1 行 — threadharbor-minimaxi-quota（MiniMax 套餐额度接口）：SyntaxError: TypeScript parameter property is not supported in strip-only mode
+```
+
+同一份账目挂在 `GET /threadharbor/health` 上：
+`{ ok, mounted, total, disabled, rows: [{ id, what, status, detail }] }`。`status` 是
+`mounted`、`failed`（模块没载入，或 `apply` 抛错）、`pending`（在等注入的服务）、
+`absent`（装配的行根本没进 Loader 树）、`disabled`（人主动关的，不算故障）之一。
+应答里没有任何令牌或凭据。
+
+为什么有这一层：2026-11-03，`src/minimaxi/credential.ts` 里一句构造函数参数属性让所有
+引用它的行在 DSH 的 strip-only 载入下全部失败，宿主半边与浏览器半边一起消失，任何日志里
+都看不见；当时只能靠「某条配额路由存不存在」这种副作用查出来。现在有两道挡在前面的闸门：
+上面这条自报行，以及 `tests/entry-loadability.spec.ts`——它用真 `node`（不经转译）把每个
+宿主入口载入一遍，载不进来就不许合。
 
 ## 要求
 

@@ -53,6 +53,31 @@ the user authorizes, the official core writes the new credential back to the sha
 `auth.json` and the next call simply works. Tokens never enter these payloads, log lines
 or error strings.
 
+## When a row doesn't mount: the self-report seam
+
+A module that cannot be imported takes its whole row down with it, and it cannot report that
+itself. So this package ships one leaf module (`./health`, row `threadharbor-health`) that
+imports nothing from the package — it still loads and speaks while everything else is broken.
+
+After boot it prints one line naming what is missing and why:
+
+```
+acp-agent health: 12/13 行已挂载；未挂载 1 行 — threadharbor-minimaxi-quota（MiniMax 套餐额度接口）：SyntaxError: TypeScript parameter property is not supported in strip-only mode
+```
+
+and serves the same ledger as JSON at `GET /threadharbor/health`:
+`{ ok, mounted, total, disabled, rows: [{ id, what, status, detail }] }`. `status` is one of
+`mounted`, `failed` (module never imported, or `apply` threw), `pending` (waiting on injected
+services), `absent` (the composed row never reached the loader tree) or `disabled` (turned off
+on purpose — not a failure). No tokens or credentials are in that payload.
+
+Why it exists: on 2026-11-03 a constructor parameter property in `src/minimaxi/credential.ts`
+made every row importing it fail under DSH's strip-only TypeScript loader. The host half and
+the browser half vanished together with nothing visible in any log; the cause was only found
+by probing whether a quota route existed. Two gates now stand in front of that: the audit row
+above, and `tests/entry-loadability.spec.ts`, which imports every host entry with a real
+`node` (no transform) before a change can ship.
+
 ## 0.3.0 — what moved out
 
 Generic conversation-area UI moved to [`@goodjin2/dsh-chat-area`](https://github.com/threadharbor/dsh-chat-area)
@@ -89,7 +114,7 @@ Or add to your profile's `package.json`:
 }
 ```
 
-Then add the agent presets you want to your profile's `cordis.patch.yml`. This repo ships its own `cordis.patch.yml` with the seven agent preset rows, the browser-half roster row (`acp-agent-client`, a bare package-name row — DSH only treats rows named exactly that way as client entries), and the host-side `roster-filter` / `zcode-quota` / `minimaxi-quota` / `codex-quota` / `claude-quota` mounts (moved here from the threadharbor umbrella in 2026-11). See the [installation guide](https://github.com/goodjin/threadharbor/blob/main/docs/install-plugins.zh.md) for details.
+Then add the agent presets you want to your profile's `cordis.patch.yml`. This repo ships its own `cordis.patch.yml` with the seven agent preset rows, the browser-half roster row (`acp-agent-client`, a bare package-name row — DSH only treats rows named exactly that way as client entries), the host-side `roster-filter` / `zcode-quota` / `minimaxi-quota` / `codex-quota` / `claude-quota` mounts (moved here from the threadharbor umbrella in 2026-11), and the `health` self-report row. See the [installation guide](https://github.com/goodjin/threadharbor/blob/main/docs/install-plugins.zh.md) for details.
 
 ## Requirements
 

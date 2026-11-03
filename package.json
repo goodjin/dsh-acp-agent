@@ -54,6 +54,10 @@
       "types": "./src/usage-claude.ts",
       "default": "./src/usage-claude.ts"
     },
+    "./health": {
+      "types": "./src/health.ts",
+      "default": "./src/health.ts"
+    },
     "./package.json": "./package.json"
   },
   "files": [
