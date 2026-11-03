@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { createElement, useCallback, useEffect, useState, type ComponentType } from 'react'
 import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConversationNodeDefinition, ConversationViewDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { SlotCore, StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { acpProcessDefinition } from './acp-process-segments.ts'
 import { wrapChatView } from './acp-process-view.ts'
@@ -146,20 +145,35 @@ type Registry = {
   views: { entries(): readonly ConversationViewDefinition[]; subscribe(fn: () => void): () => void }
   events: { register(definition: ConversationNodeDefinition): () => void }
 }
+type NodeSlotEntry = {
+  options: Record<string, unknown>
+  component: unknown
+  locale?: string
+  inject?: unknown
+  key?: string
+  priority?: number
+}
+type NodeSlots = {
+  entries(key: string): readonly NodeSlotEntry[]
+  subscribe(key: string, fn: () => void): () => void
+  register(options: Record<string, unknown>, component: unknown): () => void
+  inject(key: string, callback: () => unknown): unknown
+}
+type AssistantStepProps = Record<string, any>
 
 /**
- * 注册 ACP 进程表面：包 chat 视图（注入 `acpProcessSegment`）+ 注册进程段渲染器到
- * chat-area 的挂钩座位。
+ * 注册 ACP 进程表面：包 chat 视图（注入 `acpProcessSegment`）+ 包 `assistant-step`
+ * 渲染 ACP 段（独立运行时）+ 注册进程段渲染器到座位（chat-area 装在时复用）。
  *
- * 本函数**不再**包 `assistant-step`——那一层（含通用答案卡片）归 chat-area，它会来
- * 这个座位取 `AcpProcessComponent` 渲染带 `acpProcessSegment` 的节点。
+ * 本函数**同时**做两件事：
+ * 1. 包 `assistant-step`（priority -40），遇到 `acpProcessSegment` 渲染 `AcpProcessBlock`，
+ *    非 ACP 段调原生——保证只装 acp-agent 时 ACP 段能完整渲染。
+ * 2. 注册 `AcpProcessBlock` 到 `SEGMENT_RENDERER_SLOT` 座位——chat-area 装在时，它的
+ *    wrap 会优先处理 ACP 段（priority -30），acp-agent 的注册作为兜底。
  */
 export function registerAcpProcessSurface(ctx: Surface): void {
   const ui = ctx.get('uiConversation') as Registry | undefined
-  const slots = ctx.slots as Pick<SlotCore, 'entries' | 'subscribe'> & {
-    register(options: { name?: string; key?: string; priority?: number; id?: string; order?: number; locale?: string; inject?: StoredEntry['inject'] }, component: unknown): () => void
-    inject(key: string, callback: () => unknown): unknown
-  }
+  const slots = ctx.slots as NodeSlots
   if (typeof ui?.views?.entries !== 'function' || typeof ui.views.subscribe !== 'function'
     || typeof ui.events?.register !== 'function' || typeof slots?.entries !== 'function'
     || typeof slots.subscribe !== 'function' || typeof slots.register !== 'function') return
@@ -180,7 +194,43 @@ export function registerAcpProcessSurface(ctx: Surface): void {
     const unsubscribeView = ui.views.subscribe(attachView)
     attachView()
 
-    // 把进程段渲染器接进 chat-area 的 assistant-step 包装：它渲染时按座位名取来用。
+    // 包 `assistant-step`：遇到 ACP 段渲染 `AcpProcessBlock`，非 ACP 段调原生。
+    // priority -40 让 chat-area 的 wrap（priority -30）优先；chat-area 没装时这层生效。
+    let removeWrap: (() => void) | undefined
+    let originalComponent: unknown
+    let installing = false
+    let seatDeclared = false
+    const attachWrap = (): void => {
+      if (installing) return
+      const entry = slots.entries('conversation.chat.node').find(
+        candidate => candidate.options.key === 'assistant-step' && (candidate.options.priority as number | undefined ?? 0) >= 0,
+      )
+      if (entry === undefined || entry.component === originalComponent) return
+      installing = true
+      try {
+        removeWrap?.()
+        originalComponent = entry.component
+        const Native = entry.component as ComponentType<AssistantStepProps>
+        const Renderer = (props: AssistantStepProps) => {
+          const segment = (props.node?.data as SegmentChatData | undefined)?.acpProcessSegment
+          if (segment !== undefined) return createElement(AcpProcessBlock, { segment, t: props.t })
+          return createElement(Native, props)
+        }
+        removeWrap = slots.register({
+          name: 'conversation.chat.node', key: 'assistant-step', priority: -40,
+          ...(seatDeclared ? {} : { children: { [SEGMENT_RENDERER_SLOT]: { kind: 'list', scope: 'session' } } }),
+          ...(entry.locale === undefined ? {} : { locale: entry.locale }),
+          ...(entry.inject === undefined ? {} : { inject: entry.inject }),
+        }, Renderer)
+        seatDeclared = true
+      } finally { installing = false }
+    }
+    const unsubscribeWrap = slots.subscribe('conversation.chat.node', attachWrap)
+    attachWrap()
+
+    // 把进程段渲染器注册进座位：chat-area 装在时它的 wrap 会优先处理 ACP 段，
+    // acp-agent 的注册作为兜底（chat-area 的 wrap 遇到座位有渲染器就用，没有就退回原生，
+    // 但原生已经被 acp-agent 的 wrap 包过了，所以实际不会走到原生）。
     const removeHook = slots.inject(SEGMENT_RENDERER_SLOT, () => slots.register(
       { id: 'threadharbor-acp-segment-renderer', order: 0 },
       AcpProcessBlock,
@@ -188,6 +238,7 @@ export function registerAcpProcessSurface(ctx: Surface): void {
 
     return () => {
       unsubscribeView(); restore?.(); removeDefinition?.()
+      unsubscribeWrap(); removeWrap?.()
       if (typeof removeHook === 'function') removeHook()
     }
   }, 'threadharbor ACP process segments')
