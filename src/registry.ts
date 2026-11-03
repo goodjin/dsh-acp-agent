@@ -96,6 +96,17 @@ export type AcpPresetConfig = {
    * merge different configs into one row.
    */
   readonly collapseEfforts?: boolean
+  /**
+   * 这个 agent 自己发布的推理强度档位（`thought_level` 选项里的值）。
+   *
+   * 有些 agent 的模型 id 不带 `[effort]` 后缀，强度走的是会话级配置项
+   * （claude 的 `effort`、grok 的 `reasoning_effort`），目录从 id 里归并不出档位来，
+   * 于是选择器不画强度控件。这里声明之后，目录会给该 preset 的每个模型挂上
+   * `reasoning.efforts`，标签按 {@link effortLabelOf} 只写档位本身。
+   *
+   * 只列 agent 真的接受的值：切换时 runner 会拿 agent 自己报的选项校验。
+   */
+  readonly efforts?: readonly { readonly id: string; readonly name?: string }[]
 }
 
 export type PresetConfig = { readonly presets: Readonly<Record<string, AcpPresetConfig>> }

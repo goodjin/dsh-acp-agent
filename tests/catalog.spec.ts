@@ -423,3 +423,61 @@ describe('zcode model plugin', () => {
     expect(seen).toEqual([])
   })
 })
+describe('agent 自己发布的强度档位（preset 声明）', () => {
+  /** 一个用声明式档位的 preset：模型 id 不带后缀，强度走会话级选项。 */
+  const declaredEffortAdapter = catalogAdapter({
+    presets: {
+      'acp-claude': {
+        agent: 'claude',
+        command: 'claude-agent-acp',
+        efforts: [
+          { id: 'low' }, { id: 'medium' }, { id: 'high' }, { id: 'xhigh' }, { id: 'max', name: 'Maximum' },
+        ],
+      },
+    },
+  }, {
+    modelsOf: () => [{ id: 'claude-opus-4', name: 'Claude Opus 4' }],
+    runtimeModelsOf: () => undefined,
+    dialectFor: () => undefined,
+  } as never)
+
+  it('目录给每个模型挂上 reasoning.efforts，标签只写档位本身', async () => {
+    const models = await declaredEffortAdapter.listModels(providerRoute('acp-claude'))
+    expect(models[0]?.reasoning?.efforts).toEqual([
+      { id: 'low', name: 'Low' },
+      { id: 'medium', name: 'Medium' },
+      { id: 'high', name: 'High' },
+      { id: 'xhigh', name: 'xHigh' },
+      { id: 'max', name: 'Maximum' },
+    ])
+  })
+
+  it('没有声明档位的 preset 照旧不带 reasoning（不凭空造强度控件）', async () => {
+    const plain = catalogAdapter({
+      presets: { 'acp-claude': { agent: 'claude', command: 'claude-agent-acp' } },
+    }, {
+      modelsOf: () => [{ id: 'claude-opus-4', name: 'Claude Opus 4' }],
+      runtimeModelsOf: () => undefined,
+      dialectFor: () => undefined,
+    } as never)
+    const models = await plain.listModels(providerRoute('acp-claude'))
+    expect(models[0]?.reasoning).toBeUndefined()
+  })
+
+  it('模型 id 自带 [强度] 时以 id 归并结果为准（codex 那种），声明不覆盖它', async () => {
+    const both = catalogAdapter({
+      presets: {
+        'acp-codex': { agent: 'codex', command: 'codex-acp', efforts: [{ id: 'bogus' }] },
+      },
+    }, {
+      modelsOf: () => [
+        { id: 'gpt-6.1-sol[low]', name: '6.1 Sol (low)' },
+        { id: 'gpt-6.1-sol[high]', name: '6.1 Sol (high)' },
+      ],
+      runtimeModelsOf: () => undefined,
+      dialectFor: () => undefined,
+    } as never)
+    const models = await both.listModels(providerRoute('acp-codex'))
+    expect(models[0]?.reasoning?.efforts?.map(effort => effort.id)).toEqual(['low', 'high'])
+  })
+})

@@ -49,15 +49,20 @@ export type CatalogModel = {
 function collapsedToCatalog(
   provider: string,
   model: CollapsedModel,
+  declaredEfforts?: readonly { readonly id: string; readonly name?: string }[],
 ): CatalogModel {
+  // 档位来源有两条：模型 id 里归并出来的（codex 那种 `base[effort]`），或者 preset
+  // 声明的（claude/grok 的会话级选项、zcode/minimax 这种模型插件）。前者优先——
+  // 它带着 wire id，能一字不差拼回去。
+  const efforts = model.efforts !== undefined
+    ? model.efforts.map(effort => ({ id: effort.id, name: effort.name }))
+    : declaredEfforts?.map(effort => ({ id: effort.id, name: effort.name ?? effortLabelOf(effort.id) }))
   return {
     provider,
     id: model.baseId,
     name: model.displayName,
     ...(model.description === undefined ? {} : { description: model.description }),
-    ...(model.efforts === undefined
-      ? {}
-      : { reasoning: { efforts: model.efforts.map(effort => ({ id: effort.id, name: effort.name })) } }),
+    ...(efforts === undefined || efforts.length === 0 ? {} : { reasoning: { efforts } }),
   }
 }
 
@@ -340,15 +345,16 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
       // once and reasoning effort becomes a separate axis rather than N rows.
       // A preset that opts out (cursor, whose ids carry a config suffix rather
       // than an effort) gets one row per id, uncollapsed.
+      const declaredEfforts = config.presets[presetId]?.efforts
       if (config.presets[presetId]?.collapseEfforts === false) {
         return models.map(model => collapsedToCatalog(provider, {
           baseId: model.id,
           displayName: model.name,
           ...(model.description === undefined ? {} : { description: model.description }),
           efforts: undefined,
-        }))
+        }, declaredEfforts))
       }
-      return collapseEffortModels(models).map(model => collapsedToCatalog(provider, model))
+      return collapseEffortModels(models).map(model => collapsedToCatalog(provider, model, declaredEfforts))
     },
 
     // The catalog resolves every advertised model once at build time, and the
@@ -378,7 +384,7 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
         ? undefined
         : collapseEffortModels(modelsFor(presetId)).find(entry => entry.baseId === model)
       if (collapsed === undefined) return { provider, id: model, name: model }
-      return collapsedToCatalog(provider, collapsed)
+      return collapsedToCatalog(provider, collapsed, config.presets[presetId ?? '']?.efforts)
     },
 
     // An async generator rather than a synchronous throw: the switch hook is

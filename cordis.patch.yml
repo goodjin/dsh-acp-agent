@@ -251,6 +251,18 @@
               # 清单 = 2026-10-10 真机探针（对该命令做一次真实
               # initialize + session/new）读到的 model 配置项 options，
               # 一字不差。
+              # 强度档位：claude 的 effort 选项（真机 session/new 的 configOptions[thought_level]）。
+              efforts:
+                - id: low
+                  name: Low
+                - id: medium
+                  name: Medium
+                - id: high
+                  name: High
+                - id: xhigh
+                  name: xHigh
+                - id: max
+                  name: Max
               models:
                 - id: default
                   name: Default (recommended)
@@ -301,6 +313,16 @@
               # 点了 grok-4.7，agent 那边根本没有这个模型，这一轮直接作废。
               # 清单写成真机的样子，选择器在 agent 自己报清单之前就不会给出
               # agent 做不到的选项。
+              # 强度档位：grok 的 reasoning_effort 选项（`grok --help` 记的 minimal/low/medium/high/xhigh，这里取四档）。
+              efforts:
+                - id: low
+                  name: Low
+                - id: medium
+                  name: Medium
+                - id: high
+                  name: High
+                - id: xhigh
+                  name: xHigh
               models:
                 - id: grok-4.7
                   name: Grok 4.7
@@ -358,6 +380,16 @@
               # ZCode 这一组里。默认推理档是 high；选 none 会关掉思考。
               # 国际站账号把 ZCODE_GLM_BASE_URL 设成
               # https://api.z.ai/api/anthropic 。
+              # 强度档位：zcode 的思考档（none 关思考；low/high/max 是它接受的值）。
+              efforts:
+                - id: none
+                  name: None
+                - id: low
+                  name: Low
+                - id: high
+                  name: High
+                - id: max
+                  name: Max
               models:
                 - id: GLM-5.3
                   name: GLM 5.3
@@ -392,6 +424,18 @@
               #
               # 思考档位是 MiniMax 自己的 low/medium/high/xhigh/max；M3.1-Flash
               # 关不掉思考，选 none 会被忽略（官方对 disabled 直接返回 2013）。
+              # 强度档位：minimax 的思考档（Flash 关不掉思考，所以不列 none）。
+              efforts:
+                - id: low
+                  name: Low
+                - id: medium
+                  name: Medium
+                - id: high
+                  name: High
+                - id: xhigh
+                  name: xHigh
+                - id: max
+                  name: Max
               models:
                 - id: MiniMax-M3.1-Flash
                   name: M3.1 Flash

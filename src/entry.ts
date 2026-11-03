@@ -65,6 +65,12 @@ const Model = Schema.object({
   contextWindow: Schema.number(),
 })
 
+/** 一档推理强度：`id` 是 wire 上真正的值，`name` 缺省时按 id 生成标签。 */
+const Effort = Schema.object({
+  id: Schema.string().required(),
+  name: Schema.string(),
+})
+
 export const Config: Schema<Config> = Schema.object({
   /**
    * The preset this row belongs to.
@@ -104,6 +110,16 @@ export const Config: Schema<Config> = Schema.object({
   mode: Schema.string(),
   cwd: Schema.string(),
   models: Schema.array(Model),
+  /**
+   * 该 agent 自己发布的强度档位（会话级 `thought_level` 选项里的值）。
+   *
+   * 用于那些「模型 id 不带 `[effort]` 后缀、强度走配置项」的 agent（claude 的
+   * `effort`、grok 的 `reasoning_effort`）以及我们自己的模型插件（zcode/minimax）。
+   * 目录据此给每个模型挂 `reasoning.efforts`，选择器才会画强度控件；标签只写档位
+   * 本身（`Low`/`High`/`xHigh`…）。只列 agent 真的接受的值——切换时 runner 会用
+   * agent 自己报的选项校验。
+   */
+  efforts: Schema.array(Effort),
   /**
    * Watchdog limits for an in-place answer, in milliseconds. Meaning per field
    * in `AcpPresetConfig`; absent fields keep the gateway's defaults.
@@ -165,6 +181,8 @@ export type Config = {
    */
   cwd?: string
   models?: { id: string; name: string; description?: string; contextWindow?: number }[]
+  /** 该 agent 发布的强度档位；见 schema 里的同名字段。 */
+  efforts?: { id: string; name?: string }[]
   /** Watchdog limits for an in-place answer, ms. `0` disables that one behavior. */
   stallMs?: number
   /** Deprecated alias for `stallMs`. */
@@ -241,6 +259,7 @@ export function apply(ctx: unknown, config: Config): void {
     ...(config.mode === undefined ? {} : { mode: config.mode }),
     ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
     ...(config.models === undefined ? {} : { models: config.models }),
+    ...(config.efforts === undefined ? {} : { efforts: config.efforts }),
     ...(config.hosts === undefined ? {} : { hosts: config.hosts }),
     ...(config.stallMs === undefined ? {} : { stallMs: config.stallMs }),
     ...(config.answerTimeoutMs === undefined ? {} : { answerTimeoutMs: config.answerTimeoutMs }),

@@ -142,6 +142,25 @@ describe('decideSelection', () => {
     if (decision.kind === 'own') expect(decision.modelId).toBe('gpt-6-astra[high]')
   })
 
+  it('强度走会话级选项的 agent：选档后 modelId 仍是裸 id，不拼 [后缀]', () => {
+    // claude / grok / zcode / minimax 的模型 id 本身不带强度，档位由 preset 声明、
+    // 通过 reasoningEffort 单独下发（claude/grok 由 runner 写 session/set_config_option，
+    // zcode/minimax 直接读请求字段）。拼成 `opus[high]` 会被 agent 当成不存在的模型。
+    for (const presetId of ['acp-claude', 'acp-grok', 'acp-zcode', 'acp-minimax']) {
+      const declared = { presetId, models: [{ id: 'some-model' }] }
+      const decision = decideSelection(declared, {
+        provider: `acp:${presetId}`,
+        model: 'some-model',
+        reasoningEffort: 'high',
+      })
+      expect(decision.kind).toBe('own')
+      if (decision.kind === 'own') {
+        expect(decision.modelId).toBe('some-model')
+        expect(decision.reasoningEffort).toBe('high')
+      }
+    }
+  })
+
   it('still refuses a base model the preset never advertised at any effort', () => {
     const codex = { presetId: 'acp-codex', models: [{ id: 'gpt-6-astra[low]' }, { id: 'gpt-6-astra[high]' }] }
     const decision = decideSelection(codex, { provider: 'acp:acp-codex', model: 'gpt-9-unknown' })
