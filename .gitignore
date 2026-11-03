@@ -1,3 +1,6 @@
 node_modules/
 lib/
 *.tsbuildinfo
+
+# 本地工作树目录（agent 隔离开发用）
+.worktrees/
