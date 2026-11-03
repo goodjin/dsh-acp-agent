@@ -10,9 +10,10 @@
 
 import { buildAnthropicBody } from './anthropic.ts'
 import type { PromptInput, PromptTool } from './anthropic.ts'
-import { messagesUrl } from './credential.ts'
+import { isMiniMaxLoginRequired, messagesUrl } from './credential.ts'
 import type { CredentialOverrides, MiniMaxCredential } from './credential.ts'
 import { resolveCredential } from './credential.ts'
+import { loginUrlHint } from './login.ts'
 import { chunksFromEvents, readSseEvents } from './sse.ts'
 import type { MiniMaxStreamChunk } from './sse.ts'
 
@@ -26,7 +27,16 @@ export type MiniMaxRequest = PromptInput & {
 
 /** Stream one turn. Cancellation rejects the iterator; the text already sent stays. */
 export async function* streamMiniMax(request: MiniMaxRequest): AsyncGenerator<MiniMaxStreamChunk> {
-  const credential = request.credential ?? await resolveCredential(request.credentialOverrides ?? {})
+  let credential: MiniMaxCredential
+  try {
+    credential = request.credential ?? await resolveCredential(request.credentialOverrides ?? {})
+  } catch (error) {
+    // 登录不可用（没登录 / 过期且刷新被拒）时，光说「失败」帮不上忙：
+    // 这条消息会落进会话，把授权地址一起带出去，用户点开就能重新登录。
+    if (!isMiniMaxLoginRequired(error)) throw error
+    const hint = loginUrlHint(error.region ?? 'cn', error.buildEnv ?? 'prod')
+    throw new Error(`${error.message}${hint === undefined ? '' : ` 授权地址：${hint}`}`)
+  }
   const url = messagesUrl(credential.baseUrl)
   const body = buildAnthropicBody(request)
   const fetchImpl = request.fetchImpl ?? fetch
@@ -50,10 +60,13 @@ export async function* streamMiniMax(request: MiniMaxRequest): AsyncGenerator<Mi
   }
   if (!response.ok) {
     const detail = scrub(await response.text().catch(() => ''), credential.accessToken).slice(0, 500)
+    const unauthorized = response.status === 401 || response.status === 403
+    const hint = unauthorized ? loginUrlHint(credential.region, credential.buildEnv) : undefined
     throw new Error(
       `MiniMax request failed (${String(response.status)})${detail === '' ? '' : `: ${detail}`}`
-      + (response.status === 401 || response.status === 403
+      + (unauthorized
         ? ' — the local MiniMax Code login was rejected; open MiniMax Code and log in again'
+          + (hint === undefined ? '' : `, or use the authorization link: ${hint}`)
         : ''),
     )
   }

@@ -18,6 +18,7 @@ import { join } from 'node:path'
 import {
   AuthRequiredError,
   createMCodeTokenProvider,
+  requiresInteractiveLogin,
   resolveMCodeOAuthEndpointConfig,
 } from './vendor/mcode-oauth/index.ts'
 import type { AuthBuildEnv, AuthRegion } from './vendor/mcode-oauth/contracts.ts'
@@ -108,6 +109,35 @@ export async function detectNamespace(
   return { region, buildEnv }
 }
 
+/**
+ * 本地登录不可用：没登录，或者登录过期且刷新失败。
+ *
+ * 单独成型是为了让上层能分辨「该让人去授权了」而不是当成网络错误。消息里永远只有
+ * 目录与原因，不含任何令牌；要不要给授权链接由上层决定（见 login.ts）。
+ */
+export class MiniMaxLoginRequiredError extends Error {
+  constructor(
+    /** `missing`：这台机器上根本没有 MiniMax Code 登录；`expired`：有登录，但刷新失败。 */
+    readonly reason: 'missing' | 'expired',
+    readonly dataDir: string,
+    readonly region?: AuthRegion,
+    readonly buildEnv?: AuthBuildEnv,
+  ) {
+    super(reason === 'missing'
+      ? `no MiniMax Code login under ${dataDir}. Open MiniMax Code, log in, then try again — `
+        + 'this plugin answers with the same login, so there is no separate key to configure.'
+      : `the MiniMax Code login under ${dataDir} can no longer be refreshed (expired or revoked). `
+        + 'Log in again with MiniMax Code — or open the authorization link this plugin prints — '
+        + 'and the next call picks the new login up; there is no separate key to configure.')
+    this.name = 'MiniMaxLoginRequiredError'
+  }
+}
+
+/** 是否是「该去授权」的那类失败（区别于网络/上游故障）。 */
+export function isMiniMaxLoginRequired(error: unknown): error is MiniMaxLoginRequiredError {
+  return error instanceof MiniMaxLoginRequiredError
+}
+
 /** The access token the local login can use right now, refreshing it if it is stale. */
 export async function resolveCredential(overrides: CredentialOverrides = {}): Promise<MiniMaxCredential> {
   const env = overrides.env ?? process.env
@@ -138,7 +168,11 @@ export async function resolveCredential(overrides: CredentialOverrides = {}): Pr
       baseUrl: managedBaseUrl(region, buildEnv),
     }
   } catch (error) {
-    if (error instanceof AuthRequiredError) throw notLoggedIn(dataDir)
+    // 官方 token provider 的两种失败：没有可用登录，或者过期且刷新被拒。
+    // 后者以前会以 OAuthProtocolError 冒出去——上层看不出「该重新授权」，
+    // 配额胶囊只会安静消失，模型请求只会报一句上游拒绝。
+    if (error instanceof AuthRequiredError) throw new MiniMaxLoginRequiredError('missing', dataDir, region, buildEnv)
+    if (requiresInteractiveLogin(error)) throw new MiniMaxLoginRequiredError('expired', dataDir, region, buildEnv)
     throw error
   }
 }
@@ -151,10 +185,7 @@ export function messagesUrl(baseUrl: string): string {
 
 /** The one message a missing login gets: where to go, never what was looked for. */
 function notLoggedIn(dataDir: string): Error {
-  return new Error(
-    `no MiniMax Code login under ${dataDir}. Open MiniMax Code, log in, then try again — `
-    + 'this plugin answers with the same login, so there is no separate key to configure.',
-  )
+  return new MiniMaxLoginRequiredError('missing', dataDir)
 }
 
 async function holdsLogin(dataDir: string): Promise<boolean> {

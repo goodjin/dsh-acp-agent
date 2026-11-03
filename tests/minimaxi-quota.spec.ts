@@ -9,9 +9,24 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it } from 'vitest'
-import { apply, QUOTA_ROUTE_PATH, registerMiniMaxQuotaRoute, swapQuotaFetch } from '../src/minimaxi-quota.ts'
+import { apply, QUOTA_ROUTE_PATH, registerMiniMaxQuotaRoute, swapLoginStarter, swapQuotaFetch } from '../src/minimaxi-quota.ts'
 import type { MiniMaxQuotaContext } from '../src/minimaxi-quota.ts'
-import type { MiniMaxCodingPlanQuota } from '../src/minimaxi/index.ts'
+import type { MiniMaxCodingPlanQuota, MiniMaxCredential } from '../src/minimaxi/index.ts'
+
+/**
+ * 一份现成凭据。
+ *
+ * 这条用例测的是「生产取数器自带超时信号、并把它透传给上游」，不该顺带依赖本机
+ * 真实登录：那台机器一旦登录过期，测试就跟着环境红（2026-11-03 现场）。所以传
+ * 现成凭据，只留上游四个请求走桩。
+ */
+const CREDENTIAL: MiniMaxCredential = {
+  accessToken: 'test-access-token',
+  expiresAtMs: Date.now() + 3_600_000,
+  region: 'cn',
+  buildEnv: 'prod',
+  baseUrl: 'https://api.minimax.test/anthropic',
+}
 
 type RouteHandler = (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
 interface CapturedRoute {
@@ -116,6 +131,7 @@ async function callRoute(
 
 afterEach(() => {
   swapQuotaFetch(undefined)
+  swapLoginStarter(undefined)
 })
 
 describe('registerMiniMaxQuotaRoute', () => {
@@ -221,14 +237,62 @@ describe('registerMiniMaxQuotaRoute', () => {
       return new Response(JSON.stringify({ model_remains: [] }), { status: 200 })
     }) as typeof fetch
     try {
-      const { defaultQuotaFetch, QUOTA_UPSTREAM_TIMEOUT_MS } = await import('../src/minimaxi-quota.ts')
+      const { quotaFetchWith, QUOTA_UPSTREAM_TIMEOUT_MS } = await import('../src/minimaxi-quota.ts')
       expect(QUOTA_UPSTREAM_TIMEOUT_MS).toBeGreaterThan(0)
-      await defaultQuotaFetch()
+      // 与生产取数器同一份实现，只是凭据是现成的：不碰本机登录、不发 OAuth 请求。
+      await quotaFetchWith({ credential: CREDENTIAL })
       expect(seen).toHaveLength(4)
-      expect(seen[0]?.signal).toBeInstanceOf(AbortSignal)
+      for (const call of seen) expect(call.signal).toBeInstanceOf(AbortSignal)
     } finally {
       globalThis.fetch = real
     }
+  })
+})
+
+describe('登录过期时给出授权地址', () => {
+  it('取数失败是「该去授权」时附带可点开的链接', async () => {
+    const { MiniMaxLoginRequiredError } = await import('../src/minimaxi/index.ts')
+    swapQuotaFetch(async () => { throw new MiniMaxLoginRequiredError('expired', '/tmp/minimax-fixture', 'cn', 'prod') })
+    swapLoginStarter(async () => ({
+      userCode: 'AB12-CD34',
+      verificationUri: 'https://account.minimax.cn/device',
+      verificationUriComplete: 'https://account.minimax.cn/device?user_code=AB12-CD34',
+      expiresInSec: 300,
+    }))
+    const { route } = rig()
+    const answer = await callRoute(route, { cookie: 'dsh-session=good' })
+    expect(answer.status).toBe(200)
+    const body = answer.body as Record<string, unknown>
+    expect(body['ok']).toBe(false)
+    expect(body['needsLogin']).toBe(true)
+    expect(body['login']).toEqual({
+      url: 'https://account.minimax.cn/device?user_code=AB12-CD34',
+      userCode: 'AB12-CD34',
+      expiresInSec: 300,
+    })
+    // 报错文案里不出现令牌（这一路只带原因与目录）。
+    expect(String(body['error'])).not.toContain('AB12-CD34')
+  })
+
+  it('账号端点不通时退回账户站点，仍然是可点开的地址', async () => {
+    const { MiniMaxLoginRequiredError } = await import('../src/minimaxi/index.ts')
+    swapQuotaFetch(async () => { throw new MiniMaxLoginRequiredError('expired', '/tmp/minimax-fixture', 'cn', 'prod') })
+    swapLoginStarter(async () => { throw new Error('offline') })
+    const { route } = rig()
+    const answer = await callRoute(route, { cookie: 'dsh-session=good' })
+    const body = answer.body as Record<string, unknown>
+    expect(body['needsLogin']).toBe(true)
+    expect(body['login']).toEqual({ url: 'https://account.minimax.cn' })
+  })
+
+  it('普通网络故障不冒充「该去授权」', async () => {
+    swapQuotaFetch(async () => { throw new Error('socket hang up') })
+    const { route } = rig()
+    const answer = await callRoute(route, { cookie: 'dsh-session=good' })
+    const body = answer.body as Record<string, unknown>
+    expect(body['ok']).toBe(false)
+    expect(body['needsLogin']).toBeUndefined()
+    expect(body['login']).toBeUndefined()
   })
 })
 

@@ -14,8 +14,9 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { fetchMiniMaxQuota } from './minimaxi/index.ts'
-import type { MiniMaxCodingPlanQuota } from './minimaxi/index.ts'
+import { fetchMiniMaxQuota, isMiniMaxLoginRequired } from './minimaxi/index.ts'
+import type { MiniMaxCodingPlanQuota, MiniMaxLoginRequiredError, MiniMaxQuotaRequest } from './minimaxi/index.ts'
+import { beginDeviceLogin, cachedLoginPrompt, createLoginManager, loginUrlHint, promptUrl } from './minimaxi/login.ts'
 
 export const name = 'threadharbor-minimaxi-quota'
 
@@ -33,6 +34,21 @@ export type MiniMaxQuotaFetch = () => Promise<MiniMaxCodingPlanQuota | null>
 
 /** 模块级可替换的取数器：生产走真令牌真网络，测试换假件。 */
 let quotaFetch: MiniMaxQuotaFetch | undefined
+
+/** 设备授权提示的来源形状（登录模块里 `beginDeviceLogin` 的回值）。 */
+type LoginPrompt = { readonly userCode: string; readonly verificationUri: string; readonly verificationUriComplete?: string; readonly expiresInSec: number }
+type LoginStarter = (error: MiniMaxLoginRequiredError) => Promise<LoginPrompt>
+
+/** 可替换的「开一次登录」，测试用它避开真实账号端点。 */
+let loginStarter: LoginStarter | undefined
+
+/**
+ * 换登录发起器（测试注入假件）；传回 `undefined` 恢复生产实现。
+ * @param next - 下一只会发起设备授权的函数，或 `undefined`。
+ */
+export function swapLoginStarter(next: LoginStarter | undefined): void {
+  loginStarter = next
+}
 
 /**
  * 换取数器（测试注入假件）；传回 `undefined` 恢复真件。
@@ -117,9 +133,18 @@ export function registerMiniMaxQuotaRoute(ctx: MiniMaxQuotaContext, deps: MiniMa
             respondJson(res, 200, JSON.stringify({ ok: true, quota }))
           } catch (error) {
             // 到这一层的错误消息已在 quota 模块里脱敏（令牌不可能混进来）。
+            const message = error instanceof Error ? error.message : String(error)
+            if (!isMiniMaxLoginRequired(error)) {
+              respondJson(res, 200, JSON.stringify({ ok: false, error: message }))
+              return
+            }
+            // 登录过期：光说「过期了」没用，附一条能点开的授权地址。
+            const login = await loginOfferOf(error)
             respondJson(res, 200, JSON.stringify({
               ok: false,
-              error: error instanceof Error ? error.message : String(error),
+              error: message,
+              needsLogin: true,
+              ...(login === undefined ? {} : { login }),
             }))
           }
         },
@@ -132,7 +157,69 @@ export function registerMiniMaxQuotaRoute(ctx: MiniMaxQuotaContext, deps: MiniMa
 export const QUOTA_UPSTREAM_TIMEOUT_MS = 15_000
 
 /** 生产取数器：令牌、地址、签名全在 quota 模块内解析；自带超时信号。 */
-export const defaultQuotaFetch: MiniMaxQuotaFetch = () => fetchMiniMaxQuota({ signal: AbortSignal.timeout(QUOTA_UPSTREAM_TIMEOUT_MS) })
+export const defaultQuotaFetch: MiniMaxQuotaFetch = () =>
+  fetchMiniMaxQuota({ signal: AbortSignal.timeout(QUOTA_UPSTREAM_TIMEOUT_MS) })
+
+/**
+ * 生产取数器的可注入版本：测试传一份现成凭据，就不必碰本机真实登录
+ * （真实登录一过期，测试会跟着环境红——2026-11-03 就是这样）。
+ * @param request - 覆盖项（凭据、超时信号以外的一切）。
+ * @returns 一次配额读数。
+ */
+export function quotaFetchWith(request: MiniMaxQuotaRequest): Promise<MiniMaxCodingPlanQuota | null> {
+  return fetchMiniMaxQuota({ signal: AbortSignal.timeout(QUOTA_UPSTREAM_TIMEOUT_MS), ...request })
+}
+
+/** 生产实现：真开一次设备授权（拿到提示就返回，轮询留在后台）。 */
+function defaultLoginStarter(error: MiniMaxLoginRequiredError): Promise<LoginPrompt> {
+  return error.region === undefined || error.buildEnv === undefined
+    ? Promise.reject(new Error('unknown MiniMax login namespace'))
+    : beginDeviceLogin({
+      manager: createLoginManager({ dataDir: error.dataDir, region: error.region, buildEnv: error.buildEnv }),
+    })
+}
+
+/**
+ * 「去哪儿授权」的那条应答：先看已缓存的提示，没有就现开一次设备授权；
+ * 端点不通时退回账户站点，至少给得出一个能打开的地址。
+ * @param error - 登录不可用的错误（带着区域与环境）。
+ * @returns 浏览器可用的授权信息，或 undefined（连账户站点都算不出来）。
+ */
+async function loginOfferOf(error: MiniMaxLoginRequiredError): Promise<
+  { readonly url: string; readonly userCode?: string; readonly expiresInSec?: number } | undefined
+> {
+  if (error.region !== undefined && error.buildEnv !== undefined) {
+    // 后台开一次设备授权；只等很短一会儿——MiniMax Code 在跑时它握着跨进程锁，
+    // 我们这次登录要排队，不能把这一路接口挂在那里。等不到就用缓存/账户站点，
+    // 下一轮轮询（30 秒）多半已经拿到带用户码的完整地址。
+    const started = (loginStarter ?? defaultLoginStarter)(error).then(
+      prompt => ({ url: promptUrl(prompt), userCode: prompt.userCode, expiresInSec: prompt.expiresInSec }),
+      () => undefined,
+    )
+    const arrived = await Promise.race([started, sleepThenUndefined(LOGIN_OFFER_WAIT_MS)])
+    if (arrived !== undefined) return arrived
+  }
+  // 赛跑期间流程可能刚好把提示写进缓存：再读一次，能带上用户码就带上。
+  const settled = loginUrlHint(error.region ?? 'cn', error.buildEnv ?? 'prod')
+  if (settled === undefined) return undefined
+  const prompt = cachedLoginPrompt()
+  return prompt !== undefined && promptUrl(prompt) === settled
+    ? { url: settled, userCode: prompt.userCode, expiresInSec: prompt.expiresInSec }
+    : { url: settled }
+}
+
+/** 等设备授权提示的预算：够一次正常往返，又不至于把配额接口挂住。 */
+const LOGIN_OFFER_WAIT_MS = 3_000
+
+/** 等一小会儿再给 undefined，用来和登录流程赛跑。 */
+function sleepThenUndefined(ms: number): Promise<undefined> {
+  return new Promise(resolve => {
+    const timer = setTimeout(() => { resolve(undefined) }, ms)
+    if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
+      (timer as { unref(): void }).unref()
+    }
+  })
+}
 
 /** JSON 应答：no-store（缓存归宿主管，不许任何一环替我们缓存）+ 固定长度。 */
 function respondJson(res: ServerResponse, status: number, body: string): void {

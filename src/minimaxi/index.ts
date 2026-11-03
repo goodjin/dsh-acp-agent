@@ -1,4 +1,11 @@
-export { detectNamespace, messagesUrl, resolveCredential, resolveDataDir } from './credential.ts'
+export {
+  MiniMaxLoginRequiredError,
+  detectNamespace,
+  isMiniMaxLoginRequired,
+  messagesUrl,
+  resolveCredential,
+  resolveDataDir,
+} from './credential.ts'
 export type { CredentialOverrides, DataDirOptions, MiniMaxCredential } from './credential.ts'
 export type { AuthBuildEnv, AuthRegion } from './credential.ts'
 export { buildAnthropicBody, defaultMaxTokens, reasoningFields } from './anthropic.ts'
@@ -9,3 +16,5 @@ export { fetchMiniMaxQuota } from './quota.ts'
 export type { MiniMaxCodingPlanQuota, MiniMaxCredit, MiniMaxQuotaRequest, MiniMaxQuotaWindow } from './quota.ts'
 export type { MiniMaxBlock, MiniMaxFinish, MiniMaxStreamChunk, MiniMaxUsage } from './sse.ts'
 export { canDisableThinking, MINIMAX_MODELS } from './vendor/mcode-runtime/model-catalog.ts'
+export { accountOrigin, beginDeviceLogin, cachedLoginPrompt, clearLoginPrompt, createLoginManager, loginUrlHint, promptUrl } from './login.ts'
+export type { BeginLoginOptions, LoginManager, MiniMaxLoginPrompt } from './login.ts'

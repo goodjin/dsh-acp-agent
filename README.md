@@ -28,6 +28,31 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin tha
   package's `assistant-step` wrapper through the seat
   `conversation.chat.node.acp-segment-renderer` (chat-area owns the declaration).
 
+## MiniMax login: refresh, and what happens when it can't
+
+The MiniMax client borrows the local MiniMax Code login
+(`~/.minimax/auth/<buildEnv>/<region>/mcode-public/auth.json`) and refreshes it through
+the same official OAuth core — same credential store, same cross-process lock — so a
+refresh here never invalidates the desktop app or the CLI.
+
+When the refresh token itself is dead, retrying is pointless, so the plugin now says
+*where to authorize* instead of failing quietly:
+
+- `resolveCredential` raises `MiniMaxLoginRequiredError` (`reason: 'missing' | 'expired'`);
+- the quota route (`GET /threadharbor/minimax/quota`) answers
+  `{ ok: false, needsLogin: true, login: { url, userCode?, expiresInSec? } }`;
+- a model request that cannot authenticate puts the authorization link into the error
+  it streams into the conversation, so the link is clickable where the failure shows up.
+
+The link comes from the same device-authorization flow the desktop app uses
+(`POST /oauth2/device/code` → `verification_uri_complete`). The plugin starts one in the
+background and waits at most 3 s for the prompt, because while MiniMax Code is running it
+holds the auth lock and our login has to queue: the first response may carry just the
+account origin, and the next poll (30 s later) the complete link with the user code. Once
+the user authorizes, the official core writes the new credential back to the shared
+`auth.json` and the next call simply works. Tokens never enter these payloads, log lines
+or error strings.
+
 ## 0.3.0 — what moved out
 
 Generic conversation-area UI moved to [`@goodjin2/dsh-chat-area`](https://github.com/threadharbor/dsh-chat-area)
