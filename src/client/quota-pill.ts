@@ -17,7 +17,12 @@
 
 import { createElement } from 'react'
 import type { ReactNode } from 'react'
-import { IconDatabaseOutlineRegular, IconGaugeOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconDatabaseOutlineRegular, IconGaugeOutlineRegular, IconWarningOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { loginChipOf, loginOfferOfBody, sameLoginOffer } from './quota-login.ts'
+import type { QuotaLoginOffer } from './quota-login.ts'
+
+export { loginOfferOfBody, sameLoginOffer } from './quota-login.ts'
+export type { QuotaLoginOffer } from './quota-login.ts'
 import { fallbackT, NAMESPACE } from './locales.ts'
 import type { RuntimeT } from './locales.ts'
 
@@ -138,7 +143,9 @@ export interface QuotaWindows {
 }
 
 /** The route's whole answer body. */
-export type QuotaAnswer = { readonly ok: true; readonly quota: QuotaWindows } | { readonly ok: false; readonly error: string }
+export type QuotaAnswer =
+  | { readonly ok: true; readonly quota: QuotaWindows }
+  | { readonly ok: false; readonly error: string; readonly login?: QuotaLoginOffer }
 
 /** The model-directory snapshot shape the pill reads (upstream's directory store). */
 interface QuotaDirectorySnapshot {
@@ -165,6 +172,8 @@ function formatReset(unixMs: number): string {
 export interface QuotaPoller {
   subscribe(listener: () => void): () => void
   getSnapshot(): QuotaWindows | undefined
+  /** 当前「去授权」信息；没有过期时是 undefined。 */
+  getLogin(): QuotaLoginOffer | undefined
   refresh(): Promise<void>
   start(): void
   dispose(): void
@@ -189,14 +198,22 @@ export function createQuotaPoller(deps: {
   let quota: QuotaWindows | undefined
   let handle: unknown
   let lastReason: string | undefined
+  let login: QuotaLoginOffer | undefined
 
   const notify = (): void => { for (const listener of listeners) listener() }
 
-  const fail = (reason: string): void => {
+  const fail = (reason: string, offer: QuotaLoginOffer | undefined): void => {
+    let changed = false
     if (quota !== undefined) {
       quota = undefined
-      notify()
+      changed = true
     }
+    // 授权信息变了也要通知：胶囊旁边那枚链接要跟着换地址/消失。
+    if (!sameLoginOffer(login, offer)) {
+      login = offer
+      changed = true
+    }
+    if (changed) notify()
     if (reason !== lastReason) {
       lastReason = reason
       deps.report?.(reason)
@@ -209,19 +226,24 @@ export function createQuotaPoller(deps: {
       return () => { listeners.delete(listener) }
     },
     getSnapshot: () => quota,
+    getLogin: () => login,
     async refresh() {
       try {
         const answer = await deps.fetchQuota()
         if (!answer.ok) {
-          fail(answer.error)
+          fail(answer.error, answer.login)
           return
         }
         lastReason = undefined
+        if (login !== undefined) {
+          login = undefined
+          notify()
+        }
         if (quota !== undefined && JSON.stringify(quota) === JSON.stringify(answer.quota)) return
         quota = answer.quota
         notify()
       } catch (error) {
-        fail(`GLM quota poll failed unexpectedly: ${error instanceof Error ? error.message : String(error)}`)
+        fail(`GLM quota poll failed unexpectedly: ${error instanceof Error ? error.message : String(error)}`, undefined)
       }
     },
     start() {
@@ -256,7 +278,8 @@ export function routeQuotaFetcher(fetchImpl: typeof fetch = fetch, routePath: st
         return { ok: true, quota: body['quota'] as QuotaWindows }
       }
       if (isRecord(body) && body['ok'] === false && typeof body['error'] === 'string') {
-        return { ok: false, error: body['error'] }
+        const login = loginOfferOfBody(body)
+        return { ok: false, error: body['error'], ...(login === undefined ? {} : { login }) }
       }
       return { ok: false, error: `HTTP ${String(response.status)}: the quota route answered an unrecognised body` }
     } catch (error) {
@@ -280,9 +303,11 @@ type SnapshotHook<T> = <S>(selector: (value: T | undefined) => S) => S
  * locale seat, and the provider spec (defaults to GLM).
  * @returns the pills, or null whenever the row should not appear.
  */
-export function QuotaPillRow({ useQuota, useModelDirectory, visible = true, t = fallbackT, spec = GLM_QUOTA_PILL_SPEC }: {
+export function QuotaPillRow({ useQuota, useModelDirectory, useLogin, visible = true, t = fallbackT, spec = GLM_QUOTA_PILL_SPEC }: {
   useQuota?: SnapshotHook<QuotaWindows>
   useModelDirectory?: SnapshotHook<QuotaDirectorySnapshot>
+  /** 登录过期时宿主给的授权信息；有它就画一枚「去授权」链接取代数字。 */
+  useLogin?: SnapshotHook<QuotaLoginOffer>
   visible?: boolean
   t?: RuntimeT
   spec?: QuotaPillSpec
@@ -294,6 +319,7 @@ export function QuotaPillRow({ useQuota, useModelDirectory, visible = true, t = 
   const model = directory?.current?.model
   const providerId = directory?.current?.provider
   const quota = useQuota?.((value) => value)
+  const login = useLogin?.((value) => value)
   if (visible === false) return null
   // 认谁：优先按目录里的 provider id（preset id，如 acp:acp-claude——Claude 的
   // 模型 id 是 default/opus 这类通用别名，按前缀认会误伤别家）；没给 providerId
@@ -302,6 +328,8 @@ export function QuotaPillRow({ useQuota, useModelDirectory, visible = true, t = 
     ? providerId === spec.providerId
     : model !== undefined && model.startsWith(spec.prefix ?? '')
   if (!mine) return null
+  // 登录过期：这一行不再画数字，改画一枚能点开的授权链接（授权完成后自动恢复）。
+  if (login !== undefined) return loginChip(login, t, spec)
   if (quota === undefined) return null
   const windows = [quota.fiveHour, quota.weekly].filter((window): window is QuotaWindow => window !== undefined)
   const credit = spec.showCredit ? quota.credit : undefined
@@ -324,6 +352,11 @@ export function QuotaPillRow({ useQuota, useModelDirectory, visible = true, t = 
     ...windows.map(window => pillOf(window, t, spec)),
     ...(credit === undefined ? [] : [creditPillOf(credit, t, spec)]),
   )
+}
+
+/** 「去授权」那一枚（带上提示图标与各家口径的 data-* 标记）。 */
+export function loginChip(login: QuotaLoginOffer, t: RuntimeT, spec: QuotaPillSpec = GLM_QUOTA_PILL_SPEC): ReactNode {
+  return loginChipOf(login, t, { provider: spec.provider, icon: createElement(IconWarningOutlineRegular) })
 }
 
 /** 重置时刻那行：只在 5 小时窗口带 resetAt 时出现（周窗口重置在几天外，写时刻会误导）。 */
@@ -507,6 +540,8 @@ export function registerQuotaDockPills(
           visible,
           hooks: {
             zcodeQuota: poller,
+            // 同一只轮询器的另一半快照：登录过期时的「去授权」信息。
+            zcodeLogin: { subscribe: poller.subscribe, getSnapshot: () => poller.getLogin() },
             ...(directory === undefined ? {} : { zcodeDirectory: directory }),
           },
         }
@@ -514,11 +549,13 @@ export function registerQuotaDockPills(
     },
     (props: {
       readonly useZcodeQuota?: SnapshotHook<QuotaWindows>
+      readonly useZcodeLogin?: SnapshotHook<QuotaLoginOffer>
       readonly useZcodeDirectory?: SnapshotHook<QuotaDirectorySnapshot>
       readonly visible?: boolean
       readonly t?: RuntimeT
     }) => createElement(QuotaPillRow, {
       ...(props.useZcodeQuota === undefined ? {} : { useQuota: props.useZcodeQuota }),
+      ...(props.useZcodeLogin === undefined ? {} : { useLogin: props.useZcodeLogin }),
       ...(props.useZcodeDirectory === undefined ? {} : { useModelDirectory: props.useZcodeDirectory }),
       ...(props.visible === undefined ? {} : { visible: props.visible }),
       ...(props.t === undefined ? {} : { t: props.t }),

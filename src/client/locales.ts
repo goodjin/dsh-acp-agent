@@ -22,6 +22,7 @@ export type ClientLocaleKey =
   | 'quota.codex.window.title' | 'quota.codex.credit' | 'quota.codex.creditTitle'
   | 'quota.claude.fiveHour.title' | 'quota.claude.weekly.title'
   | 'quota.claude.credit' | 'quota.claude.creditTitle'
+  | 'quota.login.cta' | 'quota.login.code' | 'quota.login.title'
   | 'recovery.interrupted.note' | 'recovery.interrupted.expand'
   | 'acpVisibility.label' | 'acpVisibility.title' | 'acpVisibility.intro'
   | 'acpVisibility.summary' | 'acpVisibility.summaryNone' | 'acpVisibility.reset'
@@ -64,6 +65,9 @@ export const zh: Record<ClientLocaleKey, string> = {
   'quota.claude.weekly.title': 'Claude 套餐 7 天窗口：已用 {percent}%',
   'quota.claude.credit': '按量',
   'quota.claude.creditTitle': 'Claude 按量已用：{used} / {limit}',
+  'quota.login.cta': '去授权',
+  'quota.login.code': '授权码 {code}',
+  'quota.login.title': '登录过期或没有登录：点开授权链接重新登录，授权完成后这一行会自动恢复',
   'recovery.interrupted.note': '本轮被中断，{steps} 项过程内容已折叠',
   'recovery.interrupted.expand': '展开本轮过程',
   'acpVisibility.label': '提供方与模型',
@@ -121,6 +125,9 @@ export const en: Record<ClientLocaleKey, string> = {
   'quota.claude.weekly.title': 'Claude plan 7-day window: {percent}% used',
   'quota.claude.credit': 'extra',
   'quota.claude.creditTitle': 'Claude extra usage: {used} / {limit}',
+  'quota.login.cta': 'Authorize',
+  'quota.login.code': 'code {code}',
+  'quota.login.title': 'Login expired or missing: open the authorization link to sign in again; this row comes back on its own once you have',
   'recovery.interrupted.note': 'This turn was interrupted; {steps} process items are folded',
   'recovery.interrupted.expand': 'Show this turn’s process',
   'acpVisibility.label': 'Providers & models',
