@@ -65,7 +65,7 @@ function collapsedToCatalog(
 export type CatalogEffort = {
   /** The wire value the agent selects on — the `[suffix]` after the base id. */
   readonly id: string
-  /** Human label, as the agent reported the suffixed entry. */
+  /** Human label for the effort alone（`Low`/`High`/`xHigh`…），不带模型名前缀。 */
   readonly name: string
   /** The full wire id this effort stands for (`base[id]`), so a selection re-attaches it verbatim. */
   readonly wireId: string
@@ -81,6 +81,34 @@ export type CollapsedModel = {
   readonly description?: string
   /** The efforts this model offers, or undefined when the agent publishes bare ids. */
   readonly efforts: readonly CatalogEffort[] | undefined
+}
+
+/**
+ * 强度的显示名：只写强度本身，不重复模型名。
+ *
+ * 真机清单里 codex 每一项都叫 `<模型> (low)` 这种，选择器把 effort 当**模型下的一档**
+ * 渲染，于是下拉里出现「6.1 Sol (low)」——模型名在上面已经有了，这里再写一遍既长又
+ * 分不清档位。按档位名给独立单词：`low` → `Low`、`xhigh` → `xHigh`、`max` → `Max`，
+ * 未知后缀首字母大写兜底（不猜语义，也不把它丢掉）。
+ * @param effort - `[suffix]` 里的原始写法。
+ * @returns 只含强度本身的标签。
+ */
+export function effortLabelOf(effort: string): string {
+  const known: Record<string, string> = {
+    none: 'None',
+    off: 'Off',
+    minimal: 'Minimal',
+    low: 'Low',
+    medium: 'Medium',
+    high: 'High',
+    xhigh: 'xHigh',
+    max: 'Max',
+    ultra: 'Ultra',
+  }
+  const normalized = effort.trim().toLowerCase()
+  const label = known[normalized]
+  if (label !== undefined) return label
+  return normalized === '' ? effort : `${normalized.slice(0, 1).toUpperCase()}${normalized.slice(1)}`
 }
 
 /**
@@ -111,8 +139,10 @@ function splitEffort(id: string): { base: string; effort: string } | undefined {
  * exactly when the model advertises `reasoning.efforts`). A bare-id agent is
  * returned unchanged — no invented efforts, no collapsed rows.
  *
- * The base display name and the efforts keep whatever the agent reported; the
- * base id is the most common spelling among a model's entries (first wins ties),
+ * The base display name keeps what the agent reported; each effort is labelled by
+ * the effort alone（`Low`/`High`…，见 {@link effortLabelOf}），because the picker
+ * already shows the model name above the effort control。The base id is the most
+ * common spelling among a model's entries (first wins ties),
  * which is stable because a model's entries share one spelling in practice.
  * @param models - The models one preset's agent offers, possibly with `[effort]` suffixes.
  * @returns One entry per base model, in first-seen order, efforts in first-seen order.
@@ -141,13 +171,13 @@ export function collapseEffortModels(models: readonly { id: string; name: string
     const existing = byBase.get(split.base)
     if (existing === undefined) {
       order.push(split.base)
-      byBase.set(split.base, { displayName: baseName(model.name, split.effort), ...(model.description === undefined ? {} : { description: model.description }), count: 1, efforts: [{ id: split.effort, name: model.name, wireId: model.id }] })
+      byBase.set(split.base, { displayName: baseName(model.name, split.effort), ...(model.description === undefined ? {} : { description: model.description }), count: 1, efforts: [{ id: split.effort, name: effortLabelOf(split.effort), wireId: model.id }] })
       continue
     }
     existing.count += 1
     if (existing.description === undefined && model.description !== undefined) existing.description = model.description
     if (existing.efforts !== undefined && !existing.efforts.some(effort => effort.id === split.effort)) {
-      existing.efforts.push({ id: split.effort, name: model.name, wireId: model.id })
+      existing.efforts.push({ id: split.effort, name: effortLabelOf(split.effort), wireId: model.id })
     }
   }
   return order.map(base => {

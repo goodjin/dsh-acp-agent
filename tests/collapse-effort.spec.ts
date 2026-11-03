@@ -19,7 +19,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { collapseEffortModels } from '../src/catalog.ts'
+import { collapseEffortModels, effortLabelOf } from '../src/catalog.ts'
 
 describe('collapseEffortModels', () => {
   it('把同一基础模型的多个 [强度] 归并成一个', () => {
@@ -33,14 +33,16 @@ describe('collapseEffortModels', () => {
     expect(result[0]?.displayName).toBe('GPT-6-Astra')
   })
 
-  it('归并后附上各强度的 efforts（含 wire id 与原显示名）', () => {
+  it('归并后附上各强度的 efforts（标签只写强度本身，wire id 保持原样）', () => {
     const result = collapseEffortModels([
       { id: 'gpt-6-astra[low]', name: 'GPT-6-Astra (low)' },
       { id: 'gpt-6-astra[high]', name: 'GPT-6-Astra (high)' },
     ])
     const efforts = result[0]?.efforts
     expect(efforts?.map(e => e.id)).toEqual(['low', 'high'])
-    expect(efforts?.find(e => e.id === 'high')?.name).toBe('GPT-6-Astra (high)')
+    // 选择器把 effort 当模型下的一档渲染，模型名已在上面一行，这里只留档位单词。
+    expect(efforts?.find(e => e.id === 'high')?.name).toBe('High')
+    expect(efforts?.find(e => e.id === 'low')?.name).toBe('Low')
     expect(efforts?.find(e => e.id === 'high')?.wireId).toBe('gpt-6-astra[high]')
   })
 
@@ -94,5 +96,42 @@ describe('collapseEffortModels', () => {
     ])
     expect(result).toHaveLength(1)
     expect(result[0]?.efforts?.map(e => e.id)).toEqual(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
+  })
+})
+
+describe('强度标签只写强度本身', () => {
+  it('已知档位用规范写法', () => {
+    expect(effortLabelOf('low')).toBe('Low')
+    expect(effortLabelOf('medium')).toBe('Medium')
+    expect(effortLabelOf('high')).toBe('High')
+    expect(effortLabelOf('xhigh')).toBe('xHigh')
+    expect(effortLabelOf('max')).toBe('Max')
+    expect(effortLabelOf('ultra')).toBe('Ultra')
+    expect(effortLabelOf('minimal')).toBe('Minimal')
+    expect(effortLabelOf('none')).toBe('None')
+    expect(effortLabelOf('off')).toBe('Off')
+  })
+
+  it('大小写与空白都归一', () => {
+    expect(effortLabelOf(' XHIGH ')).toBe('xHigh')
+    expect(effortLabelOf('HIGH')).toBe('High')
+  })
+
+  it('不认识的档位首字母大写兜底，不丢词', () => {
+    expect(effortLabelOf('turbo')).toBe('Turbo')
+    expect(effortLabelOf('weird-mode')).toBe('Weird-mode')
+  })
+
+  it('codex 那 46 个组合归并后，每一档的标签里不再带模型名', () => {
+    const models = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'].map(level => ({
+      id: `gpt-6.1-sol[${level}]`,
+      name: `6.1 Sol (${level})`,
+    }))
+    const collapsed = collapseEffortModels(models)
+    expect(collapsed).toHaveLength(1)
+    expect(collapsed[0]?.displayName).toBe('6.1 Sol')
+    expect(collapsed[0]?.efforts?.map(effort => effort.name)).toEqual(['Low', 'Medium', 'High', 'xHigh', 'Max', 'Ultra'])
+    // wire id 仍是一字不差的组合 id（选择要能拼回去）。
+    expect(collapsed[0]?.efforts?.map(effort => effort.wireId)).toEqual(models.map(model => model.id))
   })
 })
