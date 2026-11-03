@@ -45,14 +45,22 @@ export default defineConfig({
       if (!virtualId.startsWith(cssPrefix)) return null
       const file = virtualId.slice(cssPrefix.length, -cssSuffix.length)
       this.addWatchFile(file)
+      // lightningcss 的 [hash] 以文件名为种子：传绝对路径会让类名哈希随构建目录变化
+      // （.worktrees/… vs 主仓 → 同一份 CSS 出不同的 hash，产物每次都“变脏”）。
+      // 本包的 .module.css 基名唯一，传基名即可让哈希只由内容决定、跨目录可复现。
       const result = transform({
-        filename: file,
+        filename: basename(file),
         code: await readFile(file),
         cssModules: { pattern: '[hash]_[local]' },
         minify: true,
       })
+      // 按键名排序再输出：lightningcss 的 exports 来自 Rust 侧的哈希表，遍历顺序
+      // 每个进程都不同（HashMap 的随机种子），不排序的话同一份源码每次构建产物字节
+      // 都不一样——入库产物永远“脏”，DSH 还会因为 rev 变化白白热替换一次插件。
       const classes: Record<string, string> = {}
-      for (const [local, value] of Object.entries(result.exports ?? {})) classes[local] = value.name
+      const exported = Object.entries(result.exports ?? {})
+        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      for (const [local, value] of exported) classes[local] = value.name
       const css = result.code.toString()
       const tag = `${id}/${basename(file)}`
       return [
