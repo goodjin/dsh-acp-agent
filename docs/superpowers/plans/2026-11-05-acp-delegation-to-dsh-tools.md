@@ -273,7 +273,7 @@ git commit -m "feat: 委派服务的载荷契约"
 - Test: `scripts/test-delegation-service.mjs`（superpowers）
 
 **Interfaces:**
-- Consumes: 宿主服务 `ctx.subagents`（`startContinuable`）、`ctx.agents`、`ctx.configEditor`；钉表解析用 `lib/settings-schema.js` 的 `resolveRoute`；技能清单用 `lib/delegable-skills.js` 的 `DELEGABLE_SKILLS`。
+- Consumes: 宿主服务 `ctx.subagents`（`startActivation`）、`ctx.agents`、`ctx.configEditor`；钉表解析用 `lib/settings-schema.js` 的 `resolveRoute`；技能清单用 `lib/delegable-skills.js` 的 `DELEGABLE_SKILLS`。
 - Produces: 宿主服务 `superpowers.delegation`，方法 `delegate(request: DelegationRequest): Promise<DelegationResult>`。
 
 - [ ] **Step 1: 写失败的测试**
@@ -286,7 +286,7 @@ git commit -m "feat: 委派服务的载荷契约"
 4. 技能正文被内联进孩子的初始提示：断言提示文本含 SKILL.md 正文里的一句原文，且含技能目录绝对路径。
 5. 返回值形状：`{output, model, childId}`，`model` 为实际路由字符串。
 
-测试用替身注入宿主面：`ctx` 提供假 `subagents.start`（记下 request，返回一个带可 resolve 的 `result` 与 `dispose` 的 run 替身）、假 `agents`、假 `configEditor`（返回钉表）。**测试不得依赖真实模型或真实子代理。**
+测试用替身注入宿主面：`ctx` 提供假 `subagents.startActivation`（记下 spec，返回一个带可 resolve 的 `result` 与 `dispose` 的 activation 替身）、假 `agents`、假 `configEditor`（返回钉表）。**测试不得依赖真实模型或真实子代理。**
 
 - [ ] **Step 2: 跑测试确认失败**
 
@@ -306,10 +306,11 @@ Expected: FAIL（模块不存在）。
 3. 读钉表：用 `lib/settings-schema.js` 的 `resolveRoute(settings, skill)`。钉表读法照抄 `lib/skill-delegation.js` 的 `hostDelegationConfig(ctx)`（`ctx.get('configEditor')` → 找 `options.id === NAMESPACE` 的行 → 读 `fiber.config` → `unvolatile`）。
 4. 读技能正文：从本包 `preset/skills/<skill>/SKILL.md` 读全文；技能目录绝对路径 = `preset/skills/<skill>` 的绝对路径（用 `fileURLToPath(new URL(..., import.meta.url))` 解析，不依赖 cwd）。
 5. 组装孩子提示：技能正文 + 技能目录绝对路径 + `request.brief`。提示用 `[{ type: 'text', text }]`。
-6. 起子代理：用 **one-shot** 路径 `ctx.subagents.start('spawn', { label: '[<skill>] <task>' 或 '[通用] <task>', signal, request: { parent, prompt, ...(route ? { agentOptions: route } : {}) } })`。`parent` 从 `ctx.agents.get(request.sessionId)` 取；取不到就抛错并报出 sessionId。
-   - **为什么用 one-shot 而不是 `startContinuable`**：委派是阻塞语义——工具调用返回时必须带着子代理的最终文本。`startContinuable` 只返回 childId，结果之后异步到达，调用方无从等待。one-shot 的 `run.result` 正是那个「跑完的信号」。
-7. 等结果：`const run = await ctx.subagents.start(...)`；`const result = await run.result` 取 `{ output, structured?, stopReason }`；再 `await run.dispose()`（必须调用，否则子代理资源不释放）。`output` 是 `ContentBlock[]`，取 `type === 'text'` 的 `text` 拼成纯文本。
-   - **若 `ctx.subagents.start` 不可用**（宿主只提供可续聊子代理）：报明确错误「宿主只提供可续聊子代理，无法阻塞等结果」——不静默退化成后台委派。
+6. 起子代理：`ctx.subagents.startActivation({ provider: 'spawn', label: '[<skill>] <task>' 或 '[通用] <task>', signal, delivery: 'caller', request: { parent, prompt, ...(route ? { agentOptions: route } : {}) } })`。`parent` 从 `ctx.agents.get(request.sessionId)` 取；取不到就抛错并报出 sessionId。
+   - **`delivery: 'caller'` 是阻塞语义的正解**：它让调用方 await 结果，而不给父会话投递「完成通知」或初始返回指引。委派是工具调用——结果要回到外部 agent，不是回到父会话的通知流。
+   - **`startActivation` 是宿主上唯一的启动入口**（2026-11-05 核实：宿主 0.2.1-rc.2 与 app.asar 内 rc.5 的 `ctx.subagents` 都只暴露 `startActivation`；npm 上 `dsh-subagent` 的 README 描述的 `start` / `startContinuable` 是旧版 API 记载，宿主上不存在）。
+7. 等结果：`const activation = await ctx.subagents.startActivation(...)`；`const result = await activation.result` 取 `{ output, structured?, stopReason }`；再 `await activation.dispose()`（必须调用，否则子代理资源不释放；且 `result` 在 teardown 之后才 settle）。`output` 是 `ContentBlock[]`，取 `type === 'text'` 的 `text` 拼成纯文本。
+   - **若 `ctx.subagents.startActivation` 不可用**：报明确错误「宿主没有子代理启动能力，无法执行委派」——不静默退化。
 8. 返回 `{ output, model, childId }`：`model` 用钉表解析出的 `provider/model` 串；未钉定（route 为 null）时用 `'inherited'`；`childId` 取 `run.id`。
 
 - [ ] **Step 4: 跑测试确认通过**
