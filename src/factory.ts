@@ -37,7 +37,7 @@ import type { SharedAgent, OpenSessionOptions } from './registry.ts'
 import { AcpTurnRunner } from './runner.ts'
 import type { AcpClientPort, StdioMcpServer } from './runner.ts'
 import type { SubagentSessionHost } from './subagent-sessions.ts'
-import { DELEGATION_ROUTE_PATH } from './delegation-route.ts'
+import { DELEGATION_ROUTE_PATH, name as DELEGATION_ROUTE_ROW_ID } from './delegation-route.ts'
 import { fileURLToPath } from 'node:url'
 
 export type FactoryDeps = {
@@ -145,7 +145,7 @@ function delegationMcpServers(
     // 静默不挂会让「delegate 怎么不见了」变成无迹可寻的谜。
     process.stderr.write(
       '[acp-agent] 委派服务在场但回调路由行未配置 token，本次会话不挂委派 MCP（要在 profile 里给 '
-      + 'acp-agent-delegation-route 行配 token；不生成临时令牌——与路由行不一致的令牌会让回调永远 401）\n',
+      + DELEGATION_ROUTE_ROW_ID + ' 行配 token；不生成临时令牌——与路由行不一致的令牌会让回调永远 401）\n',
     )
     return []
   }
