@@ -240,6 +240,17 @@
                 - id: "gpt-5.6-luna[max]"
                   name: "5.6 Luna (max)"
                   description: "Older fast and efficient model. Maximum reasoning depth for the hardest problems"
+          # DSH 工具行：ACP 预设自己的回合由外部 agent 驱动，父会话用不到；
+          # 挂在这里是给 DSH 侧起的子会话继承的——孩子继承本预设组合，没有
+          # 这几行它拿到的工具表是空的，bash/fs 都用不了。别删。
+          - id: acp-tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+          - id: acp-tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: acp-tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+          - id: acp-tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
     - id: acp-claude
       name: '@deepseek-ai/dsh-agent-preset'
       config:
@@ -287,6 +298,17 @@
                 - id: haiku
                   name: IQuest-Q1
                   description: Custom Haiku model
+          # DSH 工具行：ACP 预设自己的回合由外部 agent 驱动，父会话用不到；
+          # 挂在这里是给 DSH 侧起的子会话继承的——孩子继承本预设组合，没有
+          # 这几行它拿到的工具表是空的，bash/fs 都用不了。别删。
+          - id: acp-tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+          - id: acp-tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: acp-tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+          - id: acp-tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
     - id: acp-grok
       name: '@deepseek-ai/dsh-agent-preset'
       config:
@@ -340,6 +362,17 @@
                   name: Grok 4.6
                 - id: grok-4.5
                   name: Grok 4.5
+          # DSH 工具行：ACP 预设自己的回合由外部 agent 驱动，父会话用不到；
+          # 挂在这里是给 DSH 侧起的子会话继承的——孩子继承本预设组合，没有
+          # 这几行它拿到的工具表是空的，bash/fs 都用不了。别删。
+          - id: acp-tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+          - id: acp-tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: acp-tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+          - id: acp-tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
     - id: acp-cursor
       name: '@deepseek-ai/dsh-agent-preset'
       config:
@@ -369,6 +402,17 @@
                   name: grok-4.7
                 - id: claude-opus-5-5[context=300k,effort=medium,fast=false]
                   name: claude-opus-5-5
+          # DSH 工具行：ACP 预设自己的回合由外部 agent 驱动，父会话用不到；
+          # 挂在这里是给 DSH 侧起的子会话继承的——孩子继承本预设组合，没有
+          # 这几行它拿到的工具表是空的，bash/fs 都用不了。别删。
+          - id: acp-tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+          - id: acp-tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: acp-tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+          - id: acp-tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
     - id: acp-zcode
       name: '@deepseek-ai/dsh-agent-preset'
       config:
@@ -535,3 +579,14 @@
                 - id: mmodel
                   name: MiniMax-M3.1-Flash
                   description: Vision · New · 0.10x Credit
+          # DSH 工具行：ACP 预设自己的回合由外部 agent 驱动，父会话用不到；
+          # 挂在这里是给 DSH 侧起的子会话继承的——孩子继承本预设组合，没有
+          # 这几行它拿到的工具表是空的，bash/fs 都用不了。别删。
+          - id: acp-tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+          - id: acp-tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: acp-tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+          - id: acp-tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
