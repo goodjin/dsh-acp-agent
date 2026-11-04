@@ -427,6 +427,7 @@ git commit -m "feat: stdio MCP 桥接进程——把委派调用转给宿主回�
 4. 委派服务缺席（`ctx.get` 返回 undefined）→ 503，且 body 含「委派服务不可用」字样。
 5. 委派服务抛错 → 500，body 含错误文本，且**不含令牌**。
 6. 同一 `(sessionId, task)` 第二次请求 → 200，且**不再调用委派服务**（断言替身的服务没被第二次调用），body 是第一次的结果。
+7. 请求**没有** `cookie`、也不带 `Authorization` 头（模拟桥接进程这种裸请求）→ 仍按令牌放行到 200。**这条钉住「不用 `ctx.connection.admit`」**：若误用 `admit`，裸请求会被 401 拒掉，这条就红。
 
 - [ ] **Step 2: 跑测试确认失败**
 
@@ -445,6 +446,8 @@ export function apply(ctx: DelegationRouteContext): void
 
 - 令牌校验：读 `req.headers['x-dsh-delegation-token']`，与**路由行配置里的** `config.token` 逐字比。令牌缺失或不符 → 401，body 为固定短文本。
   - **令牌只有一份来源**：路由行配置。桥接进程拿到的同一个值由 Task 7 从宿主配置读出后放进 `env`。两处各自生成会让回调永远校验不过。
+  - **不要用 `ctx.connection.admit(req)` 做鉴权**：它检查的是**浏览器或 API 凭据**（cookie / `/connect?token=` 换来的签名 cookie）。来回调的是本机子进程，两样都没有，`admit` 会直接 401。这个路由走自己的令牌校验，不碰 `admit`。
+  - 路由仍要在宿主 web 服务器上注册（`ctx.webServer.register({ kind: 'exact', path, handler })`），因为桥接进程要有个地址可打；但鉴权是本路由自带的令牌，不依赖宿主连接层。
 - body 解析：读请求体（累积 chunk，`JSON.parse`），失败或缺 `task`/`brief`/`sessionId` → 400。
 - 结果缓存：以 `(sessionId, task)` 为键。请求命中已完成的键 → 直接回 200 与缓存结果，**不调委派服务**。委派成功后写入缓存。
 - 委派调用：`ctx.get(DELEGATION_SERVICE)`；缺席 → 503。`delegate(body)` 的结果回 200 + JSON。
