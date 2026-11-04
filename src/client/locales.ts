@@ -23,6 +23,7 @@ export type ClientLocaleKey =
   | 'quota.claude.fiveHour.title' | 'quota.claude.weekly.title'
   | 'quota.claude.credit' | 'quota.claude.creditTitle'
   | 'quota.deepseek.credit' | 'quota.deepseek.creditTitle'
+  | 'quota.grok.weekly.title' | 'quota.grok.weekly.title.tier'
   | 'quota.login.cta' | 'quota.login.code' | 'quota.login.title'
   | 'recovery.interrupted.note' | 'recovery.interrupted.expand'
   | 'acpVisibility.label' | 'acpVisibility.title' | 'acpVisibility.intro'
@@ -67,6 +68,8 @@ export const zh: Record<ClientLocaleKey, string> = {
   'quota.claude.credit': '按量',
   'quota.claude.creditTitle': 'Claude 按量已用：{used} / {limit}',
   'quota.deepseek.credit': '余额',
+  'quota.grok.weekly.title': 'Grok 周窗口：已用 {percent}%',
+  'quota.grok.weekly.title.tier': 'Grok（{tier}）周窗口：已用 {percent}%',
   'quota.deepseek.creditTitle': 'DeepSeek 账户余额 ¥{recharge}；赠送 ¥{bonus}{extra}',
   'quota.login.cta': '去授权',
   'quota.login.code': '授权码 {code}',
@@ -129,6 +132,8 @@ export const en: Record<ClientLocaleKey, string> = {
   'quota.claude.credit': 'extra',
   'quota.claude.creditTitle': 'Claude extra usage: {used} / {limit}',
   'quota.deepseek.credit': 'Balance',
+  'quota.grok.weekly.title': 'Grok weekly window: {percent}% used',
+  'quota.grok.weekly.title.tier': 'Grok ({tier}) weekly window: {percent}% used',
   'quota.deepseek.creditTitle': 'DeepSeek account balance ¥{recharge}; bonus ¥{bonus}{extra}',
   'quota.login.cta': 'Authorize',
   'quota.login.code': 'code {code}',

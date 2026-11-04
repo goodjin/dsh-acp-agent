@@ -12,13 +12,13 @@
 - **GLM（ZCode）模型客户端** — 解密本机 ZCode 登录凭据、调用 GLM Coding Plan、流式响应
 - **MiniMax 模型客户端** — 读取/刷新 MiniMax Code 凭据、调用托管网关
 - **Preset 分发** — 把外部 agent 注册为 DSH preset、接管会话、路由回合、处理模型切换
-- **配额接口** — 宿主侧 GLM/MiniMax/Codex/Claude 配额路由（凭据不出宿主进程）
+- **配额接口** — 宿主侧 GLM/MiniMax/Codex/Claude/Grok 配额路由（凭据不出宿主进程）
 - **名册过滤** — 把标记的 preset 从新建会话选择器隐藏
 - **Mermaid 资产** — 按需提供会话区 Mermaid 渲染运行时
 
 **浏览器侧**（`./client` 入口，DSH Web 按 `dsh.client` 声明自动加载）：
 
-- **配额胶囊** — 输入框下方的 GLM/MiniMax/Codex/Claude 胶囊，轮询宿主接口
+- **配额胶囊** — 输入框下方的 GLM/MiniMax/Codex/Claude/Grok 胶囊，轮询宿主接口
 - **模型屏蔽面板** — 设置里的「提供方与模型」屏蔽栏
 - **模型标签** — 输入框的模型名显示
 - **切换反馈** — 对话移到新会话时的交接提示与切换进度条

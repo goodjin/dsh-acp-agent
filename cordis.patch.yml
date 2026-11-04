@@ -60,6 +60,14 @@
     # 机器上没有凭据，胶囊安静地不出现（上游接口自带 429 冷却，缓存 2 分钟）。
     - id: threadharbor-claude-quota
       name: '@goodjin2/dsh-acp-agent/claude-quota'
+    # Grok（grok-cli 的 SuperGrok/GrokPro 套餐）额度接口：宿主读本机
+    # ~/.grok/auth.json 的 OAuth 令牌问一次 grok-cli 代理域的
+    # /v1/billing?format=credits（周窗 + creditUsagePercent）与
+    # /v1/user?include=subscription（档位，进悬停提示）。令牌约一小时过期、
+    # CLI 自己续；过期/没登录就折成 ok:false，胶囊安静地不出现（30 秒缓存）。
+    # 必须走 cli-chat-proxy.grok.com：直接打 grok.com 被 Cloudflare 盾拦。
+    - id: threadharbor-grok-quota
+      name: '@goodjin2/dsh-acp-agent/grok-quota'
     # Mermaid 渲染已迁往 @goodjin2/dsh-chat-area（浏览器渲染 + /threadharbor/mermaid.js
     # 宿主路由都在那边），本包不再提供 mermaid 资产或渲染。
     # /commit-merge-push 已独立出仓（goodjin/dsh-command-commit-merge-push），

@@ -53,7 +53,7 @@ const GLM_MODEL_PREFIX = 'GLM-'
  */
 export interface QuotaPillSpec {
   /** 取值口径来源：决定文案命名空间与变色方向。 */
-  readonly provider: 'zcode' | 'minimaxi' | 'claude' | 'codex' | 'deepseek'
+  readonly provider: 'zcode' | 'minimaxi' | 'claude' | 'codex' | 'deepseek' | 'grok'
   /** 当前会话目录里的 provider id（如 `acp:acp-claude`）与此相等才渲染。 */
   readonly providerId?: string
   /** 模型 id 前缀匹配；providerId 已给时可以不填（Claude 的模型 id 是通用别名）。 */
@@ -122,6 +122,20 @@ export const DEEPSEEK_QUOTA_PILL_SPEC: QuotaPillSpec = {
   dockOrder: 14,
 }
 
+/**
+ * Grok 那套：按目录里的 provider id 精确认（`acp:acp-grok`）。数据来自 grok-cli
+ * 自己的代理域（`/v1/billing?format=credits` 的周窗 + `/v1/user` 的档位），宿主侧
+ * 的 grok-quota 行把它们折成一条周窗——只有一个窗口，档位进悬停提示。
+ */
+export const GROK_QUOTA_PILL_SPEC: QuotaPillSpec = {
+  provider: 'grok',
+  providerId: 'acp:acp-grok',
+  showCredit: false,
+  routePath: '/threadharbor/grok/quota',
+  dockId: 'threadharbor-grok-quota',
+  dockOrder: 15,
+}
+
 /** 全部口径：apply 按这张表各建一只轮询器、各挂一条 dock。 */
 export const QUOTA_PILL_SPECS: readonly QuotaPillSpec[] = [
   GLM_QUOTA_PILL_SPEC,
@@ -129,6 +143,7 @@ export const QUOTA_PILL_SPECS: readonly QuotaPillSpec[] = [
   CODEX_QUOTA_PILL_SPEC,
   CLAUDE_QUOTA_PILL_SPEC,
   DEEPSEEK_QUOTA_PILL_SPEC,
+  GROK_QUOTA_PILL_SPEC,
 ]
 
 /**
@@ -168,6 +183,8 @@ export interface QuotaWindows {
     /** 非 CNY 钱包的提示（预拼好的字符串，如「另有 $12.00」）；通常为空。 */
     readonly extra?: string
   }
+  /** 套餐档位（如 Grok 的 `SuperGrok`/`GrokPro`）；进悬停提示的第一句。 */
+  readonly tier?: string
 }
 
 /** The route's whole answer body. */
@@ -472,7 +489,7 @@ export function QuotaPillRow({ useQuota, useModelDirectory, useLogin, visible = 
       key: 'reset',
       style: { textAlign: 'center', opacity: 0.8, marginBottom: '2px' },
     }, formatResetLine(quota.fiveHour?.resetAt, t)),
-    ...windows.map(window => pillOf(window, t, spec)),
+    ...windows.map(window => pillOf(window, t, spec, quota.tier)),
     ...(credit === undefined ? [] : [creditPillOf(credit, t, spec)]),
   )
 }
@@ -495,19 +512,21 @@ function titleKey(provider: QuotaPillSpec['provider'], fiveHour: boolean):
   | 'quota.minimaxi.weekly.title'
   | 'quota.claude.fiveHour.title'
   | 'quota.claude.weekly.title'
-  | 'quota.codex.window.title' {
+  | 'quota.codex.window.title'
+  | 'quota.grok.weekly.title' | 'quota.grok.weekly.title.tier' {
   if (provider === 'minimaxi') return fiveHour ? 'quota.minimaxi.fiveHour.title' : 'quota.minimaxi.weekly.title'
   if (provider === 'claude') return fiveHour ? 'quota.claude.fiveHour.title' : 'quota.claude.weekly.title'
   if (provider === 'codex') return 'quota.codex.window.title'
+  if (provider === 'grok') return 'quota.grok.weekly.title'
   return fiveHour ? 'quota.fiveHour.title' : 'quota.weekly.title'
 }
 
 /** One pill: icon + 「5小时 1%」，悬停给详情与重置时刻，按用量变色。 */
-function pillOf(window: QuotaWindow, t: RuntimeT, spec: QuotaPillSpec): ReactNode {
+export function pillOf(window: QuotaWindow, t: RuntimeT, spec: QuotaPillSpec, tier?: string): ReactNode {
   const fiveHour = window.kind === 'five-hour'
   const unlimited = window.unlimited === true
   const percent = window.percent ?? 0
-  // zcode/claude/codex 的 percent 是「已用」：越高越红。minimaxi 的是「剩余」：越低越红。
+  // zcode/claude/codex/grok 的 percent 是「已用」：越高越红。minimaxi 的是「剩余」：越低越红。
   const tone = unlimited
     ? undefined
     : spec.provider === 'minimaxi'
@@ -527,7 +546,13 @@ function pillOf(window: QuotaWindow, t: RuntimeT, spec: QuotaPillSpec): ReactNod
         used: String(window.used ?? 0),
         total: String(window.total ?? 0),
       }) + reset
-      : t(titleKey(spec.provider, fiveHour), { percent: String(Math.round(percent)) }) + reset
+      : spec.provider === 'grok'
+        // Grok 的悬停第一句带档位（SuperGrok / GrokPro …）；档位没拿到就退回不带
+        // 档位的句子，宁缺毋滥——界面上不该出现「{tier}」这样的占位符。
+        ? (tier === undefined
+          ? t('quota.grok.weekly.title', { percent: String(Math.round(percent)) })
+          : t('quota.grok.weekly.title.tier', { tier, percent: String(Math.round(percent)) })) + reset
+        : t(titleKey(spec.provider, fiveHour), { percent: String(Math.round(percent)) }) + reset
   const label = unlimited
     ? t('quota.minimaxi.unlimited')
     : t(fiveHour ? 'quota.fiveHour.label' : 'quota.weekly.label', { percent: String(Math.round(percent)) })

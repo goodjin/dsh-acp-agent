@@ -1,5 +1,5 @@
 /**
- * 自报门面：本包的 13 条装载行到底挂上没有。
+ * 自报门面：本包的装载行到底挂上没有。
  *
  * 2026-11-03 现场：一句不可擦除的 TS 写法（构造函数参数属性）让模块 import 直接失败，
  * Loader 那一行拿不到 fiber，宿主半边与浏览器半边一起消失——设置里的「屏蔽提供方与
@@ -45,7 +45,7 @@ export interface RowExpectation {
 }
 
 /**
- * 本包在 profile 里装配的 13 条行。
+ * 本包在 profile 里装配的行。
  *
  * 这份清单是「应该挂上的样子」，与 cordis.patch.yml 的 insert 段一一对应。硬编码是为了
  * 能发现「装配的清单根本没进树」（absent）——如果从补丁文件反推，清单丢了就一起丢了，
@@ -58,6 +58,7 @@ export const EXPECTED_ROWS: readonly RowExpectation[] = [
   { id: 'threadharbor-minimaxi-quota', what: 'MiniMax 套餐额度接口' },
   { id: 'threadharbor-codex-quota', what: 'Codex 额度接口' },
   { id: 'threadharbor-claude-quota', what: 'Claude 额度接口' },
+  { id: 'threadharbor-grok-quota', what: 'Grok 额度接口' },
   { id: 'acp-codex', what: 'Codex 预置' },
   { id: 'acp-claude', what: 'Claude 预置' },
   { id: 'acp-grok', what: 'Grok 预置' },
