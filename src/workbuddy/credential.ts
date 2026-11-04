@@ -160,6 +160,41 @@ export function credentialResolver(options: CredentialStoreOptions = {}): () => 
   }
 }
 
+/**
+ * 强制续期一次。
+ *
+ * 令牌被服务端作废（401）时用：不等它自然过期，直接拿刷新令牌换一对新的。成功
+ * 就写回文件，失败就返回 `undefined`（调用方据此说「需要重新登录」）。
+ * @param options - 文件、端点与 fetch 实现。
+ * @returns 新的凭据，或 `undefined`（续不了）。
+ */
+export async function forceRefreshCredential(
+  options: CredentialStoreOptions = {},
+): Promise<WorkBuddyCredential | undefined> {
+  const file = options.file ?? credentialFilePath(options.env)
+  const endpoints = options.endpoints ?? resolveEndpoints(undefined, options.env)
+  const fetchImpl = options.fetchImpl ?? fetch
+  const stored = await readStoredCredential(file)
+  if (stored === undefined) return undefined
+  const refreshToken = stored.refreshToken
+  if (refreshToken === undefined || refreshToken === '') return undefined
+  let refreshed: WorkBuddyCredential
+  try {
+    refreshed = await refreshSession({ refreshToken, endpoints, fetchImpl })
+  } catch {
+    return undefined
+  }
+  const account = refreshed.account ?? stored.account
+  const credential: WorkBuddyCredential = {
+    accessToken: refreshed.accessToken,
+    ...(refreshed.refreshToken === undefined ? {} : { refreshToken: refreshed.refreshToken }),
+    ...(refreshed.expiresAt === undefined ? {} : { expiresAt: refreshed.expiresAt }),
+    ...(account === undefined ? {} : { account }),
+  }
+  await writeStoredCredential(credential, file).catch(() => {})
+  return credential
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

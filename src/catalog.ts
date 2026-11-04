@@ -13,7 +13,9 @@
  */
 
 import type { AcpDialect } from './index.ts'
+import type { MiniMaxStreamChunk } from './minimaxi/index.ts'
 import type { GlmStreamChunk } from './zcode/index.ts'
+import type { WorkBuddyStreamChunk } from './workbuddy/sse.ts'
 import type { PresetConfig } from './registry.ts'
 import { baseIdOf } from './selection.ts'
 import { GatewayChunkQueue } from './gateway.ts'
@@ -237,7 +239,7 @@ export type CatalogDeps = {
    * here — tools included — and the native loop keeps the turn. Returning
    * `undefined` leaves the request on the gateway path.
    */
-  modelStream?(presetId: string, request: CatalogTurnRequest): AsyncIterable<GlmStreamChunk> | undefined
+  modelStream?(presetId: string, request: CatalogTurnRequest): AsyncIterable<GlmStreamChunk | MiniMaxStreamChunk | WorkBuddyStreamChunk> | undefined
 }
 
 const ROUTE_PREFIX = 'acp:'
@@ -287,6 +289,7 @@ const DISPLAY: Readonly<Record<string, string>> = {
   qoder: 'Qoder',
   zcode: 'ZCode',
   minimaxi: 'MiniMax',
+  workbuddy: 'WorkBuddy',
 }
 
 /**
@@ -310,7 +313,7 @@ export type CatalogTurnRequest = {
 }
 
 /** Chunks a catalog stream may yield: the gateway's text, or a real model's tool calls. */
-export type CatalogStreamChunk = GatewayChunk | GlmStreamChunk
+export type CatalogStreamChunk = GatewayChunk | GlmStreamChunk | MiniMaxStreamChunk | WorkBuddyStreamChunk
 
 /**
  * The catalog-facing adapter.
