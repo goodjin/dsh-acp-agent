@@ -29,7 +29,7 @@
 import Schema from '@deepseek-ai/schemastery'
 import { markedRosterIds } from './roster-marks.ts'
 
-export const name = 'threadharbor-roster-filter'
+export const name = 'acp-agent-roster-filter'
 
 /**
  * Optional extra ids. The normal path is the `hideFromRoster` mark on each
@@ -134,7 +134,7 @@ export function apply(ctx: unknown, config: Config): void {
   const report = (message: string) => {
     const logger = (ctx as { logger?: { warn(message: string): void } } | null)?.logger
     logger?.warn(message)
-    process.stderr.write(`[threadharbor] ${message}\n`)
+    process.stderr.write(`[acp-agent] ${message}\n`)
   }
   const mount = (service: unknown): void => {
     if (typeof service !== 'object' || service === null) {

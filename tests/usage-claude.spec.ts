@@ -150,7 +150,7 @@ describe('registerClaudeQuotaRoute（宿主路由）', () => {
   it('注册 exact 路由在固定路径，成功应答带两档窗口', async () => {
     const { route } = rig()
     expect(route).toMatchObject({ kind: 'exact', path: QUOTA_ROUTE_PATH })
-    expect(QUOTA_ROUTE_PATH).toBe('/threadharbor/claude/quota')
+    expect(QUOTA_ROUTE_PATH).toBe('/acp-agent/claude/quota')
     swapUsageFetch(async () => ({
       fiveHour: { kind: 'five-hour', percent: 83 },
       weekly: { kind: 'weekly', percent: 14 },

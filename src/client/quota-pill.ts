@@ -1,8 +1,8 @@
 /**
  * GLM 套餐配额胶囊：挂在输入框下方的 dock 里，与 token 用量同一排。
  *
- * 数据链路：宿主侧的 `threadharbor-zcode-quota` 插件（preset-dispatch 包）
- * 在 `/threadharbor/zcode/quota` 上用本机 ZCode 登录密钥转发 Coding Plan 的
+ * 数据链路：宿主侧的 `acp-agent-zcode-quota` 插件（本包）
+ * 在 `/acp-agent/zcode/quota` 上用本机 ZCode 登录密钥转发 Coding Plan 的
  * monitor 应答；这里只做同源 GET，密钥永不出宿主进程。轮询器由 apply 创建
  * 一份、全浏览器共享——套餐是账号级数字，不是会话级。
  *
@@ -27,19 +27,19 @@ import { fallbackT, NAMESPACE } from './locales.ts'
 import type { RuntimeT } from './locales.ts'
 
 /** 与宿主侧 zcode-quota 路由登记的同一路径。 */
-export const QUOTA_ROUTE_PATH = '/threadharbor/zcode/quota'
+export const QUOTA_ROUTE_PATH = '/acp-agent/zcode/quota'
 
 /** MiniMax 那侧宿主路由的同一路径（见 dsh-preset-dispatch/minimaxi-quota）。 */
-export const MINIMAX_QUOTA_ROUTE_PATH = '/threadharbor/minimax/quota'
+export const MINIMAX_QUOTA_ROUTE_PATH = '/acp-agent/minimax/quota'
 
 /** Codex（ChatGPT 套餐）宿主路由（见 dsh-preset-dispatch/codex-quota）。 */
-export const CODEX_QUOTA_ROUTE_PATH = '/threadharbor/codex/quota'
+export const CODEX_QUOTA_ROUTE_PATH = '/acp-agent/codex/quota'
 
 /** Claude（Anthropic 官方订阅）宿主路由（见 dsh-preset-dispatch/claude-quota）。 */
-export const CLAUDE_QUOTA_ROUTE_PATH = '/threadharbor/claude/quota'
+export const CLAUDE_QUOTA_ROUTE_PATH = '/acp-agent/claude/quota'
 
 /** dock 里的条目 id 与顺序：排在官方 stats（order 0）之后。 */
-export const QUOTA_DOCK_ID = 'threadharbor-zcode-quota'
+export const QUOTA_DOCK_ID = 'acp-agent-zcode-quota'
 export const QUOTA_DOCK_ORDER = 10
 
 /** zcode 那组模型在目录里的 id 前缀；选了它才轮到配额胶囊出场。 */
@@ -83,7 +83,7 @@ export const MINIMAX_QUOTA_PILL_SPEC: QuotaPillSpec = {
   prefix: 'MiniMax-',
   showCredit: true,
   routePath: MINIMAX_QUOTA_ROUTE_PATH,
-  dockId: 'threadharbor-minimaxi-quota',
+  dockId: 'acp-agent-minimaxi-quota',
   dockOrder: 11,
 }
 
@@ -93,7 +93,7 @@ export const CODEX_QUOTA_PILL_SPEC: QuotaPillSpec = {
   providerId: 'acp:acp-codex',
   showCredit: true,
   routePath: CODEX_QUOTA_ROUTE_PATH,
-  dockId: 'threadharbor-codex-quota',
+  dockId: 'acp-agent-codex-quota',
   dockOrder: 12,
 }
 
@@ -103,7 +103,7 @@ export const CLAUDE_QUOTA_PILL_SPEC: QuotaPillSpec = {
   providerId: 'acp:acp-claude',
   showCredit: true,
   routePath: CLAUDE_QUOTA_ROUTE_PATH,
-  dockId: 'threadharbor-claude-quota',
+  dockId: 'acp-agent-claude-quota',
   dockOrder: 13,
 }
 
@@ -118,7 +118,7 @@ export const DEEPSEEK_QUOTA_PILL_SPEC: QuotaPillSpec = {
   provider: 'deepseek',
   providerId: 'deepseek-account',
   showCredit: true,
-  dockId: 'threadharbor-deepseek-quota',
+  dockId: 'acp-agent-deepseek-quota',
   dockOrder: 14,
 }
 
@@ -131,8 +131,8 @@ export const GROK_QUOTA_PILL_SPEC: QuotaPillSpec = {
   provider: 'grok',
   providerId: 'acp:acp-grok',
   showCredit: false,
-  routePath: '/threadharbor/grok/quota',
-  dockId: 'threadharbor-grok-quota',
+  routePath: '/acp-agent/grok/quota',
+  dockId: 'acp-agent-grok-quota',
   dockOrder: 15,
 }
 
@@ -667,7 +667,7 @@ function directoryStoreOf(
   } catch (error) {
     // 宿主日志在浏览器里看不见；这一档的线索只能留在这里（模型列表同时空着，
     // 胶囊是唯一会说「连接已经断了」的地方）。
-    console.warn(`[threadharbor] zcode quota: the model directory service is gone (${error instanceof Error ? error.message : String(error)}) — the pills are hidden`)
+    console.warn(`[acp-agent] zcode quota: the model directory service is gone (${error instanceof Error ? error.message : String(error)}) — the pills are hidden`)
     return undefined
   }
 }

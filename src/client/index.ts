@@ -90,7 +90,7 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
   // 也就是说：一个本可以只丢一个表面的错误，会变成打不开界面。
   const say: Log = typeof log === 'function'
     ? log
-    : (message: string) => { console.warn(`[threadharbor] ${message}`) }
+    : (message: string) => { console.warn(`[acp-agent] ${message}`) }
 
   // 注册本插件的词典。
   //
@@ -107,7 +107,7 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
         const dispose = (register as Function).call(registerLocale, NAMESPACE, { zh: { ...zh }, en: { ...en } })
         const effect = boundMethod(ctx, 'effect')
         if (typeof dispose === 'function' && effect !== undefined) {
-          (effect as Function).call(ctx, () => dispose, 'threadharbor: locale dictionaries')
+          (effect as Function).call(ctx, () => dispose, 'acp-agent: locale dictionaries')
         }
       } catch (error) {
         // 重复注册（同一命名空间已有该语言）也会抛：说一声，别静默。
@@ -168,7 +168,7 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
       }
     }
     // 收尾：停掉五只轮询器、撤掉五条 dock 条目。
-    ctx.effect(() => () => { for (const dispose of disposers.splice(0)) dispose() }, 'threadharbor: quota pills')
+    ctx.effect(() => () => { for (const dispose of disposers.splice(0)) dispose() }, 'acp-agent: quota pills')
   }, say)
 
   // Interrupted turn recovery
@@ -240,7 +240,7 @@ function mountAcpVisibilityFilter(
       const childEffect = boundMethod(child, 'effect')
       attach(propertyOf(child, 'modelDirectories'), dispose => {
         if (childEffect !== undefined) childEffect(() => dispose)
-        else (ctx as any).effect(() => dispose, 'threadharbor: acp visibility picker filter')
+        else (ctx as any).effect(() => dispose, 'acp-agent: acp visibility picker filter')
       })
     })
     return
@@ -252,7 +252,7 @@ function mountAcpVisibilityFilter(
     service = undefined
   }
   attach(service, dispose => {
-    (ctx as any).effect(() => dispose, 'threadharbor: acp visibility picker filter')
+    (ctx as any).effect(() => dispose, 'acp-agent: acp visibility picker filter')
   })
 }
 

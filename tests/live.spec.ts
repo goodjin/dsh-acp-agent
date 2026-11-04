@@ -12,7 +12,7 @@
  * this work exists to remove. So the test records whether any text arrived
  * before the prompt call resolved.
  *
- * Skipped unless `THREADHARBOR_LIVE_ACP=1`: real binaries, real model, real
+ * Skipped unless `ACP_AGENT_LIVE_ACP=1`: real binaries, real model, real
  * wall clock. See the ACP layer's live spec for what the local claude actually
  * is — its frame shapes are genuine, its model behaviour is not.
  */
@@ -37,7 +37,7 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const LIVE = process.env['THREADHARBOR_LIVE_ACP'] === '1'
+const LIVE = process.env['ACP_AGENT_LIVE_ACP'] === '1'
 const CODEX_ACP = process.env['THREADHARBOR_CODEX_ACP'] ?? 'codex-acp'
 const CURSOR_ACP = process.env['THREADHARBOR_CURSOR_ACP'] ?? 'cursor-agent'
 const CLAUDE_ACP = process.env['THREADHARBOR_CLAUDE_ACP'] ?? 'claude-agent-acp'

@@ -26,13 +26,13 @@ import { promisify } from 'node:util'
 
 const execFileP = promisify(execFile)
 
-export const name = 'threadharbor-claude-quota'
+export const name = 'acp-agent-claude-quota'
 
 /** webServer 挂路由；connection 做准入（admit）。 */
 export const inject = ['webServer', 'connection']
 
 /** exact 路由路径；浏览器侧的胶囊按这个常量取数。 */
-export const QUOTA_ROUTE_PATH = '/threadharbor/claude/quota'
+export const QUOTA_ROUTE_PATH = '/acp-agent/claude/quota'
 
 /**
  * 成功应答的缓存时长。上游接口自带冷却（429，Retry-After 约 160 秒），
@@ -179,7 +179,7 @@ export function registerClaudeQuotaRoute(ctx: ClaudeQuotaContext, deps: ClaudeQu
           }
         },
       }),
-    'threadharbor-claude-quota: usage route',
+    'acp-agent-claude-quota: usage route',
   )
 }
 

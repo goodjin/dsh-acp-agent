@@ -47,7 +47,7 @@ import type { AcpDialect } from './index.ts'
 import { projectStepContent } from './index.ts'
 import { AcpAssistantStream } from './stream.ts'
 
-export const name = 'threadharbor-acp'
+export const name = "acp-agent"
 
 /** One model an agent serves, as offered in the picker. */
 const Model = Schema.object({
@@ -279,7 +279,7 @@ export function apply(ctx: unknown, config: Config): void {
     const line = `acp row not mounted: preset=${config.presetId} is offered on `
       + `[${(config.hosts ?? []).join(', ')}] but this host is ${hostId} — staying off this machine`
     host.logger?.warn(line)
-    process.stderr.write(`[threadharbor] ${line}\n`)
+    process.stderr.write(`[acp-agent] ${line}\n`)
     return
   }
 
@@ -312,7 +312,7 @@ export function apply(ctx: unknown, config: Config): void {
   // Also to stderr: this row is silent by design, and whether it mounted at all
   // is the first question anyone asks when no session is taken over. The host's
   // log level is not ours to raise.
-  process.stderr.write(`[threadharbor] ${summary}\n`)
+  process.stderr.write(`[acp-agent] ${summary}\n`)
 
   // Listen for the loop's step notice from the day this row mounts: the numbers
   // must already be in hand when the first replaced step runs, not registered by
@@ -383,7 +383,7 @@ export function apply(ctx: unknown, config: Config): void {
       decision,
       report: message => {
         host.logger?.warn(message)
-        process.stderr.write(`[threadharbor] ${message}\n`)
+        process.stderr.write(`[acp-agent] ${message}\n`)
       },
     })
   }
@@ -444,14 +444,14 @@ export function apply(ctx: unknown, config: Config): void {
     subagents: makeSubagentSessionHost(host),
     report: message => {
       host.logger?.warn(message)
-      process.stderr.write(`[threadharbor] ${message}\n`)
+      process.stderr.write(`[acp-agent] ${message}\n`)
     },
     install: (agent, presetId, dialect, table) => {
       const line = `acp takeover: session=${String(sessionIdOf(agent) ?? '?')} preset=${presetId} dialect=${dialect.id}`
       const sessionId = sessionIdOf(agent)
       if (sessionId !== undefined) agents.set(sessionId, agent)
       host.logger?.info(line)
-      process.stderr.write(`[threadharbor] ${line}\n`)
+      process.stderr.write(`[acp-agent] ${line}\n`)
 
       // Replace the session's step so the external agent drives the turn. This is
       // the whole point of the row: reporting a takeover without doing it leaves

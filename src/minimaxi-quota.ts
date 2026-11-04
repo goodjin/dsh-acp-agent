@@ -3,7 +3,7 @@
  *
  * 浏览器画输入框下方的配额胶囊时要读这份限额，但登录令牌只住在宿主进程
  * *（minimaxi-acp 的约定：内存里用、不落盘、不进日志）。所以这一层只做转发：
- * 同源 GET `/threadharbor/minimax/quota` → 宿主用本机登录令牌问一次 MiniMax
+ * 同源 GET `/acp-agent/minimax/quota` → 宿主用本机登录令牌问一次 MiniMax
  * 的网关（签名查组与积分）+ 开放平台（查两个窗口），把 5 小时、周、积分
  * 的数字原样发回。令牌本身永远不出宿主。
  *
@@ -18,13 +18,13 @@ import { fetchMiniMaxQuota, isMiniMaxLoginRequired } from './minimaxi/index.ts'
 import type { MiniMaxCodingPlanQuota, MiniMaxLoginRequiredError, MiniMaxQuotaRequest } from './minimaxi/index.ts'
 import { beginDeviceLogin, cachedLoginPrompt, createLoginManager, loginUrlHint, promptUrl } from './minimaxi/login.ts'
 
-export const name = 'threadharbor-minimaxi-quota'
+export const name = 'acp-agent-minimaxi-quota'
 
 /** webServer 挂路由；connection 做准入（admit）。 */
 export const inject = ['webServer', 'connection']
 
 /** exact 路由路径；浏览器侧的胶囊按这个常量取数。 */
-export const QUOTA_ROUTE_PATH = '/threadharbor/minimax/quota'
+export const QUOTA_ROUTE_PATH = '/acp-agent/minimax/quota'
 
 /** 成功应答的缓存时长；换算成上游被问的频率上限（多标签页也不翻倍）。 */
 const CACHE_TTL_MS = 30_000
@@ -149,7 +149,7 @@ export function registerMiniMaxQuotaRoute(ctx: MiniMaxQuotaContext, deps: MiniMa
           }
         },
       }),
-    'threadharbor-minimaxi-quota: quota route',
+    'acp-agent-minimaxi-quota: quota route',
   )
 }
 

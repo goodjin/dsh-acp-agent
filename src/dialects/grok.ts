@@ -2,7 +2,7 @@
  * grok dialect.
  *
  * Captured from a live `grok agent serve` (grok 1.0.46), the same frames the
- * original `packages/dsh-grok-agent` projection was written against. grok is
+ * the original standalone grok-agent projection was written against. grok is
  * the only one of the three that puts the tool's name in `title`, and it only
  * does so on the *opening* frame: every later `tool_call_update` overwrites
  * `title` with a human activity line ("Execute `echo ...`"). The name therefore

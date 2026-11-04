@@ -314,7 +314,7 @@ export function applyAcpPlugin(
   // and the first symptom is an empty or stale answer at send time, long after
   // startup. Naming the claimed rows here makes that a log question instead.
   process.stderr.write(
-    `[threadharbor] model rows answered in place: ${describeClaimedModels(presets)}\n`,
+    `[acp-agent] model rows answered in place: ${describeClaimedModels(presets)}\n`,
   )
   // A model request landing on one of these routes for a session this row does
   // not drive is answered in place: the gateway borrows the agent as a model,

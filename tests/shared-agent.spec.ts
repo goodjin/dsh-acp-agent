@@ -255,7 +255,7 @@ describe('一条连接上的两个会话', () => {
   }, 20_000)
 
   it('共享连接上也按会话读日志进度：grok 压缩只有它的会话看得见', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'threadharbor-grok-shared-'))
+    const home = mkdtempSync(join(tmpdir(), 'acp-agent-grok-shared-'))
     const previous = process.env['GROK_HOME']
     process.env['GROK_HOME'] = home
     const h = harness()

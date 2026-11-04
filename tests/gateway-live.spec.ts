@@ -1,7 +1,7 @@
 /**
  * The gateway against the real codex binary.
  *
- * Skipped unless `THREADHARBOR_LIVE_ACP=1`: real binary, real model, real wall
+ * Skipped unless `ACP_AGENT_LIVE_ACP=1`: real binary, real model, real wall
  * clock. This is the acceptance gate for in-place answering: a foreign
  * session's first request must prime the external conversation with the
  * transcript and answer in place, and a SECOND request must feed only the
@@ -14,7 +14,7 @@ import { GatewayConversations } from '../src/gateway.ts'
 import type { GatewayChunk } from '../src/gateway.ts'
 import type { PresetConfig } from '../src/registry.ts'
 
-const LIVE = process.env['THREADHARBOR_LIVE_ACP'] === '1'
+const LIVE = process.env['ACP_AGENT_LIVE_ACP'] === '1'
 const CODEX_ACP = process.env['THREADHARBOR_CODEX_ACP'] ?? '/Users/good/.local/bin/codex-acp'
 
 const CONFIG: PresetConfig = {

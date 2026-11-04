@@ -26,7 +26,7 @@ import { fallbackT, NAMESPACE } from './locales.ts'
 import type { RuntimeT } from './locales.ts'
 
 /** turnTail 座位条目的 id；order 排在官方结尾内容之后。 */
-export const RECOVERY_TAIL_ID = 'threadharbor-interrupted-recovery'
+export const RECOVERY_TAIL_ID = 'acp-agent-interrupted-recovery'
 export const RECOVERY_TAIL_ORDER = 10
 
 /** turn-process 投影里本行读的字段（官方 TurnProcessSpec 的结构子集）。 */

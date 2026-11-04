@@ -67,7 +67,7 @@ export const HOLD_MS = 4_000
 export const FINISH_DELAY_MS = 600
 
 /** The id this surface occupies in the frame's floating layer. */
-const LAYER_ID = 'threadharbor-switch-progress'
+const LAYER_ID = 'acp-agent-switch-progress'
 
 /** What one step says on screen; the target session's new agent names itself. */
 const PHASE_KEY: Record<SwitchProgressPhase, ProgressKey> = {
@@ -234,7 +234,7 @@ export function startSwitchProgressSurface(params: {
           // A session the client cannot address (created and dropped between
           // the handover and this call) is not a reason to keep the user in a
           // conversation that is no longer theirs.
-          ctx.logger('threadharbor-client').warn(
+          ctx.logger('acp-agent-client').warn(
             `agent-switch progress: session ${sessionId} cannot be preloaded — ${String(error)}; jumping without it`,
           )
         }

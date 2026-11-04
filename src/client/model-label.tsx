@@ -131,7 +131,7 @@ export function ModelLabelWithProvider(props: ModelLabelProps): ReactElement {
 }
 
 /** 我们自己的类名（官方那份的 CSS 模块不归我们管）。 */
-const labelClassName = 'threadharbor-model-label'
+const labelClassName = 'acp-agent-model-label'
 
 /** The slot host this module registers into. */
 export type ModelLabelSlotHost = {
@@ -142,7 +142,10 @@ export type ModelLabelSlotHost = {
 }
 
 /** The kill switch: `off` leaves the official label in place. */
-export const MODEL_LABEL_STORAGE_KEY = 'threadharbor.modelSeat'
+export const MODEL_LABEL_STORAGE_KEY = 'acp-agent.modelSeat'
+
+/** 改名前的旧键；只为一次性迁移保留（旧值搬新键后即删）。 */
+const LEGACY_MODEL_LABEL_STORAGE_KEY = 'threadharbor.modelSeat'
 
 /**
  * Whether the kill switch is set to `off`.
@@ -154,7 +157,17 @@ export const MODEL_LABEL_STORAGE_KEY = 'threadharbor.modelSeat'
  */
 export function modelLabelShadowedOff(): boolean {
   try {
-    return globalThis.localStorage?.getItem(MODEL_LABEL_STORAGE_KEY) === 'off'
+    const storage = globalThis.localStorage
+    let stored = storage?.getItem(MODEL_LABEL_STORAGE_KEY) ?? null
+    if (stored === null) {
+      // 键名一代迁移：旧键在场就搬过来，之后只认新键。
+      stored = storage?.getItem(LEGACY_MODEL_LABEL_STORAGE_KEY) ?? null
+      if (stored !== null) {
+        storage?.setItem(MODEL_LABEL_STORAGE_KEY, stored)
+        storage?.removeItem(LEGACY_MODEL_LABEL_STORAGE_KEY)
+      }
+    }
+    return stored === 'off'
   } catch {
     return false
   }

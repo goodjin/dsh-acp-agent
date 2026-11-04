@@ -122,12 +122,12 @@ async function withFakeQuota(run: (count: () => number) => Promise<void>): Promi
 }
 
 describe('apply（wiring 层）', () => {
-  it('注册一条 exact 的 /threadharbor/zcode/quota 路由', () => {
+  it('注册一条 exact 的 /acp-agent/zcode/quota 路由', () => {
     const { ctx, routes } = rig()
     apply(ctx)
     expect(routes).toHaveLength(1)
     expect(routes[0]).toMatchObject({ kind: 'exact', path: QUOTA_ROUTE_PATH })
-    expect(QUOTA_ROUTE_PATH).toBe('/threadharbor/zcode/quota')
+    expect(QUOTA_ROUTE_PATH).toBe('/acp-agent/zcode/quota')
   })
 })
 

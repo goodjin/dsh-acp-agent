@@ -7,7 +7,7 @@
 
 export type ProgressKey = Extract<ClientLocaleKey, `progress.${string}`>
 
-export const NAMESPACE = 'threadharborClient'
+export const NAMESPACE = 'acpAgentClient'
 
 export type ClientLocaleKey =
   | 'handover.title' | 'handover.open'

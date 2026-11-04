@@ -28,7 +28,7 @@ import type { AcpCatalogAgent, AcpCatalogError, AcpCatalogStore } from './acp-vi
 import styles from './acp-visibility.module.css'
 
 /** Shared identity of the settings rail row and the body it mounts. */
-export const ACP_VISIBILITY_PANEL_ID = 'threadharbor-acp-visibility'
+export const ACP_VISIBILITY_PANEL_ID = 'acp-agent-acp-visibility'
 /** Below the hosts section (100), so it reads as a second setting. */
 export const ACP_VISIBILITY_PANEL_ORDER = 110
 

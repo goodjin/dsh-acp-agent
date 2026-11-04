@@ -22,13 +22,13 @@ import { request as httpsRequest } from 'node:https'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-export const name = 'threadharbor-codex-quota'
+export const name = 'acp-agent-codex-quota'
 
 /** webServer 挂路由；connection 做准入（admit）。 */
 export const inject = ['webServer', 'connection']
 
 /** exact 路由路径；浏览器侧的胶囊按这个常量取数。 */
-export const QUOTA_ROUTE_PATH = '/threadharbor/codex/quota'
+export const QUOTA_ROUTE_PATH = '/acp-agent/codex/quota'
 
 /** 成功应答的缓存时长；多标签页轮询时上游每半分钟最多被问一次。 */
 const CACHE_TTL_MS = 30_000
@@ -171,7 +171,7 @@ export function registerCodexQuotaRoute(ctx: CodexQuotaContext, deps: CodexQuota
           }
         },
       }),
-    'threadharbor-codex-quota: usage route',
+    'acp-agent-codex-quota: usage route',
   )
 }
 

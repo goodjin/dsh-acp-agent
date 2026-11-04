@@ -28,8 +28,8 @@ describe('口径表', () => {
   it('第六张是 Grok：providerId 精确到 acp:acp-grok，走路由取数', () => {
     const spec = QUOTA_PILL_SPECS.find(entry => entry.provider === 'grok')
     expect(spec?.providerId).toBe('acp:acp-grok')
-    expect(spec?.routePath).toBe('/threadharbor/grok/quota')
-    expect(spec?.dockId).toBe('threadharbor-grok-quota')
+    expect(spec?.routePath).toBe('/acp-agent/grok/quota')
+    expect(spec?.dockId).toBe('acp-agent-grok-quota')
     expect(GROK_QUOTA_PILL_SPEC).toBe(spec)
   })
 })

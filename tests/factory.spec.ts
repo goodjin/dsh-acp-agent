@@ -190,7 +190,7 @@ const CURSOR_ASK = JSON.stringify({
  * the wrong arguments", which is exactly the failure this guards.
  */
 function recordingBinary(): { command: string; argv: () => readonly string[] } {
-  const dir = mkdtempSync(join(tmpdir(), 'threadharbor-argv-'))
+  const dir = mkdtempSync(join(tmpdir(), 'acp-agent-argv-'))
   const argvFile = join(dir, 'argv.json')
   const script = join(dir, 'agent')
   writeFileSync(script, [
@@ -228,7 +228,7 @@ async function spawnArgvOf(config: PresetConfig, presetId: string): Promise<read
 
 /** A stand-in binary that records the directory it was started in. */
 function recordingCwd(): { command: string; cwd: () => string } {
-  const dir = mkdtempSync(join(tmpdir(), 'threadharbor-cwd-'))
+  const dir = mkdtempSync(join(tmpdir(), 'acp-agent-cwd-'))
   const cwdFile = join(dir, 'cwd.txt')
   const script = join(dir, 'agent')
   writeFileSync(script, [
@@ -299,7 +299,7 @@ describe('拉起外部 agent 时补齐 ACP 所需的参数', () => {
     // 预设上的目录曾经盖过会话自己的项目：子进程和 session/new 各看各的，
     // 新会话就开到了写死的那一处。两边都必须用同一次打开给出的目录。
     const binary = recordingCwd()
-    const project = mkdtempSync(join(tmpdir(), 'threadharbor-project-'))
+    const project = mkdtempSync(join(tmpdir(), 'acp-agent-project-'))
     const factory = makeSessionFactory(
       { presets: { 'acp-codex': { agent: 'codex', command: binary.command, cwd: '/Users/good/Documents/deepseek-harness' } } },
       deps,

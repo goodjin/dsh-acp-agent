@@ -9,7 +9,7 @@
  * - 只有一条 dock 条目、只有一条路由 → 就算轮询器跑了，选 MiniMax/Codex/Claude
  *   的模型时也没有对应的条目去画。
  *
- * 宿主那几条路由（/threadharbor/minimax/quota 等）都好好挂着，取数也正常，
+ * 宿主那几条路由（/acp-agent/minimax/quota 等）都好好挂着，取数也正常，
  * 缺的是浏览器这半边的装配——所以界面上一个字都没有。
  *
  * 这里钉三件事：

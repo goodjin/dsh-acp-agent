@@ -160,7 +160,7 @@ const TERMINAL_CREATE = JSON.stringify({
   params: {
     sessionId: '01a11f40-825a-7712-a947-766e2fe5df10',
     command: "/bin/bash -lc 'echo ACP_LIVE_OK'",
-    cwd: '/Users/good/github/threadharbor',
+    cwd: '/Users/good/github/dsh-plugins/threadharbor',
   },
 })
 

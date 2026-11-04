@@ -4,10 +4,13 @@
  * 编译包 `MarkdownText` 把 http(s) 链接渲染成普通 `<a target="_blank">`，桌面外壳
  * 会把 `_blank` 交给系统浏览器、宿主渲染层会把链接路由到右侧预览面板。这里不碰编译包，
  * 只给文本块叠一层交互：hover 时浮出「右侧打开 / 浏览器打开」两个按钮，单击链接走
- * 默认打开方式。默认打开方式存 localStorage（与文件树视图偏好同一套 `threadharbor.*` 键）。
+ * 默认打开方式。默认打开方式存 localStorage（与文件树视图偏好同一套 `acp-agent.*` 键）。
  */
 
-export const DEFAULT_LINK_OPEN_KEY = 'threadharbor.markdown.defaultLinkOpen'
+export const DEFAULT_LINK_OPEN_KEY = 'acp-agent.markdown.defaultLinkOpen'
+
+/** 改名前的旧键；只为一次性迁移保留（旧值搬新键后即删）。 */
+const LEGACY_DEFAULT_LINK_OPEN_KEY = 'threadharbor.markdown.defaultLinkOpen'
 
 /** 链接打开方式：右侧 = 交给宿主右侧预览面板；浏览器 = 系统浏览器新标签。 */
 export type LinkOpenMode = 'right' | 'browser'
@@ -17,7 +20,15 @@ const VALID: readonly LinkOpenMode[] = ['right', 'browser']
 /** 读取默认打开方式；未设置或非法值回退到「右侧」（保持现状）。 */
 export function readDefaultLinkOpenMode(): LinkOpenMode {
   if (typeof localStorage === 'undefined') return 'right'
-  const stored = localStorage.getItem(DEFAULT_LINK_OPEN_KEY)
+  let stored = localStorage.getItem(DEFAULT_LINK_OPEN_KEY)
+  if (stored === null) {
+    // 键名一代迁移：旧键在场就搬过来，之后只认新键。
+    stored = localStorage.getItem(LEGACY_DEFAULT_LINK_OPEN_KEY)
+    if (stored !== null) {
+      localStorage.setItem(DEFAULT_LINK_OPEN_KEY, stored)
+      localStorage.removeItem(LEGACY_DEFAULT_LINK_OPEN_KEY)
+    }
+  }
   return VALID.includes(stored as LinkOpenMode) ? (stored as LinkOpenMode) : 'right'
 }
 

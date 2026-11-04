@@ -244,7 +244,7 @@ export function registerAcpProcessSurface(ctx: Surface): void {
     // 把 ACP 段渲染器挂到座位：座位由 chat-area 声明，它在外层渲染时从这里取组件。
     // 只装本包时座位永远没人声明，这个 inject 就一直不触发——无害，本包的 wrap 兜底。
     const removeHook = slots.inject(SEGMENT_RENDERER_SLOT, () => slots.register(
-      { id: 'threadharbor-acp-segment-renderer', order: 0 },
+      { id: 'acp-agent-acp-segment-renderer', order: 0 },
       AcpProcessBlock,
     ))
 
@@ -253,5 +253,5 @@ export function registerAcpProcessSurface(ctx: Surface): void {
       unsubscribeWrap(); removeWrap?.()
       if (typeof removeHook === 'function') removeHook()
     }
-  }, 'threadharbor ACP process segments')
+  }, 'acp-agent ACP process segments')
 }

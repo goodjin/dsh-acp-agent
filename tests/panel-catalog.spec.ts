@@ -91,7 +91,7 @@ describe.skipIf(!hasBundle)('设置页读模型目录（真实产物 + 真实目
     const apply = plugin['apply'] as (ctx: unknown, config: unknown, log?: unknown) => void
     expect(() => apply(ctx, undefined, () => {})).not.toThrow()
 
-    const section = slots.sections.find(entry => entry['id'] === 'threadharbor-acp-visibility')
+    const section = slots.sections.find(entry => entry['id'] === 'acp-agent-acp-visibility')
     expect(section, '设置里的「提供方与模型」应当注册进 settings.section').toBeDefined()
     const face = (section!['inject'] as () => { catalog: { load(): Promise<void>; getSnapshot(): { status: string; agents: { key: string; models: unknown[] }[]; error: unknown } } })()
     await face.catalog.load()

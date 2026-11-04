@@ -294,7 +294,7 @@ function install(
 ): void {
   const openSession = openSessionFaceOf(uiWorkspace)
   if (openSession === undefined) {
-    ctx.logger('threadharbor-client').warn('agent-switch handover: uiWorkspace.openSession unavailable — the notice renders, without the automatic jump')
+    ctx.logger('acp-agent-client').warn('agent-switch handover: uiWorkspace.openSession unavailable — the notice renders, without the automatic jump')
   }
   // The registry manages its own lifetime through the owning context, exactly
   // as ui-user-questions registers its Definition: one call, no extra wrap.
@@ -331,7 +331,7 @@ export function registerAgentSwitchHandoverSurface(
     ? conversationRegisterOf(uiConversation)
     : undefined
   if (!isRecord(uiWorkspace) || register === undefined) {
-    ctx.logger('threadharbor-client').warn('agent-switch handover: uiConversation/uiWorkspace unavailable — switched-away turns keep their ending visible only as data; no notice, no automatic jump')
+    ctx.logger('acp-agent-client').warn('agent-switch handover: uiConversation/uiWorkspace unavailable — switched-away turns keep their ending visible only as data; no notice, no automatic jump')
     return
   }
   install(ctx, uiWorkspace, register, progress?.prepare)

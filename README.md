@@ -39,7 +39,7 @@ When the refresh token itself is dead, retrying is pointless, so the plugin now 
 *where to authorize* instead of failing quietly:
 
 - `resolveCredential` raises `MiniMaxLoginRequiredError` (`reason: 'missing' | 'expired'`);
-- the quota route (`GET /threadharbor/minimax/quota`) answers
+- the quota route (`GET /acp-agent/minimax/quota`) answers
   `{ ok: false, needsLogin: true, login: { url, userCode?, expiresInSec? } }`;
 - a model request that cannot authenticate puts the authorization link into the error
   it streams into the conversation, so the link is clickable where the failure shows up.
@@ -56,16 +56,16 @@ or error strings.
 ## When a row doesn't mount: the self-report seam
 
 A module that cannot be imported takes its whole row down with it, and it cannot report that
-itself. So this package ships one leaf module (`./health`, row `threadharbor-health`) that
+itself. So this package ships one leaf module (`./health`, row `acp-agent-health`) that
 imports nothing from the package — it still loads and speaks while everything else is broken.
 
 After boot it prints one line naming what is missing and why:
 
 ```
-acp-agent health: 12/13 行已挂载；未挂载 1 行 — threadharbor-minimaxi-quota（MiniMax 套餐额度接口）：SyntaxError: TypeScript parameter property is not supported in strip-only mode
+acp-agent health: 12/13 行已挂载；未挂载 1 行 — acp-agent-minimaxi-quota（MiniMax 套餐额度接口）：SyntaxError: TypeScript parameter property is not supported in strip-only mode
 ```
 
-and serves the same ledger as JSON at `GET /threadharbor/health`:
+and serves the same ledger as JSON at `GET /acp-agent/health`:
 `{ ok, mounted, total, disabled, rows: [{ id, what, status, detail }] }`. `status` is one of
 `mounted`, `failed` (module never imported, or `apply` threw), `pending` (waiting on injected
 services), `absent` (the composed row never reached the loader tree) or `disabled` (turned off
@@ -84,7 +84,7 @@ above, and `tests/entry-loadability.spec.ts`, which imports every host entry wit
 
 ## 0.3.0 — what moved out
 
-Generic conversation-area UI moved to [`@goodjin2/dsh-chat-area`](https://github.com/threadharbor/dsh-chat-area)
+Generic conversation-area UI moved to [`@goodjin2/dsh-chat-area`](https://github.com/acp-agent/dsh-chat-area)
 in 2026-11: the answer card, the conversation file cards, the Mermaid renderer and
 its host route, and the short session-ID bar. This package keeps the ACP side and
 no longer exports `./mermaid-asset` — if your profile still lists
@@ -118,7 +118,7 @@ Or add to your profile's `package.json`:
 }
 ```
 
-Then add the agent presets you want to your profile's `cordis.patch.yml`. This repo ships its own `cordis.patch.yml` with the seven agent preset rows, the browser-half roster row (`acp-agent-client`, a bare package-name row — DSH only treats rows named exactly that way as client entries), the host-side `roster-filter` / `zcode-quota` / `minimaxi-quota` / `codex-quota` / `claude-quota` mounts (moved here from the threadharbor umbrella in 2026-11), and the `health` self-report row. See the [installation guide](https://github.com/goodjin/threadharbor/blob/main/docs/install-plugins.zh.md) for details.
+Then add the agent presets you want to your profile's `cordis.patch.yml`. This repo ships its own `cordis.patch.yml` with the seven agent preset rows, the browser-half roster row (`acp-agent-client`, a bare package-name row — DSH only treats rows named exactly that way as client entries), the host-side `roster-filter` / `zcode-quota` / `minimaxi-quota` / `codex-quota` / `claude-quota` mounts (moved here from the threadharbor umbrella in 2026-11), and the `health` self-report row. See the [installation guide](https://github.com/goodjin/acp-agent/blob/main/docs/install-plugins.zh.md) for details.
 
 ## Requirements
 

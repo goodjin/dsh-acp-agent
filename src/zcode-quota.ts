@@ -3,7 +3,7 @@
  *
  * 浏览器画输入框下方的配额胶囊时要读这份限额，但解密密钥只住在宿主进程
  * （zcode-acp 的约定：内存里解密、不落盘、不进日志）。所以这一层只做转发：
- * 同源 GET `/threadharbor/zcode/quota` → 宿主用本机登录密钥问一次 Coding
+ * 同源 GET `/acp-agent/zcode/quota` → 宿主用本机登录密钥问一次 Coding
  * Plan 的 monitor 地址，把两个窗口（5 小时、周）的数字原样发回。密钥本身
  * 永远不出宿主。
  *
@@ -18,13 +18,13 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { fetchCodingPlanQuota } from './zcode/index.ts'
 import type { GlmCodingPlanQuota } from './zcode/index.ts'
 
-export const name = 'threadharbor-zcode-quota'
+export const name = 'acp-agent-zcode-quota'
 
 /** webServer 挂路由；connection 做准入（admit）。 */
 export const inject = ['webServer', 'connection']
 
 /** exact 路由路径；浏览器侧的胶囊按这个常量取数。 */
-export const QUOTA_ROUTE_PATH = '/threadharbor/zcode/quota'
+export const QUOTA_ROUTE_PATH = '/acp-agent/zcode/quota'
 
 /** 成功应答的缓存时长；换算成上游被问的频率上限（两个标签页也不翻倍）。 */
 const CACHE_TTL_MS = 30_000
@@ -125,7 +125,7 @@ export function registerZcodeQuotaRoute(ctx: ZcodeQuotaContext, deps: ZcodeQuota
           }
         },
       }),
-    'threadharbor-zcode-quota: quota route',
+    'acp-agent-zcode-quota: quota route',
   )
 }
 

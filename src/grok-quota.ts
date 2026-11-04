@@ -18,13 +18,13 @@ import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-export const name = 'threadharbor-grok-quota'
+export const name = 'acp-agent-grok-quota'
 
 /** webServer 挂路由；connection 做准入（admit）。 */
 export const inject = ['webServer', 'connection']
 
 /** exact 路由路径；浏览器侧的胶囊按这个常量取数。 */
-export const QUOTA_ROUTE_PATH = '/threadharbor/grok/quota'
+export const QUOTA_ROUTE_PATH = '/acp-agent/grok/quota'
 
 const GROK_BILLING_URL = 'https://cli-chat-proxy.grok.com/v1/billing?format=credits'
 const GROK_USER_URL = 'https://cli-chat-proxy.grok.com/v1/user?include=subscription'
@@ -244,7 +244,7 @@ export function registerGrokQuotaRoute(ctx: GrokQuotaContext, deps: GrokQuotaRou
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify(payload))
     },
-  }), 'threadharbor-grok-quota: quota route')
+  }), 'acp-agent-grok-quota: quota route')
 }
 
 /** DSH 插件的入口：注册配额路由。 */

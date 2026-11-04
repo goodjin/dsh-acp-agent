@@ -1,7 +1,7 @@
 /** Presentation-only ACP segmentation. Durable messages and model history stay intact. */
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
-export const ACP_PROCESS_DATA = 'threadharbor-acp-process'
+export const ACP_PROCESS_DATA = 'acp-agent-acp-process'
 export type ProseBlock = { readonly kind: 'text' | 'reasoning'; readonly text: string }
 export type ProcessSegment = {
   readonly callId: string
@@ -26,7 +26,7 @@ export type StepProse = {
 export type AcpProcessState = { readonly turn: number; readonly steps: ReadonlyMap<number, StepProse> }
 
 declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
-  interface ConversationTurnDataMap { 'threadharbor-acp-process': AcpProcessState }
+  interface ConversationTurnDataMap { 'acp-agent-acp-process': AcpProcessState }
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -184,6 +184,8 @@ export function foldAcpProcess(state: AcpProcessState, event: unknown): AcpProce
     const provider = typeof source.provider === 'string' ? source.provider : ''
     if (provider.startsWith('acp:') || (provider.startsWith('acp-') && provider !== 'acp-raw-output')) step = { ...step, acp: true }
     const content = Array.isArray(message.content) ? message.content : []
+    // 字段名带 threadharbor 是**会话数据格式**（历史会话已以该名落盘），不改名——
+    // 写入端在宿主 runner.ts，两端必须同名。
     const marker = record(record(record(source.replayState).response).threadharborAcpBoundary)
     if (step.acp && marker.version === 1 && Number.isInteger(marker.beforeBlock) && Number(marker.beforeBlock) >= 0) {
       const boundaries = new Map(step.boundaries)

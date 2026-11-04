@@ -37,7 +37,7 @@ describe('assistant-step 的座位契约', () => {
 
   it('本包仍然把 ACP 段渲染器注册进座位（座位存在时由 chat-area 取用）', () => {
     expect(SURFACE).toContain('slots.inject(SEGMENT_RENDERER_SLOT')
-    expect(SURFACE).toContain('threadharbor-acp-segment-renderer')
+    expect(SURFACE).toContain('acp-agent-acp-segment-renderer')
   })
 
   it('兜底优先级 -40，比 chat-area 的 -50 更内层', () => {

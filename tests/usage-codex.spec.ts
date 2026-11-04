@@ -232,7 +232,7 @@ describe('registerCodexQuotaRoute（宿主路由）', () => {
   it('注册 exact 路由在固定路径，成功应答带完整额度', async () => {
     const { route } = rig()
     expect(route).toMatchObject({ kind: 'exact', path: QUOTA_ROUTE_PATH })
-    expect(QUOTA_ROUTE_PATH).toBe('/threadharbor/codex/quota')
+    expect(QUOTA_ROUTE_PATH).toBe('/acp-agent/codex/quota')
     swapUsageFetch(async () => ({
       level: 'pro',
       weekly: { kind: 'weekly', percent: 91, windowSeconds: 604_800 },

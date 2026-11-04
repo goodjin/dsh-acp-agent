@@ -138,7 +138,7 @@ describe('registerMiniMaxQuotaRoute', () => {
   it('装载即注册一条 exact 路由在固定路径', () => {
     const { route } = rig()
     expect(route).toMatchObject({ kind: 'exact', path: QUOTA_ROUTE_PATH })
-    expect(QUOTA_ROUTE_PATH).toBe('/threadharbor/minimax/quota')
+    expect(QUOTA_ROUTE_PATH).toBe('/acp-agent/minimax/quota')
   })
 
   it('准入照官方：拒绝时状态码原样、短体固定，不取数', async () => {

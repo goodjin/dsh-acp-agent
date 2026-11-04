@@ -8,7 +8,7 @@
  *
  * 所以这一行只做两件事：
  *   1. boot 之后在一行里说清「挂了几行、缺哪几行、为什么缺」，成功也说一声；
- *   2. 把同一份账目挂到一条只读路由上（`/threadharbor/health`），运维和下一次出事的
+ *   2. 把同一份账目挂到一条只读路由上（`/acp-agent/health`），运维和下一次出事的
  *      我们不必再靠猜，也不必等界面消失才发现。
  *
  * 三个设计约束，都是被上面那场事故逼出来的：
@@ -36,7 +36,7 @@ const FIBER_FAILED = 3
 const FIBER_DISPOSED = 4
 
 /** 只读路由：给人（和 curl）看这份账目。 */
-export const HEALTH_ROUTE_PATH = '/threadharbor/health'
+export const HEALTH_ROUTE_PATH = '/acp-agent/health'
 
 /** 一条装载行的期望：id 与「它在界面上是什么」，缺行时日志里说得出人话。 */
 export interface RowExpectation {
@@ -53,12 +53,12 @@ export interface RowExpectation {
  */
 export const EXPECTED_ROWS: readonly RowExpectation[] = [
   { id: 'acp-agent-client', what: '浏览器半边登记行（缺它整块界面不进浏览器清单）' },
-  { id: 'threadharbor-roster-filter', what: '名册过滤器（设置里的屏蔽提供方与模型）' },
-  { id: 'threadharbor-zcode-quota', what: 'GLM 套餐额度接口' },
-  { id: 'threadharbor-minimaxi-quota', what: 'MiniMax 套餐额度接口' },
-  { id: 'threadharbor-codex-quota', what: 'Codex 额度接口' },
-  { id: 'threadharbor-claude-quota', what: 'Claude 额度接口' },
-  { id: 'threadharbor-grok-quota', what: 'Grok 额度接口' },
+  { id: 'acp-agent-roster-filter', what: '名册过滤器（设置里的屏蔽提供方与模型）' },
+  { id: 'acp-agent-zcode-quota', what: 'GLM 套餐额度接口' },
+  { id: 'acp-agent-minimaxi-quota', what: 'MiniMax 套餐额度接口' },
+  { id: 'acp-agent-codex-quota', what: 'Codex 额度接口' },
+  { id: 'acp-agent-claude-quota', what: 'Claude 额度接口' },
+  { id: 'acp-agent-grok-quota', what: 'Grok 额度接口' },
   { id: 'acp-codex', what: 'Codex 预置' },
   { id: 'acp-claude', what: 'Claude 预置' },
   { id: 'acp-grok', what: 'Grok 预置' },
@@ -304,7 +304,7 @@ export interface HealthContext {
 }
 
 /** 插件名：Loader 用它显示装载日志。 */
-export const name = 'threadharbor-health'
+export const name = 'acp-agent-health'
 
 /** 找 Loader 服务：注入面与 `get` 两条路都试（不同宿主面只给其中之一）。 */
 function loaderOf(ctx: HealthContext): HealthContext['loader'] {
@@ -325,7 +325,7 @@ function reporter(ctx: HealthContext): (message: string) => void {
     } catch {
       // logger 自己坏了不该带走这一行。
     }
-    process.stderr.write(`[threadharbor] ${message}\n`)
+    process.stderr.write(`[acp-agent] ${message}\n`)
   }
 }
 
@@ -406,7 +406,7 @@ export function installHealth(ctx: HealthContext, deps: InstallHealthDeps = {}):
   }
 
   const handle = schedule(() => { void announce() })
-  if (ctx.effect !== undefined) ctx.effect(() => () => cancel(handle), 'threadharbor: health audit')
+  if (ctx.effect !== undefined) ctx.effect(() => () => cancel(handle), 'acp-agent: health audit')
   else if (typeof handle === 'object' && handle !== null) { /* 没有 effect 面时交给进程退出 */ }
 
   /** 只读路由：GET 返回账目 JSON，准入照官方那套（先 admit，再应答）。 */

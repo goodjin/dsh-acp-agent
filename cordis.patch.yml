@@ -13,7 +13,7 @@
 
 - insert:
     # 自报门面：boot 之后打一行「几行挂上、缺哪几行、为什么缺」，并把同一份账目挂到
-    # 只读路由 /threadharbor/health。
+    # 只读路由 /acp-agent/health。
     #
     # 为什么要有这一行：2026-11-03 一句参数属性让主入口在 strip-only 载入时直接失败，
     # 整个插件的宿主半边与浏览器半边一起消失（设置里的屏蔽页、模型前缀、配额胶囊全没了），
@@ -21,7 +21,7 @@
     # 它故意不 import 包内任何东西，所以主入口坏掉时它照样能载入并说话。
     #
     # 放第一位：它排的那次核对在 boot 之后跑，位置靠前只是让它在别人坏掉时也一定存在。
-    - id: threadharbor-health
+    - id: acp-agent-health
       name: '@goodjin2/dsh-acp-agent/health'
     # 浏览器半边的挂载行。DSH 不按 package.json 的 dsh.client 自动装载浏览器包：
     # 客户端模块系统扫的是 Loader 的行，只有 name 恰好等于包名（裸包名）时那个包
@@ -38,27 +38,27 @@
     # 名册过滤器不点名。每个要藏起的 preset 在自己的 binding 上打
     # hideFromRoster: true；过滤器只认这个标记（以及行上的同名字段）。
     # 新增 agent 只要打标记，不必改过滤器配置。内部 list() 仍不过滤。
-    - id: threadharbor-roster-filter
+    - id: acp-agent-roster-filter
       name: '@goodjin2/dsh-acp-agent/roster-filter'
     # GLM 套餐限额接口：宿主解密本机 ZCode 登录密钥后问一次 Coding Plan 的
     # monitor 地址，把 5 小时/周两个窗口的数字发回；浏览器侧输入框下方的
     # 配额胶囊从这里读（密钥不出宿主进程，成功应答带 30 秒缓存）。
-    - id: threadharbor-zcode-quota
+    - id: acp-agent-zcode-quota
       name: '@goodjin2/dsh-acp-agent/zcode-quota'
     # MiniMax Token Plan 限额+积分接口：宿主用本机 MiniMax 登录令牌（签名查组与
     # 积分 + 开放平台查两个窗口）问一次，把 5 小时/周/积分发回；与 GLM 那条同面，
     # 浏览器侧给 MiniMax 模型画配额胶囊时读它（令牌不出宿主进程，30 秒缓存）。
-    - id: threadharbor-minimaxi-quota
+    - id: acp-agent-minimaxi-quota
       name: '@goodjin2/dsh-acp-agent/minimaxi-quota'
     # Codex（ChatGPT 套餐）额度接口：宿主读本机 ~/.codex 登录令牌问一次官方
     # usage 只读接口，把主/次窗口（时长决定标签）与按量积分发回；没登录就
     # 不出数据，浏览器侧按 acp:acp-codex 画胶囊（令牌不出宿主，30 秒缓存）。
-    - id: threadharbor-codex-quota
+    - id: acp-agent-codex-quota
       name: '@goodjin2/dsh-acp-agent/codex-quota'
     # Claude（Anthropic 官方订阅）额度接口：宿主读本机官方 OAuth 令牌（文件或
     # 钥匙串）问一次 oauth usage，把 5 小时/7 天两档发回；走中转站没登官方的
     # 机器上没有凭据，胶囊安静地不出现（上游接口自带 429 冷却，缓存 2 分钟）。
-    - id: threadharbor-claude-quota
+    - id: acp-agent-claude-quota
       name: '@goodjin2/dsh-acp-agent/claude-quota'
     # Grok（grok-cli 的 SuperGrok/GrokPro 套餐）额度接口：宿主读本机
     # ~/.grok/auth.json 的 OAuth 令牌问一次 grok-cli 代理域的
@@ -66,9 +66,9 @@
     # /v1/user?include=subscription（档位，进悬停提示）。令牌约一小时过期、
     # CLI 自己续；过期/没登录就折成 ok:false，胶囊安静地不出现（30 秒缓存）。
     # 必须走 cli-chat-proxy.grok.com：直接打 grok.com 被 Cloudflare 盾拦。
-    - id: threadharbor-grok-quota
+    - id: acp-agent-grok-quota
       name: '@goodjin2/dsh-acp-agent/grok-quota'
-    # Mermaid 渲染已迁往 @goodjin2/dsh-chat-area（浏览器渲染 + /threadharbor/mermaid.js
+    # Mermaid 渲染已迁往 @goodjin2/dsh-chat-area（浏览器渲染 + /acp-agent/mermaid.js
     # 宿主路由都在那边），本包不再提供 mermaid 资产或渲染。
     # /commit-merge-push 已独立出仓（goodjin/dsh-command-commit-merge-push），
     # 由 profile 单独安装挂载，不随本仓库分发。

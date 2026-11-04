@@ -43,7 +43,14 @@ import type {
 export const ACP_ROUTE_PREFIX = 'acp:'
 
 /** The settings-document key this choice lives under. */
-export const ACP_VISIBILITY_STORAGE_KEY = 'threadharbor.acpVisibility'
+export const ACP_VISIBILITY_STORAGE_KEY = 'acp-agent.acpVisibility'
+
+/**
+ * 改名前的旧键（插件还挂在 threadharbor 名下的时候）。只为一次性迁移保留：
+ * 首次读取时旧键在场、新键缺失，就把旧值搬到新键并删掉旧键。除此之外没有任何
+ * 代码再读它。
+ */
+export const LEGACY_ACP_VISIBILITY_STORAGE_KEY = 'threadharbor.acpVisibility'
 
 /** What the user chose to keep out of the model pickers. */
 export type AcpVisibility = {
@@ -57,6 +64,8 @@ export type AcpVisibility = {
 export type AcpVisibilityStorage = {
   getItem(key: string): string | null
   setItem(key: string, value: string): void
+  /** 键名迁移时清旧键用；存储面不支持时迁移退化为「读时兜底」。 */
+  removeItem?(key: string): void
 }
 
 /** What the settings page and the picker filter read. */
@@ -280,7 +289,24 @@ export function startAcpVisibility(
   report: (message: string) => void = () => {},
 ): AcpVisibilityStore {
   const listeners = new Set<() => void>()
-  const read = (): AcpVisibility => parseAcpVisibility(storage.getItem(ACP_VISIBILITY_STORAGE_KEY), report)
+  // 键名一代迁移：新键缺失、旧键在场 → 搬值到新键并删旧键（存储面支持删除时）。
+  // 写失败或没有删除面时退化为「读时兜底」：新键永远优先，旧键留着下次再试。
+  if (storage.getItem(ACP_VISIBILITY_STORAGE_KEY) === null) {
+    const legacy = storage.getItem(LEGACY_ACP_VISIBILITY_STORAGE_KEY)
+    if (legacy !== null) {
+      try {
+        storage.setItem(ACP_VISIBILITY_STORAGE_KEY, legacy)
+        storage.removeItem?.(LEGACY_ACP_VISIBILITY_STORAGE_KEY)
+      } catch {
+        // 迁移写失败：读时兜底已能保证清单不丢。
+      }
+    }
+  }
+  const read = (): AcpVisibility =>
+    parseAcpVisibility(
+      storage.getItem(ACP_VISIBILITY_STORAGE_KEY) ?? storage.getItem(LEGACY_ACP_VISIBILITY_STORAGE_KEY),
+      report,
+    )
   let current = read()
   const notify = (): void => {
     for (const listener of [...listeners]) listener()

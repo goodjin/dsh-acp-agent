@@ -239,7 +239,7 @@ const patches = new WeakMap<object, Patch>()
  * 这个指针因此住在页面的全局上（`Symbol.for` 的全局注册表），新旧两份模块
  * 看到的是同一份。
  */
-const CURRENT_SERVICE_KEY = Symbol.for('threadharbor.acpVisibility.currentService')
+const CURRENT_SERVICE_KEY = Symbol.for('acp-agent.acpVisibility.currentService')
 
 /** The one slot every module instance of this module shares. */
 function currentServiceSlot(): { service?: object } {
@@ -315,7 +315,7 @@ export function installAcpVisibilityFilter(
         shapeReported = true
         const note = `acp visibility: model directory unavailable (${describeError(error)})`
         report(note)
-        console.warn(`[threadharbor] ${note}`)
+        console.warn(`[acp-agent] ${note}`)
       }
       return degradedDirectory(error)
     }

@@ -26,9 +26,9 @@ import { NAMESPACE, fallbackT } from './locales.ts'
 import styles from './lost-input.module.css'
 
 /** 只做状态折叠、不出节点的 Context kind。 */
-export const LOST_INPUT_STATE_KIND = 'threadharbor-lost-input-state'
+export const LOST_INPUT_STATE_KIND = 'acp-agent-lost-input-state'
 /** Chat 节点 kind（同时是卡片在 `conversation.chat.node` 槽里的 key）。 */
-export const LOST_INPUT_NODE_KIND = 'threadharbor-lost-input'
+export const LOST_INPUT_NODE_KIND = 'acp-agent-lost-input'
 
 /** 一条没能进入对话记录的人类消息。 */
 export interface LostInputMessage {
@@ -67,7 +67,7 @@ export const EMPTY_LOST_INPUT_STATE: LostInputState = {
 
 declare module '@deepseek-ai/dsh-client-ui-chat/client' {
   interface ChatNodeDataMap {
-    'threadharbor-lost-input': LostInputData
+    'acp-agent-lost-input': LostInputData
   }
 }
 
@@ -444,14 +444,14 @@ export function registerLostInputSurface(ctx: LostInputSurfaceContext): void {
   const events = isRecord(uiConversation) ? uiConversation['events'] : undefined
   const register = readMethod(events, 'register')
   if (register === undefined) {
-    ctx.logger('threadharbor-client').warn('lost input: uiConversation.events unavailable — failed turns keep their unsent request hidden')
+    ctx.logger('acp-agent-client').warn('lost input: uiConversation.events unavailable — failed turns keep their unsent request hidden')
     return
   }
   const registerOn = (definition: unknown): void => {
     try {
       register.call(events, definition)
     } catch (error: unknown) {
-      ctx.logger('threadharbor-client').warn(`lost input: definition registration failed: ${messageOf(error)}`)
+      ctx.logger('acp-agent-client').warn(`lost input: definition registration failed: ${messageOf(error)}`)
     }
   }
   registerOn(lostInputStateDefinition)

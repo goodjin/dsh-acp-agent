@@ -1294,6 +1294,9 @@ export class AcpTurnRunner {
       if (announcement !== undefined && beforeBlock !== undefined) {
         const payload = recordOf(announcement.payload)
         const message = recordOf(payload['message'])
+        // 字段名带 threadharbor 是**会话数据格式**，不是命名残留：历史会话的 JSONL
+        // 里已经以这个名字落盘，改名会让旧会话的 ACP 分段读不出来。宿主与浏览器
+        // 两端必须保持同名（另一端在 client/acp-process-segments.ts）。
         announcement = { ...announcement, payload: { ...payload, message: { ...message,
           source: { ...recordOf(message['source']), replayState: { response: { threadharborAcpBoundary: { version: 1, beforeBlock } } } },
         } } }

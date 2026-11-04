@@ -93,13 +93,13 @@ describe('auditRows', () => {
 
   it('模块载入失败的行：failed，并带上重导入取回的原始错误', async () => {
     const rows = await auditRows(withRows({
-      'threadharbor-minimaxi-quota': failedImport(
-        'threadharbor-minimaxi-quota',
+      'acp-agent-minimaxi-quota': failedImport(
+        'acp-agent-minimaxi-quota',
         '@goodjin2/dsh-acp-agent/minimaxi-quota',
         'TypeScript parameter property is not supported in strip-only mode',
       ),
     }))
-    const row = rows.find(entry => entry.id === 'threadharbor-minimaxi-quota')
+    const row = rows.find(entry => entry.id === 'acp-agent-minimaxi-quota')
     expect(row?.status).toBe('failed')
     expect(row?.detail).toContain('parameter property')
   })
@@ -124,13 +124,13 @@ describe('auditRows', () => {
 
   it('等依赖服务的行：pending，并点名缺哪个服务', async () => {
     const rows = await auditRows(withRows({
-      'threadharbor-zcode-quota': pendingOn(
-        'threadharbor-zcode-quota',
+      'acp-agent-zcode-quota': pendingOn(
+        'acp-agent-zcode-quota',
         '@goodjin2/dsh-acp-agent/zcode-quota',
         ['webServer'],
       ),
     }))
-    const row = rows.find(entry => entry.id === 'threadharbor-zcode-quota')
+    const row = rows.find(entry => entry.id === 'acp-agent-zcode-quota')
     expect(row?.status).toBe('pending')
     expect(row?.detail).toContain('webServer')
   })
@@ -177,14 +177,14 @@ describe('summarizeAudit', () => {
 
   it('缺行时一行里点名缺哪几行、为什么缺', async () => {
     const line = summarizeAudit(await auditRows(withRows({
-      'threadharbor-minimaxi-quota': failedImport(
-        'threadharbor-minimaxi-quota',
+      'acp-agent-minimaxi-quota': failedImport(
+        'acp-agent-minimaxi-quota',
         '@goodjin2/dsh-acp-agent/minimaxi-quota',
         'TypeScript parameter property is not supported in strip-only mode',
       ),
       'acp-minimax': { options: { id: 'acp-minimax', name: '@deepseek-ai/dsh-agent-preset' } },
     })))
-    expect(line).toContain('threadharbor-minimaxi-quota')
+    expect(line).toContain('acp-agent-minimaxi-quota')
     expect(line).toContain('acp-minimax')
     expect(line).toContain('parameter property')
     expect(line).not.toContain('\n')
@@ -232,7 +232,7 @@ describe('期望清单与补丁一一对应', () => {
   it('补丁里的每一行（除自报门面自己），期望清单里也真有', () => {
     const expected = EXPECTED_ROWS.map(row => row.id)
     for (const id of topLevelRowIds()) {
-      if (id === 'threadharbor-health') continue
+      if (id === 'acp-agent-health') continue
       expect(expected, `期望清单里没有 ${id}`).toContain(id)
     }
   })
@@ -297,9 +297,9 @@ describe('installHealth / apply', () => {
     try {
       const { ctx, warnings } = rig()
       const entries = [
-        ...allMounted().filter(entry => entry.options.id !== 'threadharbor-minimaxi-quota'),
+        ...allMounted().filter(entry => entry.options.id !== 'acp-agent-minimaxi-quota'),
         failedImport(
-          'threadharbor-minimaxi-quota',
+          'acp-agent-minimaxi-quota',
           '@goodjin2/dsh-acp-agent/minimaxi-quota',
           'TypeScript parameter property is not supported in strip-only mode',
         ),
@@ -307,7 +307,7 @@ describe('installHealth / apply', () => {
       ;(ctx as unknown as { loader: { entries: () => LoaderEntryLike[] } }).loader = { entries: () => entries }
       installHealth(ctx, { schedule: run => run() })
       await flush()
-      expect(warnings.join('\n')).toContain('threadharbor-minimaxi-quota')
+      expect(warnings.join('\n')).toContain('acp-agent-minimaxi-quota')
       expect(warnings.join('\n')).toContain('parameter property')
     } finally {
       stderr.mockRestore()
