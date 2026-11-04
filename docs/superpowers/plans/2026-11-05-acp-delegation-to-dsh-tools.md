@@ -57,11 +57,8 @@ import { describe, expect, it } from 'vitest'
 import { isDelegatedChild } from '../src/dispatch.ts'
 
 describe('受委派子会话的接管排除', () => {
-  it('会话头带 origin=subagent 的 agent 是受委派子会话', () => {
-    expect(isDelegatedChild({ session: { header: { origin: 'subagent', delegationDepth: 1 } } })).toBe(true)
-  })
-
   it('会话头带 delegationDepth>0 的 agent 是受委派子会话', () => {
+    expect(isDelegatedChild({ session: { header: { delegationDepth: 1 } } })).toBe(true)
     expect(isDelegatedChild({ session: { header: { delegationDepth: 2 } } })).toBe(true)
   })
 
@@ -71,6 +68,12 @@ describe('受委派子会话的接管排除', () => {
 
   it('没有会话头的 agent 不是受委派子会话', () => {
     expect(isDelegatedChild({})).toBe(false)
+  })
+
+  it('origin=subagent 但没有 delegationDepth 的会话不算受委派子会话', () => {
+    // origin 是粗粒度的来源标记；ACP 行自己造的影子子会话也带它。
+    // 判据用 delegationDepth —— 宿主对「这是受委派产生的」的记账。
+    expect(isDelegatedChild({ session: { header: { origin: 'subagent' } } })).toBe(false)
   })
 })
 ```
@@ -88,7 +91,9 @@ Expected: FAIL，报 `isDelegatedChild` 未导出（SyntaxError / undefined is n
 export function isDelegatedChild(agent: unknown): boolean
 ```
 
-读 `agent.session?.header?.origin === 'subagent'` 或 `agent.session?.header?.delegationDepth` 为正数即返回 true；结构不认得（无 `session`、无 `header`）返回 false。所有读取都按结构进行并逐层做类型守卫，缺字段即 false。
+读 `agent.session?.header?.delegationDepth`，是正数即返回 true；其余一律 false（无 `session`、无 `header`、字段缺失或非数）。
+
+**判据只用 `delegationDepth`，不用 `origin`**：`origin === 'subagent'` 是粗粒度的来源标记，ACP 行自己造的影子子会话（`src/entry.ts:544`）也带它；`delegationDepth` 才是宿主对「这是受委派产生的」的记账，与深度上限用的是同一个事实。所有读取都按结构进行并逐层做类型守卫。
 
 - [ ] **Step 4: 把守卫接到两条接管路径上**
 
@@ -407,6 +412,7 @@ git commit -m "feat: stdio MCP 桥接进程——把委派调用转给宿主回�
 **Interfaces:**
 - Consumes: 宿主服务 `superpowers.delegation`（Task 4 提供）、`ctx.webServer`、`ctx.connection`；请求头 `x-dsh-delegation-token`；body 为 `DelegationRequest` 的 JSON。
 - Produces: 路由 `POST /acp-agent/delegation`，成功回 200 + `DelegationResult` JSON；令牌不符回 401；body 不合法回 400；委派服务缺席回 503。
+- 另产出：一份**按 `(sessionId, task)` 记的已完成结果缓存**——委派跑超 MCP 工具调用超时后，agent 再问同一标识时直接拿到已完成的结果，不必重跑。缓存挂在路由行的闭包里，进程内存，不落盘。
 
 - [ ] **Step 1: 写失败的测试**
 
@@ -417,6 +423,7 @@ git commit -m "feat: stdio MCP 桥接进程——把委派调用转给宿主回�
 3. body 缺 `task` → 400。
 4. 委派服务缺席（`ctx.get` 返回 undefined）→ 503，且 body 含「委派服务不可用」字样。
 5. 委派服务抛错 → 500，body 含错误文本，且**不含令牌**。
+6. 同一 `(sessionId, task)` 第二次请求 → 200，且**不再调用委派服务**（断言替身的服务没被第二次调用），body 是第一次的结果。
 
 - [ ] **Step 2: 跑测试确认失败**
 
@@ -433,10 +440,12 @@ export const DELEGATION_ROUTE_PATH = '/acp-agent/delegation'
 export function apply(ctx: DelegationRouteContext): void
 ```
 
-- 令牌校验：读 `req.headers['x-dsh-delegation-token']`，与配置里的期望值逐字比。期望值从**宿主配置**取（不写在包里）：路由行 `config.token`。令牌缺失或不符 → 401，body 为固定短文本。
+- 令牌校验：读 `req.headers['x-dsh-delegation-token']`，与**路由行配置里的** `config.token` 逐字比。令牌缺失或不符 → 401，body 为固定短文本。
+  - **令牌只有一份来源**：路由行配置。桥接进程拿到的同一个值由 Task 7 从宿主配置读出后放进 `env`。两处各自生成会让回调永远校验不过。
 - body 解析：读请求体（累积 chunk，`JSON.parse`），失败或缺 `task`/`brief`/`sessionId` → 400。
+- 结果缓存：以 `(sessionId, task)` 为键。请求命中已完成的键 → 直接回 200 与缓存结果，**不调委派服务**。委派成功后写入缓存。
 - 委派调用：`ctx.get(DELEGATION_SERVICE)`；缺席 → 503。`delegate(body)` 的结果回 200 + JSON。
-- 委派抛错 → 500，body 只含错误消息，**必须过滤掉令牌**（用 `.replace(token, '[redacted]')` 一类处理）。
+- 委派抛错 → 500，body 只含错误消息，**必须过滤掉令牌**（用 `.replace(token, '[redacted]')` 一类处理）。**失败的委派不写缓存**——否则一次失败会被缓存成永久失败。
 
 - [ ] **Step 4: 跑测试确认通过**
 
@@ -462,7 +471,7 @@ git commit -m "feat: 委派回调路由——校验令牌后转交委派服务"
 - Test: `tests/mcp-attach.spec.ts`
 
 **Interfaces:**
-- Consumes: 宿主服务 `superpowers.delegation` 的**存在性**（决定挂不挂）；`ctx.webServer` 的 `getOrigin()`/端口（拼回调 URL）；桥接进程绝对路径。
+- Consumes: 宿主服务 `superpowers.delegation` 的**存在性**（决定挂不挂）；宿主配置里回调路由那一行的 `config.token`（令牌的唯一来源）；`ctx.webServer` 的 `getOrigin()`/端口（拼回调 URL）；桥接进程绝对路径。
 - Produces: `session/new` 与 `session/load`/`resume` 的 `mcpServers` 数组含一项 `{ type: 'stdio', name: 'dsh-delegation', command: <node 可执行路径>, args: [<桥接 .mjs 绝对路径>], env: [...] }`。
 
 - [ ] **Step 1: 写失败的测试**
@@ -481,9 +490,10 @@ Expected: FAIL（`mcpServers` 仍是空数组）。
 - [ ] **Step 3: 实现挂载**
 
 1. `src/entry.ts`：读宿主服务 `superpowers.delegation`（用 `src/delegation-contract.ts` 的 `DELEGATION_SERVICE`）。**在** `deps.install` 之前，把「委派服务在场」这一事实与委派所需的宿主面传给 factory/runner：委派服务本身（供回调路由用）、回调路由的 URL 与令牌。
-2. `src/factory.ts`：为每个 DSH 会话生成一枚**随机令牌**（`node:crypto` 的 `randomBytes(32).toString('hex')`），拼出回调 URL `${origin}/acp-agent/delegation`，并把桥接进程的可执行路径与 `.mjs` 绝对路径准备好。
+2. `src/factory.ts`：从**宿主配置**读回调路由那一行的 `config.token`（令牌只有这一份来源，见 Task 6 Step 3），拼出回调 URL `${origin}/acp-agent/delegation`，并把桥接进程的可执行路径与 `.mjs` 绝对路径准备好。
    - 可执行路径：宿主自己的 `process.execPath`（node）。桥接文件路径：从本包位置解析（`new URL('../bridge/dsh-acp-mcp-bridge.mjs', import.meta.url)`）。
-   - 令牌放 `env`：`DSH_DELEGATION_TOKEN`（同时也是回调路由的期望令牌）、`DSH_DELEGATION_URL`、`DSH_DELEGATION_SESSION`。
+   - 令牌放 `env`：`DSH_DELEGATION_TOKEN`（与路由行的 `config.token` 同一个值）、`DSH_DELEGATION_URL`、`DSH_DELEGATION_SESSION`。
+   - 令牌读不到（路由行没配 `config.token`）→ **不挂 MCP 服务器**，并在 stderr 记一行；不生成临时令牌——临时令牌会让回调路由的校验永远不过。
 3. `src/runner.ts`：`session/new` 与 `session/load`/`resume` 的 `mcpServers` 从「写死空数组」改成「传进来的服务器列表」；委派服务缺席时传空数组。
 
 - [ ] **Step 4: 跑测试确认通过**
@@ -611,6 +621,8 @@ git commit -m "test: 真机探针——五家认不认客户端提供的 MCP 服
 
 令牌用 `openssl rand -hex 32` 生成，**只写进 profile，不进任何仓库**。
 
+这枚令牌是**唯一来源**：Task 6 的路由行拿它校验，Task 7 的挂载从同一行读出后放进桥接进程的 `env`。两处若各自生成，回调永远校验不过。
+
 - [ ] **Step 2: 重装两个插件并重启桌面版**
 
 按 `dsh-plugins/AGENTS.md` 的规矩：改完插件要重新安装，让 profile 指过来；桌面版改动后**重建产物并重启 App**，否则界面加载的仍是旧产物。
@@ -624,9 +636,9 @@ git commit -m "test: 真机探针——五家认不认客户端提供的 MCP 服
 - 子会话的模型与钉表一致；
 - 子代理用 DSH 的工具（bash/fs）干活，而不是外部 agent 的工具。
 
-- [ ] **Step 4: 提交 profile 改动**
+- [ ] **Step 4: 把装法写回设计文档**
 
-profile 不在仓库里，不提交。**但**要在 `docs/agent-acp/delegation-design.md` 里补一句「装法：profile 里加这两行 + 重装插件 + 重启」。
+profile 不在仓库里，不提交。**但**要在 `docs/agent-acp/delegation-design.md` 里补一句「装法：profile 里加这两行（路由行带 `config.token`）+ 重装插件 + 重启」。
 
 ---
 
