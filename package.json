@@ -69,6 +69,7 @@
     "LICENSE",
     "README.md",
     "cordis.patch.yml",
+    "bridge/",
     "lib/client.js",
     "lib/client.js.map",
     "src/**/*.ts",
