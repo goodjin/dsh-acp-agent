@@ -85,7 +85,7 @@ describe('配额胶囊的浏览器装配', () => {
     }
   })
 
-  it('每只轮询器都开跑，而且问的是自己那条路由', async () => {
+  it('每只轮询器都开跑：走路由的问自己那条路由，DeepSeek 走 remote 不发请求', async () => {
     const asked: string[] = []
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       asked.push(String(input))
@@ -96,7 +96,14 @@ describe('配额胶囊的浏览器装配', () => {
       apply(host.ctx, undefined, () => {})
       // start() 会立刻问一次；轮询间隔很长，等第二次没有意义。
       await new Promise(resolve => setTimeout(resolve, 0))
-      expect(asked).toEqual(QUOTA_PILL_SPECS.map(spec => spec.routePath))
+      const routeSpecs = QUOTA_PILL_SPECS.filter(spec => spec.routePath !== undefined)
+      // 走路由的四家各问各的路径；
+      expect(asked).toEqual(routeSpecs.map(spec => spec.routePath))
+      // DeepSeek 没有路由可问：它的取数器只认 remote（这个假宿主没给 remote，
+      // 所以它折成 ok:false，一次 fetch 都不发）。
+      const deepseek = QUOTA_PILL_SPECS.find(spec => spec.provider === 'deepseek')
+      expect(deepseek?.routePath).toBeUndefined()
+      expect(asked.some(url => url.includes('deepseek'))).toBe(false)
     } finally {
       host.dispose()
     }

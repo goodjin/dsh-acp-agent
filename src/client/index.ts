@@ -23,7 +23,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PropsRuntime, SlotCore, SlotMap } from '@deepseek-ai/dsh-client-ui-slots'
 
 import { registerModelLabel } from './model-label.tsx'
-import { createQuotaPoller, QUOTA_PILL_SPECS, registerQuotaDockPills, routeQuotaFetcher } from './quota-pill.ts'
+import { createQuotaPoller, QUOTA_PILL_SPECS, registerQuotaDockPills, remoteBalanceFetcher, routeQuotaFetcher } from './quota-pill.ts'
 import type { QuotaPillServices } from './quota-pill.ts'
 import { registerInterruptedTurnRecovery } from './interrupted-turn-recovery.ts'
 import { registerAcpVisibilitySection } from './acp-visibility-panel.tsx'
@@ -42,6 +42,14 @@ import { createElement } from 'react'
 export type ClientPanelContext = ClientContext & {
   readonly locale?: {
     readonly register?: (dictionaries: Record<string, unknown>) => void
+    /** 当前界面语言（client-locale 的 store）；余额请求要用它派生 Platform 请求头。 */
+    readonly getSnapshot?: () => { readonly active?: string }
+  }
+  /** api-remotes 注入的远端面；DeepSeek 余额走 `remote.account.getBalance`（与设置页同源）。 */
+  readonly remote?: {
+    readonly account?: {
+      readonly getBalance?: (metadata: unknown) => Promise<unknown>
+    }
   }
 }
 
@@ -127,16 +135,24 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
         return ctx.get('sessions') as QuotaPillServices['sessions']
       },
     }
-    // 四套口径（GLM / MiniMax / Codex / Claude）**各建一只轮询器、各挂一条
-    // dock**：路由、出现条件、文案各归各，模型前缀互不相认。
+    // 五套口径（GLM / MiniMax / Codex / Claude / DeepSeek）**各建一只轮询器、各挂
+    // 一条 dock**：路由、出现条件、文案各归各，模型前缀互不相认。
     //
     // 轮询器必须 start：不 start 它一次也不问，快照永远是 undefined，胶囊整行
     // 不渲染——哪一家都不出现（2026-11 现场：迁进本仓时这段装配丢了，只剩 GLM
     // 一条，而且那只轮询器从没开跑）。取数失败也要说一句，别静默。
     const disposers: (() => void)[] = []
     for (const spec of QUOTA_PILL_SPECS) {
+      // 有 routePath 的走宿主路由；DeepSeek 的余额与设置页同源，直接走 remote
+      // 通道（`remote.account.getBalance`），不该去问一条不存在的路由。
+      const fetchQuota = spec.routePath !== undefined
+        ? routeQuotaFetcher(fetch, spec.routePath)
+        : remoteBalanceFetcher({
+          remote: ctx.remote,
+          locale: () => ctx.locale?.getSnapshot?.().active ?? 'en',
+        })
       const poller = createQuotaPoller({
-        fetchQuota: routeQuotaFetcher(fetch, spec.routePath),
+        fetchQuota,
         report: message => { say(`${spec.dockId}: ${message}`) },
       })
       poller.start()
@@ -151,7 +167,7 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
         disposers.push(() => { window.removeEventListener('visibilitychange', onVisible) })
       }
     }
-    // 收尾：停掉四只轮询器、撤掉四条 dock 条目。
+    // 收尾：停掉五只轮询器、撤掉五条 dock 条目。
     ctx.effect(() => () => { for (const dispose of disposers.splice(0)) dispose() }, 'threadharbor: quota pills')
   }, say)
 

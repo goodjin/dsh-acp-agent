@@ -53,15 +53,15 @@ const GLM_MODEL_PREFIX = 'GLM-'
  */
 export interface QuotaPillSpec {
   /** 取值口径来源：决定文案命名空间与变色方向。 */
-  readonly provider: 'zcode' | 'minimaxi' | 'claude' | 'codex'
+  readonly provider: 'zcode' | 'minimaxi' | 'claude' | 'codex' | 'deepseek'
   /** 当前会话目录里的 provider id（如 `acp:acp-claude`）与此相等才渲染。 */
   readonly providerId?: string
   /** 模型 id 前缀匹配；providerId 已给时可以不填（Claude 的模型 id 是通用别名）。 */
   readonly prefix?: string
-  /** 是否渲染积分胶囊（MiniMax/Codex/Claude 有，GLM 无）。 */
+  /** 是否渲染积分胶囊（MiniMax/Codex/Claude/DeepSeek 有，GLM 无）。 */
   readonly showCredit: boolean
-  /** 宿主路由路径。 */
-  readonly routePath: string
+  /** 宿主路由路径；只有走路由取数的口径才有。DeepSeek 走 remote 余额接口，没有。 */
+  readonly routePath?: string
   /** dock 条目 id 与顺序。 */
   readonly dockId: string
   readonly dockOrder: number
@@ -107,12 +107,28 @@ export const CLAUDE_QUOTA_PILL_SPEC: QuotaPillSpec = {
   dockOrder: 13,
 }
 
+/**
+ * DeepSeek 官方账号那套：按目录里的 provider id 精确认（`deepseek-account` 是
+ * 账号渠道自己的 id，不会误伤 API key 渠道）。余额不走宿主路由——设置页的余额
+ * 是浏览器直接调 `remote.account.getBalance(...)` 拿的，本包客户端注入的是同一个
+ * `@deepseek-ai/dsh-api-remotes`，所以胶囊读同一个源：同一个数、不碰令牌、
+ * 不用新开后端。
+ */
+export const DEEPSEEK_QUOTA_PILL_SPEC: QuotaPillSpec = {
+  provider: 'deepseek',
+  providerId: 'deepseek-account',
+  showCredit: true,
+  dockId: 'threadharbor-deepseek-quota',
+  dockOrder: 14,
+}
+
 /** 全部口径：apply 按这张表各建一只轮询器、各挂一条 dock。 */
 export const QUOTA_PILL_SPECS: readonly QuotaPillSpec[] = [
   GLM_QUOTA_PILL_SPEC,
   MINIMAX_QUOTA_PILL_SPEC,
   CODEX_QUOTA_PILL_SPEC,
   CLAUDE_QUOTA_PILL_SPEC,
+  DEEPSEEK_QUOTA_PILL_SPEC,
 ]
 
 /**
@@ -138,8 +154,20 @@ export interface QuotaWindows {
   readonly level?: string
   readonly fiveHour?: QuotaWindow
   readonly weekly?: QuotaWindow
-  /** 有积分套餐才带：MiniMax/Codex 是余额，Claude 是按量已用与上限。 */
-  readonly credit?: { readonly remaining?: number; readonly used?: number; readonly limit?: number }
+  /**
+   * 有积分套餐才带：MiniMax/Codex 是余额，Claude 是按量已用与上限，DeepSeek 是
+   * 账户余额（recharge/bonus/extra 只进悬停明细：数字只认充值钱包的 CNY 合计，
+   * 没有汇率就不该把别的币种瞎合并进来）。
+   */
+  readonly credit?: {
+    readonly remaining?: number
+    readonly used?: number
+    readonly limit?: number
+    readonly recharge?: number
+    readonly bonus?: number
+    /** 非 CNY 钱包的提示（预拼好的字符串，如「另有 $12.00」）；通常为空。 */
+    readonly extra?: string
+  }
 }
 
 /** The route's whole answer body. */
@@ -289,6 +317,101 @@ export function routeQuotaFetcher(fetchImpl: typeof fetch = fetch, routePath: st
 }
 
 /**
+ * 请求方身份：宿主拿它派生 Platform 请求头。设置页传的是「应用版本 + 界面语言 +
+ * 时区偏移」，这里保持同一形状——版本与设置页一样取 DSH 运行时版本（升级时两处
+ * 一起改）。
+ */
+const DEEPSEEK_APP_VERSION = '0.2.1-rc.5'
+
+/** 一只钱包：币种 + 余额（宿主已经把它校验成十进制字符串）。 */
+interface DeepseekWallet {
+  readonly currency?: unknown
+  readonly balance?: unknown
+}
+
+/** 用「分」做加法，避免 0.1 + 0.2 这类浮点尾巴混进钱里。 */
+function sumCny(wallets: readonly DeepseekWallet[]): number {
+  const cents = wallets
+    .filter(wallet => wallet.currency === 'CNY')
+    .reduce((total, wallet) => {
+      const value = Number(wallet.balance)
+      return Number.isFinite(value) ? total + Math.round(value * 100) : total
+    }, 0)
+  return cents / 100
+}
+
+/**
+ * DeepSeek 官方账号的余额取数器：走设置页同一条 remote 通道
+ * （`remote.account.getBalance`），把充值钱包折成积分胶囊的形状。
+ *
+ * 折算口径：数字只认充值钱包的 CNY 合计——没有汇率就不把 USD 或赠送金合并进来，
+ * 它们进悬停明细（credit.extra / bonus）。任何故障（remote 不在场、未登录、
+ * 远端说失败、形状不认识、钱包列表为空）都折成 ok:false，胶囊安静地不出现：
+ * DeepSeek 的登录在应用设置里完成，没有可点开的授权链接，所以这 家不出「去授权」。
+ */
+export function remoteBalanceFetcher(deps: {
+  /** 宿主注入的 remote 面（`ctx.remote`）；缺了就永远 ok:false。 */
+  readonly remote?: unknown
+  /** 当时的界面语言；每次取数都问一遍，切语言后下一拍就换。 */
+  readonly locale?: () => string
+  /** 覆盖请求方版本；默认与设置页同一常量。 */
+  readonly version?: string
+}): () => Promise<QuotaAnswer> {
+  return async () => {
+    const getBalance = (deps.remote as {
+      account?: { getBalance?: (metadata: unknown) => Promise<unknown> }
+    } | null | undefined)?.account?.getBalance
+    if (typeof getBalance !== 'function') {
+      return { ok: false, error: 'the remote account API is not available on this context' }
+    }
+    const timezoneOffsetSeconds = -new Date().getTimezoneOffset() * 60
+    let result: unknown
+    try {
+      result = await getBalance.call(deps.remote, {
+        version: deps.version ?? DEEPSEEK_APP_VERSION,
+        locale: deps.locale?.() ?? 'en',
+        timezoneOffsetSeconds,
+      })
+    } catch (error) {
+      return { ok: false, error: `account balance request failed: ${error instanceof Error ? error.message : String(error)}` }
+    }
+    if (result === null || result === undefined) {
+      return { ok: false, error: 'no DeepSeek account session (signed out, or the grant changed)' }
+    }
+    if (typeof result !== 'object' || !('ok' in result)) {
+      return { ok: false, error: 'the account balance answered an unrecognised shape' }
+    }
+    const outcome = result as { ok?: unknown; error?: unknown; value?: unknown }
+    if (outcome.ok !== true) {
+      const reason = typeof outcome.error === 'string' && outcome.error !== '' ? outcome.error : 'the account balance query failed'
+      return { ok: false, error: reason }
+    }
+    const detail = outcome.value as { status?: unknown; value?: unknown; bonusWallets?: unknown } | null | undefined
+    if (detail === null || typeof detail !== 'object' || detail.status !== 'ready' || !Array.isArray(detail.value)) {
+      return { ok: false, error: 'the account balance answered an unrecognised shape' }
+    }
+    const normal = detail.value as DeepseekWallet[]
+    const bonus = Array.isArray(detail.bonusWallets) ? (detail.bonusWallets as DeepseekWallet[]) : []
+    if (normal.length === 0) {
+      return { ok: false, error: 'the account carries no recharge wallet' }
+    }
+    const recharge = sumCny(normal)
+    const bonusCny = sumCny(bonus)
+    const usdCents = normal
+      .filter(wallet => wallet.currency === 'USD')
+      .reduce((total, wallet) => {
+        const value = Number(wallet.balance)
+        return Number.isFinite(value) ? total + Math.round(value * 100) : total
+      }, 0)
+    const extra = usdCents === 0 ? undefined : `；另有 $${(usdCents / 100).toFixed(2)}`
+    return {
+      ok: true,
+      quota: { credit: { remaining: recharge, recharge, bonus: bonusCny, ...(extra === undefined ? {} : { extra }) } },
+    }
+  }
+}
+
+/**
  * 渲染器绑定的快照钩子。真机上 ui-renderer 用 useSyncExternalStoreWithSelector
  * 把注入的 hooks 源包成 (selector, isEqual) => S：**每次调用都必须带选择器**，
  * 空参调用会抛 "selector is not a function"，条目被槽位错误边界收成空块。
@@ -432,22 +555,41 @@ function pillOf(window: QuotaWindow, t: RuntimeT, spec: QuotaPillSpec): ReactNod
  * （「按量 4.5 / 100」）。文案命名空间跟 provider 走。
  */
 function creditKeys(provider: QuotaPillSpec['provider']): {
-  credit: 'quota.minimaxi.credit' | 'quota.codex.credit' | 'quota.claude.credit'
-  title: 'quota.minimaxi.creditTitle' | 'quota.codex.creditTitle' | 'quota.claude.creditTitle'
+  credit: 'quota.minimaxi.credit' | 'quota.codex.credit' | 'quota.claude.credit' | 'quota.deepseek.credit'
+  title: 'quota.minimaxi.creditTitle' | 'quota.codex.creditTitle' | 'quota.claude.creditTitle' | 'quota.deepseek.creditTitle'
 } {
   if (provider === 'claude') return { credit: 'quota.claude.credit', title: 'quota.claude.creditTitle' }
   if (provider === 'codex') return { credit: 'quota.codex.credit', title: 'quota.codex.creditTitle' }
+  if (provider === 'deepseek') return { credit: 'quota.deepseek.credit', title: 'quota.deepseek.creditTitle' }
   return { credit: 'quota.minimaxi.credit', title: 'quota.minimaxi.creditTitle' }
 }
 
-function creditPillOf(credit: { readonly remaining?: number; readonly used?: number; readonly limit?: number }, t: RuntimeT, spec: QuotaPillSpec): ReactNode {
+/** 画积分胶囊的那只（导出只为测试：文案与数字的对应关系是用户看得见的行为）。 */
+export function creditPillOf(credit: {
+  readonly remaining?: number
+  readonly used?: number
+  readonly limit?: number
+  readonly recharge?: number
+  readonly bonus?: number
+  readonly extra?: string
+}, t: RuntimeT, spec: QuotaPillSpec): ReactNode {
   const keys = creditKeys(spec.provider)
-  const detail = credit.remaining !== undefined
-    ? String(credit.remaining)
-    : `${credit.used ?? 0}${credit.limit === undefined ? '' : ` / ${credit.limit}`}`
-  const title = spec.provider === 'claude'
-    ? t('quota.claude.creditTitle', { used: String(credit.used ?? 0), limit: String(credit.limit ?? '') })
-    : t(keys.title, { remaining: String(credit.remaining ?? '') })
+  const isDeepseek = spec.provider === 'deepseek'
+  // DeepSeek 的数字是钱：固定两位小数并带上币种符号；其余家照旧。
+  const detail = isDeepseek
+    ? `¥${(credit.remaining ?? 0).toFixed(2)}`
+    : credit.remaining !== undefined
+      ? String(credit.remaining)
+      : `${credit.used ?? 0}${credit.limit === undefined ? '' : ` / ${credit.limit}`}`
+  const title = isDeepseek
+    ? t('quota.deepseek.creditTitle', {
+      recharge: (credit.recharge ?? credit.remaining ?? 0).toFixed(2),
+      bonus: (credit.bonus ?? 0).toFixed(2),
+      extra: credit.extra ?? '',
+    })
+    : spec.provider === 'claude'
+      ? t('quota.claude.creditTitle', { used: String(credit.used ?? 0), limit: String(credit.limit ?? '') })
+      : t(keys.title, { remaining: String(credit.remaining ?? '') })
   return createElement('span', {
     key: 'credit',
     title,
