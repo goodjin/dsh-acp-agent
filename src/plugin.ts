@@ -16,7 +16,7 @@
  * listens for and the shape it needs, and the caller adapts.
  */
 
-import { holdsAcpDispatch, presetIdOf } from './dispatch.ts'
+import { holdsAcpDispatch, isDelegatedChild, presetIdOf } from './dispatch.ts'
 import type { AgentLike, PresetResolver, StepPosition } from './dispatch.ts'
 import type {
   AskQuestionAnswer,
@@ -422,6 +422,9 @@ export function applyAcpPlugin(
       const binding = table.get(presetId)
       if (binding === undefined) return
       if (holdsAcpDispatch(agent, binding)) return
+      // 受委派的孩子留在 DSH 里跑：孩子继承父会话的预设名，接管判定照样
+      // 匹配得上，但被接管就等于交回外部 agent 反向驱动，委派就白做了。
+      if (isDelegatedChild(agent)) return
       deps.install(agent, presetId, dialect, table)
       void followPresetSelection(servicesOf(ctx), presetId, pickerModels, agentIdentifier(agent) ?? '?', agent, reportOf(deps))
     } catch (error) {
@@ -492,6 +495,8 @@ export function applyAcpPlugin(
       }
       if (dialect === undefined || binding === undefined) return
       if (holdsAcpDispatch(agent, binding)) return
+      // 同 agent/created：受委派的孩子不被 ACP 行接管，预设改选也不例外。
+      if (isDelegatedChild(agent)) return
       deps.install(agent, presetId, dialect, table)
       void followPresetSelection(servicesOf(ctx), presetId, pickerModels, sessionId, agent, reportOf(deps))
     } catch (error) {

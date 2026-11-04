@@ -362,6 +362,30 @@ function readHeader(agent: AgentLike): string | undefined {
   return agent.session?.header?.agentPreset
 }
 
+/**
+ * 判定一个 agent 是否是受委派产生的子会话。
+ *
+ * 委派落到 DSH 侧后，宿主标准通道起的孩子继承父会话的预设组合，会话头里
+ * 记着父会话的预设名——接管判定照样匹配得上。但这样的孩子必须留在 DSH 里跑：
+ * 被 ACP 行接管等于把刚起好的孩子再交回外部 agent 驱动，工具又变回外部
+ * agent 的，委派就白做了。所以接管路径在 install 之前先问这里。
+ *
+ * 判据只用 delegationDepth，不用 origin：`origin === 'subagent'` 是粗粒度的
+ * 来源标记，本行自己造的影子子会话（`entry.ts` 的 openChild）也带它；
+ * delegationDepth 才是「这是受委派产生的」的记账，与深度上限用的是同一个
+ * 事实。读取按结构逐层守卫，任何一层缺失、字段缺失或非数都读作「不是」——
+ * 守卫只负责排除，不抛错：形状不认识的 agent 仍走原有接管判定。
+ */
+export function isDelegatedChild(agent: unknown): boolean {
+  if (typeof agent !== 'object' || agent === null) return false
+  const session = (agent as { readonly session?: unknown }).session
+  if (typeof session !== 'object' || session === null) return false
+  const header = (session as { readonly header?: unknown }).header
+  if (typeof header !== 'object' || header === null) return false
+  const depth = (header as { readonly delegationDepth?: unknown }).delegationDepth
+  return typeof depth === 'number' && depth > 0
+}
+
 /** Read a `step` implementation off an instance or its prototype chain. */
 function readStep(
   agent: object,
