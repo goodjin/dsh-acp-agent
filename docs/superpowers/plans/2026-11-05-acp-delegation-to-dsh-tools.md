@@ -114,7 +114,7 @@ Expected: PASS（既有 dispatch 测试不回归）。
 ```bash
 cd dsh-acp-agent/.worktrees/feat-acp-delegation
 git add src/dispatch.ts src/plugin.ts tests/delegation-guard.spec.ts
-git commit -m "feat: 受委派的子会话不�� ACP 行接管"
+git commit -m "feat: 受委派的子会话不被 ACP 行接管"
 ```
 
 ---
