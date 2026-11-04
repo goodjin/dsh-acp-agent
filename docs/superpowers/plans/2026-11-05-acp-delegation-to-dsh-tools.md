@@ -383,7 +383,10 @@ Expected: FAIL（桥接文件不存在）。
 `bridge/dsh-acp-mcp-bridge.mjs`：
 
 - 读 stdin 的行（`readline`），每行一个 JSON-RPC 消息；往 stdout 写响应，**每行一个 JSON 对象，不带其它输出**（stderr 可写日志）。
-- 支持三个方法：`initialize`（回 `protocolVersion` 用 `'2025-06-18'`、`capabilities: { tools: {} }`、`serverInfo: { name: 'dsh-acp-agent', version: <包版本> }`）、`tools/list`、`tools/call`；另支持 `notifications/initialized` 这类通知（不回响应）。
+- 支持三个方法：`initialize`（回 `protocolVersion: '2025-06-18'`、`capabilities: { tools: {} }`、`serverInfo: { name: 'dsh-acp-agent', version: <包版本> }`）、`tools/list`、`tools/call`；另支持 `notifications/initialized` 这类通知（不回响应）。
+  - **协议要求的确切字段**（MCP 规范 2025-06-18 lifecycle，2026-11-05 核对）：`initialize` 应答的 `result` 必须含 `protocolVersion`、`capabilities`、`serverInfo` 三个键；`capabilities.tools` 存在即表示本服务端提供工具。`protocolVersion` 用**日期串** `'2025-06-18'`，不是数字。
+  - **顺序约束**：客户端在收到 `initialize` 应答后必须发 `notifications/initialized` 通知，之后才进入正常操作。所以 `notifications/initialized` 必须**不回响应**（回一个响应会让客户端认为这是它发的请求的回包，帧序列错位）。
+  - **收到 `initialize` 之前不要应答别的请求**：规范要求初始化是第一段交互。
 - `tools/call` 的 `name` 必须是 `delegate`，否则回 `isError: true` 并说明只有这一个工具。
 - `delegate` 的入参校验：`task` 与 `brief` 必填非空字符串，缺失回 `isError: true` 并指出缺哪个。`skill` 可选。
 - 转发：向 `process.env.DSH_DELEGATION_URL` 发 `POST`，`Content-Type: application/json`，body 是 `{ sessionId: process.env.DSH_DELEGATION_SESSION, skill, task, brief }`。超时用 `AbortSignal.timeout(600000)`（十分钟；一次委派不该无限挂住）。
