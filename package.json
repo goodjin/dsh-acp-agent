@@ -63,6 +63,10 @@
       "types": "./src/health.ts",
       "default": "./src/health.ts"
     },
+    "./delegation-route": {
+      "types": "./src/delegation-route.ts",
+      "default": "./src/delegation-route.ts"
+    },
     "./package.json": "./package.json"
   },
   "files": [

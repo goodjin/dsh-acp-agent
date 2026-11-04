@@ -68,6 +68,17 @@
     # 必须走 cli-chat-proxy.grok.com：直接打 grok.com 被 Cloudflare 盾拦。
     - id: acp-agent-grok-quota
       name: '@goodjin2/dsh-acp-agent/grok-quota'
+    # 外部 agent 委派回调路由：桥接进程（bridge/dsh-acp-mcp-bridge.mjs，由外部 agent
+    # 自己拉起）把 delegate 工具调用 POST 到这里，本校验行配置令牌后转交宿主服务
+    # superpowers.delegation。鉴权不走 connection.admit（那是浏览器 cookie 面；
+    # 回调方是本机子进程，admit 会一律 401），走本行 config.token 与请求头
+    # x-dsh-delegation-token 的逐字比对。token 是令牌的唯一来源：会话侧从同一行
+    # 读出同一个值放进桥接进程的 env，两处各配各的会让回调永远 401。留空 =
+    # 回调一律拒绝（fail closed）；要用委派就在 profile 里把它设成长随机串。
+    - id: acp-agent-delegation-route
+      name: '@goodjin2/dsh-acp-agent/delegation-route'
+      config:
+        token: ''
     # Mermaid 渲染已迁往 @goodjin2/dsh-chat-area（浏览器渲染 + /acp-agent/mermaid.js
     # 宿主路由都在那边），本包不再提供 mermaid 资产或渲染。
     # /commit-merge-push 已独立出仓（goodjin/dsh-command-commit-merge-push），
