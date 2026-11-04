@@ -247,7 +247,7 @@ export type RunnerOptions = {
  * 默认的原生工具。只进 `session/prompt` 载荷——用户没说过这句话，会话
  * 日志里不能出现。
  */
-export const DELEGATION_HINT = '【委派提示】需要派出子代理时，请使用 dsh-delegation 服务器提供的 delegate 工具，不要用你自带的子代理工具（Task、collab、spawn_subagent 等）。'
+const DELEGATION_HINT = '【委派提示】需要派出子代理时，请使用 dsh-delegation 服务器提供的 delegate 工具，不要用你自带的子代理工具（Task、collab、spawn_subagent 等）。'
 
 /** 开关打开时把引导语拼在用户文本之后；关着就原样返回，逐字节与今天一致。 */
 function withDelegationHint(body: string, on: boolean | undefined): string {

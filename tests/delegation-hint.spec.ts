@@ -123,6 +123,21 @@ describe('引导语只进 prompt 载荷，不进会话日志', () => {
     expect(JSON.stringify(written), '会话日志事件里不该出现引导语').not.toContain('委派提示')
     expect(deltas.join(''), '实时流里不该出现引导语').not.toContain('委派提示')
   })
+
+  it('runSteps 路径写入会话日志的内容里也没有这句话', async () => {
+    // 两条 prompt 组装路径是各写各的（「两处同构」只是事实，不是保证）——
+    // 引导语不进日志是本任务的核心约束，两条路径都得有钉子。
+    const client = fakeClient()
+    const written: unknown[] = []
+    await new AcpTurnRunner(client, { cwd: '/tmp', delegationHint: true }).runSteps(
+      DECISION,
+      { ...TURN('s1'), produce: result => { written.push(result); return [] }, write: events => { written.push(events); return 1 } },
+      { first: true },
+    )
+
+    expect(promptTextOf(client.calls)).toContain('委派提示')
+    expect(JSON.stringify(written), '会话日志事件里不该出现引导语').not.toContain('委派提示')
+  })
 })
 
 /** 记录式传输（照 mcp-attach 的立桩法）：记录发出的帧，可按帧应答。 */
