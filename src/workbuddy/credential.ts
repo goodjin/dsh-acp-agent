@@ -99,8 +99,10 @@ export async function readStoredCredential(file?: string): Promise<WorkBuddyCred
 export async function writeStoredCredential(credential: WorkBuddyCredential, file?: string): Promise<void> {
   const path = file ?? credentialFilePath()
   await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+  // mkdir 的 mode 也只在目录新建时生效；已存在的目录权限不会变，所以补一次收紧。
+  await chmod(dirname(path), 0o700).catch(() => {})
   await writeFile(path, JSON.stringify(credential), { encoding: 'utf8', mode: 0o600 })
-  // writeFile 的 mode 只在文件新建时生效；已存在的文件权限不会变，所以补一次。
+  // 同理：writeFile 的 mode 只在文件新建时生效。
   await chmod(path, 0o600).catch(() => {})
 }
 

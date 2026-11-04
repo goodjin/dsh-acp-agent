@@ -11,7 +11,7 @@
  * 4. **任何一条错误消息里都不含令牌**。
  */
 
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -59,6 +59,15 @@ describe('存放位置', () => {
     await writeStoredCredential({ accessToken: 'ACCESS', refreshToken: 'REFRESH' }, file)
     const info = await stat(file)
     expect(info.mode & 0o777).toBe(0o600)
+  })
+
+  it('目录也只有当前用户能进（已经存在的目录也要收紧）', async () => {
+    const nested = join(dir, 'nested')
+    await mkdir(nested, { recursive: true, mode: 0o755 })
+    await chmod(nested, 0o755)
+    await writeStoredCredential({ accessToken: 'ACCESS' }, join(nested, 'credentials.json'))
+    const info = await stat(nested)
+    expect(info.mode & 0o777).toBe(0o700)
   })
 
   it('读回来是原来那份，没有文件时是空而不是报错', async () => {

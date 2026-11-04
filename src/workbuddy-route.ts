@@ -60,10 +60,23 @@ export interface WorkBuddyRouteDeps {
 
 /**
  * 装载入口：挂上那两条 exact 路由。
+ *
+ * 宿主按 `apply(ctx, config)` 调用，第二个参数是**插件配置**，不是注入面——所以
+ * 注入面另起一个名字（{@link registerWorkBuddyRoutes}），免得配置里的字段被当成
+ * 注入面读。这一行不读配置，签名里留着它只是为了与宿主的调用方式一致。
+ * @param ctx - 宿主上下文（effect / webServer / connection）。
+ * @param _config - 宿主传进来的插件配置；这一行不用它。
+ */
+export function apply(ctx: WorkBuddyRouteContext, _config?: unknown): void {
+  registerWorkBuddyRoutes(ctx)
+}
+
+/**
+ * 挂上那两条 exact 路由。
  * @param ctx - 宿主上下文（effect / webServer / connection）。
  * @param deps - 可选注入面；缺省走真实的登录与凭据。
  */
-export function apply(ctx: WorkBuddyRouteContext, deps: WorkBuddyRouteDeps = {}): void {
+export function registerWorkBuddyRoutes(ctx: WorkBuddyRouteContext, deps: WorkBuddyRouteDeps = {}): void {
   const file = deps.credentialFile ?? credentialFilePath()
   const beginLogin = deps.startLogin ?? (() => startLogin())
   const poll = deps.pollForToken ?? ((state: string) => pollForToken({ state }))

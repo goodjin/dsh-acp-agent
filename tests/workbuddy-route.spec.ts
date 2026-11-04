@@ -12,6 +12,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { describe, expect, it } from 'vitest'
 import {
   apply,
+  registerWorkBuddyRoutes,
   WORKBUDDY_LOGIN_ROUTE_PATH,
   WORKBUDDY_SESSION_ROUTE_PATH,
 } from '../src/workbuddy-route.ts'
@@ -95,7 +96,18 @@ async function call(
 describe('路由', () => {
   it('两条路由挂在约定的路径上', () => {
     const { ctx, routes } = rig()
-    apply(ctx)
+    registerWorkBuddyRoutes(ctx)
+    expect(routes.map(route => route.path).sort()).toEqual([
+      WORKBUDDY_LOGIN_ROUTE_PATH,
+      WORKBUDDY_SESSION_ROUTE_PATH,
+    ].sort())
+  })
+
+  it('宿主按 apply(ctx, config) 调用时挂的也是这两条', () => {
+    // 宿主把插件配置当第二个参数传进来；注入面不能占这个位置，
+    // 否则配置里的字段会被当成注入面读。
+    const { ctx, routes } = rig()
+    apply(ctx, { startLogin: async () => ({ state: 'x', url: 'https://x.example' }) })
     expect(routes.map(route => route.path).sort()).toEqual([
       WORKBUDDY_LOGIN_ROUTE_PATH,
       WORKBUDDY_SESSION_ROUTE_PATH,
@@ -106,7 +118,7 @@ describe('路由', () => {
 describe('状态', () => {
   it('没登录时说的是「需要登录」', async () => {
     const { ctx, routes } = rig()
-    apply(ctx, {
+    registerWorkBuddyRoutes(ctx, {
       credentialFile: '/tmp/workbuddy-does-not-exist.json',
     })
     const result = await call(routes, WORKBUDDY_SESSION_ROUTE_PATH, 'GET')
@@ -116,7 +128,7 @@ describe('状态', () => {
 
   it('登了就说清是谁', async () => {
     const { ctx, routes } = rig()
-    apply(ctx, {
+    registerWorkBuddyRoutes(ctx, {
       credentialFile: '/tmp/workbuddy-session-fixture.json',
       readCredential: async () => ({
         accessToken: 'ACCESS',
@@ -136,7 +148,7 @@ describe('状态', () => {
 describe('登录', () => {
   it('给出授权地址，且应答里没有令牌', async () => {
     const { ctx, routes } = rig()
-    apply(ctx, {
+    registerWorkBuddyRoutes(ctx, {
       startLogin: async () => ({ state: 'st-1', url: 'https://www.workbuddy.cn/login?state=st-1' }),
       pollForToken: async () => ({ accessToken: 'ACCESS' }),
       writeCredential: async () => {},
@@ -151,7 +163,7 @@ describe('登录', () => {
 
   it('登录没起来时折成 ok:false，不甩 500', async () => {
     const { ctx, routes } = rig()
-    apply(ctx, {
+    registerWorkBuddyRoutes(ctx, {
       startLogin: async () => { throw new Error('站点没给登录地址') },
     })
     const result = await call(routes, WORKBUDDY_LOGIN_ROUTE_PATH, 'POST')

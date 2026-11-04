@@ -17,10 +17,12 @@ interface Captured {
   messages?: readonly unknown[]
   accessToken?: string
   account?: { uid: string }
+  chatUrl?: string
 }
 
 const captured: Captured = {}
 let modelListFails = false
+let fetches = 0
 /** 记下写进账本的东西；放在盒子里是因为控制流分析看不见回调里的赋值。 */
 const state: { recorded?: { presetId: string; models: readonly { id: string; name: string }[] } } = {}
 
@@ -29,21 +31,27 @@ function recordedNow(): { presetId: string; models: readonly { id: string; name:
   return state.recorded
 }
 
-vi.mock('../src/workbuddy/index.ts', () => ({
-  credentialResolver: () => async () => ({ accessToken: 'ACCESS', account: { uid: 'uid-1' } }),
-  forceRefreshCredential: async () => ({ accessToken: 'ACCESS-2', account: { uid: 'uid-1' } }),
-  fetchModels: async () => {
-    if (modelListFails) throw new Error('no model list')
-    return [{ id: 'auto', name: 'Auto' }, { id: 'fast-model', name: '快速' }]
-  },
-  streamWorkBuddy: (request: Captured) => {
-    captured.model = request.model
-    captured.messages = request.messages
-    captured.accessToken = request.accessToken
-    captured.account = request.account
-    return (async function* noChunks(): AsyncGenerator<never> { /* 请求的形状才是这里的主体 */ })()
-  },
-}))
+vi.mock('../src/workbuddy/index.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/workbuddy/index.ts')>()
+  return {
+    ...actual,
+    credentialResolver: () => async () => ({ accessToken: 'ACCESS', account: { uid: 'uid-1' } }),
+    forceRefreshCredential: async () => ({ accessToken: 'ACCESS-2', account: { uid: 'uid-1' } }),
+    fetchModels: async () => {
+      fetches += 1
+      if (modelListFails) throw new Error('no model list')
+      return [{ id: 'auto', name: 'Auto' }, { id: 'fast-model', name: '快速' }]
+    },
+    streamWorkBuddy: (request: Captured & { endpoints?: { chatUrl: string } }) => {
+      captured.model = request.model
+      captured.messages = request.messages
+      captured.accessToken = request.accessToken
+      captured.account = request.account
+      captured.chatUrl = request.endpoints?.chatUrl
+      return (async function* noChunks(): AsyncGenerator<never> { /* 请求的形状才是这里的主体 */ })()
+    },
+  }
+})
 
 const { workBuddyModelStream } = await import('../src/workbuddy-model.ts')
 const { modelPluginStream } = await import('../src/model-plugins.ts')
@@ -51,6 +59,9 @@ const { modelPluginStream } = await import('../src/model-plugins.ts')
 const config = {
   presets: {
     'acp-workbuddy': { agent: 'workbuddy', models: [{ id: 'auto', name: 'Auto' }] },
+    'acp-workbuddy-selfhosted': { agent: 'workbuddy', baseUrl: 'https://wb.example.com', models: [{ id: 'auto', name: 'Auto' }] },
+    // 清单缓存是按 preset 记的，所以这条用另一个 id：它有自己的一份缓存。
+    'acp-workbuddy-fresh': { agent: 'workbuddy', models: [{ id: 'auto', name: 'Auto' }] },
     'acp-codex': { agent: 'codex', models: [{ id: 'gpt-5', name: 'gpt-5' }] },
   },
 } as unknown as PresetConfig
@@ -117,6 +128,18 @@ describe('历史里的工具调用', () => {
   })
 })
 
+describe('端点', () => {
+  it('预置行里写的端点要真的生效（登录与模型同源，都从它派生）', async () => {
+    await drain(workBuddyModelStream(config)('acp-workbuddy-selfhosted', request))
+    expect(captured.chatUrl).toBe('https://wb.example.com/v2/chat/completions')
+  })
+
+  it('没写端点时用默认站点', async () => {
+    await drain(workBuddyModelStream(config)('acp-workbuddy', request))
+    expect(captured.chatUrl).toBe('https://www.workbuddy.cn/v2/chat/completions')
+  })
+})
+
 describe('运行时模型清单', () => {
   it('拉到的清单写进目录的账本', async () => {
     state.recorded = undefined
@@ -126,6 +149,20 @@ describe('运行时模型清单', () => {
     await drain(stream('acp-workbuddy', request))
     expect(recordedNow()?.presetId).toBe('acp-workbuddy')
     expect(recordedNow()?.models.map(model => model.id)).toEqual(['auto', 'fast-model'])
+  })
+
+  it('拉不到清单时不要每一轮都去拉一次', async () => {
+    state.recorded = undefined
+    modelListFails = true
+    fetches = 0
+    const stream = modelPluginStream(config, {
+      onRuntimeModels: (presetId, models) => { state.recorded = { presetId, models } },
+    })
+    await drain(stream('acp-workbuddy-fresh', request))
+    await drain(stream('acp-workbuddy-fresh', request))
+    // 第一次试过一次就记住失败，第二轮不再去撞上游。
+    expect(fetches).toBe(1)
+    modelListFails = false
   })
 
   it('拉不到清单不影响发消息', async () => {

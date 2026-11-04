@@ -90,6 +90,32 @@ export async function beginWorkBuddyLogin(options: {
 }
 
 /**
+ * 连着问几次「登了没」，登上就停。
+ *
+ * 用户在浏览器里授权要花时间（可能要输验证码），问一次就收手会看到「未登录」，
+ * 让人以为没成。所以这里问若干次，每次之间停一下。
+ * @param options - fetch 实现、问几次与等待。
+ * @returns 最后的账号状态。
+ */
+export async function pollUntilSignedIn(options: {
+  readonly fetchImpl?: typeof fetch | undefined
+  readonly attempts?: number | undefined
+  readonly intervalMs?: number | undefined
+  readonly sleepImpl?: ((ms: number) => Promise<void>) | undefined
+}): Promise<WorkBuddyAccountState> {
+  const attempts = options.attempts ?? 20
+  const intervalMs = options.intervalMs ?? 3_000
+  const sleep = options.sleepImpl ?? ((ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)))
+  let state: WorkBuddyAccountState = { authenticated: false }
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    state = await readWorkBuddySession({ ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl }) })
+    if (state.authenticated) return state
+    await sleep(intervalMs)
+  }
+  return state
+}
+
+/**
  * 画这一段。
  *
  * 已登录就说清是谁；没登录就给一个「去登录」按钮（点了开授权页）。
@@ -178,8 +204,11 @@ export function WorkBuddyAccountSection(props: { readonly t?: WorkBuddyAccountT 
         setState({ authenticated: false, reason: result.reason })
         return
       }
-      // 授权在浏览器里完成，宿主那边还在轮询；过一会儿再问一次状态。
-      setTimeout(() => { void refresh() }, 3_000)
+      // 授权在浏览器里完成，宿主那边还在轮询；这里连着问几次，登上了就停。
+      void pollUntilSignedIn({}).then(signedIn => {
+        setState(signedIn)
+        setBusy(false)
+      })
     } finally {
       setBusy(false)
     }

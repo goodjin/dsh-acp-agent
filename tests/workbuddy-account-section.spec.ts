@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest'
 import type { ReactElement } from 'react'
 import {
   beginWorkBuddyLogin,
+  pollUntilSignedIn,
   readWorkBuddySession,
   WORKBUDDY_ACCOUNT_SECTION_ID,
   workBuddyAccountView,
@@ -113,6 +114,29 @@ describe('问宿主', () => {
     })
     expect(result.ok).toBe(false)
     expect(opened).toEqual([])
+  })
+})
+
+describe('授权之后', () => {
+  it('连着问几次，登上了就停', async () => {
+    const calls: string[] = []
+    let answers = 0
+    const fetchImpl = (async (url: string) => {
+      calls.push(String(url))
+      answers += 1
+      const body = answers < 3 ? { ok: true, authenticated: false } : { ok: true, ...LOGGED_IN }
+      return new Response(JSON.stringify(body), { status: 200 })
+    }) as unknown as typeof fetch
+
+    const state = await pollUntilSignedIn({ fetchImpl, attempts: 5, sleepImpl: async () => {} })
+    expect(state.authenticated).toBe(true)
+    expect(calls).toHaveLength(3)
+  })
+
+  it('一直问到底也没登上，就返回没登录', async () => {
+    const fetchImpl = (async () => new Response(JSON.stringify({ ok: true, authenticated: false }), { status: 200 })) as unknown as typeof fetch
+    const state = await pollUntilSignedIn({ fetchImpl, attempts: 3, sleepImpl: async () => {} })
+    expect(state.authenticated).toBe(false)
   })
 })
 

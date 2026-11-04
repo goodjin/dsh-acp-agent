@@ -15,9 +15,10 @@ import {
   credentialResolver,
   fetchModels,
   forceRefreshCredential,
+  resolveEndpoints,
   streamWorkBuddy,
 } from './workbuddy/index.ts'
-import type { WorkBuddyCredential, WorkBuddyStreamChunk } from './workbuddy/index.ts'
+import type { WorkBuddyCredential, WorkBuddyEndpoints, WorkBuddyStreamChunk } from './workbuddy/index.ts'
 
 /** 运行时清单写进目录账本时用的形状。 */
 export type WorkBuddyReportedModel = {
@@ -26,11 +27,14 @@ export type WorkBuddyReportedModel = {
   readonly description?: string | undefined
 }
 
-/** 清单多久重拉一次。 */
+/** 清单拉到了，多久之内不重拉。 */
 const MODEL_LIST_TTL_MS = 24 * 60 * 60_000
 
-/** 每个 preset 上次拉清单的时间。 */
-const modelListAt = new Map<string, number>()
+/** 清单没拉到，多久之内不再试（没登录时每一轮都去试会把上游打爆）。 */
+const MODEL_LIST_RETRY_MS = 5 * 60_000
+
+/** 每个 preset 上次拉清单的时间与结果。 */
+const modelListAt = new Map<string, { at: number; ok: boolean }>()
 
 /**
  * 认下 WorkBuddy 那一行，并把它变成模型插件。
@@ -45,21 +49,25 @@ export function workBuddyModelStream(
   },
 ): (presetId: string, request: CatalogTurnRequest) => AsyncIterable<WorkBuddyStreamChunk> | undefined {
   return (presetId, request) => {
-    if (config.presets[presetId]?.agent !== 'workbuddy') return undefined
-    return answer(presetId, request, deps)
+    const preset = config.presets[presetId]
+    if (preset?.agent !== 'workbuddy') return undefined
+    // 端点一处说了算：登录、清单、模型请求都从它派生，不会出现两处不同源。
+    const endpoints = resolveEndpoints(preset.baseUrl)
+    return answer(presetId, request, deps, endpoints)
   }
 }
 
 async function* answer(
   presetId: string,
   request: CatalogTurnRequest,
-  deps?: {
+  deps: {
     readonly onRuntimeModels?: ((presetId: string, models: readonly WorkBuddyReportedModel[]) => void) | undefined
-  },
+  } | undefined,
+  endpoints: WorkBuddyEndpoints,
 ): AsyncGenerator<WorkBuddyStreamChunk> {
-  const resolve = credentialResolver()
+  const resolve = credentialResolver({ endpoints })
   const credential = await resolve()
-  await publishModels(presetId, credential, deps)
+  await publishModels(presetId, credential, deps, endpoints)
 
   const tools = normalizeTools(request.tools)
   yield* streamWorkBuddy({
@@ -74,9 +82,10 @@ async function* answer(
     ...(request.signal instanceof AbortSignal ? { signal: request.signal } : {}),
     accessToken: credential.accessToken,
     ...(credential.account === undefined ? {} : { account: credential.account }),
+    endpoints,
     // 令牌被作废时续期一次再重试；续不了就让这一轮以失败结束。
     onUnauthorized: async () => {
-      const refreshed = await forceRefreshCredential().catch(() => undefined)
+      const refreshed = await forceRefreshCredential({ endpoints }).catch(() => undefined)
       return refreshed?.accessToken
     },
   })
@@ -90,16 +99,24 @@ async function* answer(
 async function publishModels(
   presetId: string,
   credential: WorkBuddyCredential,
-  deps?: {
+  deps: {
     readonly onRuntimeModels?: ((presetId: string, models: readonly WorkBuddyReportedModel[]) => void) | undefined
-  },
+  } | undefined,
+  endpoints: WorkBuddyEndpoints,
 ): Promise<void> {
   if (deps?.onRuntimeModels === undefined) return
   const last = modelListAt.get(presetId)
-  if (last !== undefined && Date.now() - last < MODEL_LIST_TTL_MS) return
-  const models = await fetchModels({ credential }).catch(() => undefined)
-  if (models === undefined || models.length === 0) return
-  modelListAt.set(presetId, Date.now())
+  if (last !== undefined) {
+    const ttl = last.ok ? MODEL_LIST_TTL_MS : MODEL_LIST_RETRY_MS
+    if (Date.now() - last.at < ttl) return
+  }
+  const models = await fetchModels({ credential, endpoints }).catch(() => undefined)
+  if (models === undefined || models.length === 0) {
+    // 没拉到：记住这次失败，过一会儿再试，别每轮都去撞一次。
+    modelListAt.set(presetId, { at: Date.now(), ok: false })
+    return
+  }
+  modelListAt.set(presetId, { at: Date.now(), ok: true })
   deps.onRuntimeModels(presetId, models.map(model => ({
     id: model.id,
     name: model.name,
