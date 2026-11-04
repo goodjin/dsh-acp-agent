@@ -306,9 +306,14 @@ describe('delegationMountSurface — 从宿主面读三样事实', () => {
       fileURLToPath(new URL('../bridge/dsh-acp-mcp-bridge.mjs', import.meta.url)),
       'utf8',
     )
-    const read = new Set(
-      [...bridgeSource.matchAll(/process\.env\.(DSH_DELEGATION_\w+)/g)].map(match => match[1]!)
-    )
+    // 两种读取写法都要匹配：直接下标 `process.env.DSH_X`，以及解构
+    // `const { DSH_X } = process.env`。只匹配前者的话，桥接改成解构写法时
+    // 这个钉子会扫不出任何变量名而静默空转——断言反而「通过」了。
+    const read = new Set([
+      ...[...bridgeSource.matchAll(/process\.env\.(DSH_DELEGATION_\w+)/g)].map(match => match[1]!),
+      ...[...bridgeSource.matchAll(/\b(DSH_DELEGATION_\w+)\s*\}/g)].map(match => match[1]!),
+      ...[...bridgeSource.matchAll(/\b(DSH_DELEGATION_\w+)\s*,/g)].map(match => match[1]!),
+    ])
     // 键集相等即可：env 是数组，条目顺序对桥接进程无所谓。
     expect([...written].sort()).toEqual([...read].sort())
   })
