@@ -213,7 +213,7 @@ DelegationResult = {
 - [ ] **Step 3: 跑两侧测试确认失败**
 
 Run: `cd dsh-acp-agent/.worktrees/feat-acp-delegation && npx vitest run tests/delegation-contract.spec.ts` → FAIL（模块不存在）
-Run: `cd dsh-superpowers && node scripts/test-delegation-contract.mjs` → FAIL（模块不存在）
+Run: `cd dsh-superpowers/.worktrees/feat-delegation-service && node scripts/test-delegation-contract.mjs` → FAIL（模块不存在）
 
 - [ ] **Step 4: 实现两侧契约文件**
 
@@ -240,12 +240,14 @@ superpowers `lib/delegation-contract.js`：同一常量、同一两个类型的�
 
 - [ ] **Step 5: 加一道两侧形状对照测试**
 
-在 acp-agent 的 `tests/delegation-contract.spec.ts` 里加一个用例：读 `../../dsh-superpowers/lib/delegation-contract.js`（相对路径，用 `new URL` 解析），断言它的 `DELEGATION_SERVICE` 与 `isDelegationResult` 行为与本仓一致。**该用例在 superpowers 仓不在场时跳过**（`it.skipIf`），不得因此失败。
+在 acp-agent 的 `tests/delegation-contract.spec.ts` 里加一个用例：读 superpowers 仓的契约文件，断言它的 `DELEGATION_SERVICE` 与 `isDelegationResult` 行为与本仓一致。
+
+**路径不能用 `../../dsh-superpowers/...`**——那个相对路径从 worktree 里解析会落到 `dsh-acp-agent/dsh-superpowers/...`（不存在）。正确做法：从本仓位置向上找到容器目录再拼路径，即 `new URL('../../../dsh-superpowers/.worktrees/feat-delegation-service/lib/delegation-contract.js', import.meta.url)`——从 `dsh-acp-agent/.worktrees/feat-acp-delegation/tests/` 往上三层是 `dsh-plugins/`。若该文件不存在（superpowers 仓不在场），**跳过**（`it.skipIf`），不得因此失败。
 
 - [ ] **Step 6: 跑两侧测试确认通过**
 
 Run: `cd dsh-acp-agent/.worktrees/feat-acp-delegation && npx vitest run tests/delegation-contract.spec.ts` → PASS
-Run: `cd dsh-superpowers && node scripts/test-delegation-contract.mjs` → PASS
+Run: `cd dsh-superpowers/.worktrees/feat-delegation-service && node scripts/test-delegation-contract.mjs` → PASS
 
 - [ ] **Step 7: 提交（两个仓库各一次）**
 
@@ -254,7 +256,7 @@ cd dsh-acp-agent/.worktrees/feat-acp-delegation
 git add src/delegation-contract.ts tests/delegation-contract.spec.ts
 git commit -m "feat: 委派服务的载荷契约"
 
-cd dsh-superpowers
+cd dsh-superpowers/.worktrees/feat-delegation-service
 git add lib/delegation-contract.js scripts/test-delegation-contract.mjs
 git commit -m "feat: 委派服务的载荷契约"
 ```
@@ -284,11 +286,11 @@ git commit -m "feat: 委派服务的载荷契约"
 4. 技能正文被内联进孩子的初始提示：断言提示文本含 SKILL.md 正文里的一句原文，且含技能目录绝对路径。
 5. 返回值形状：`{output, model, childId}`，`model` 为实际路由字符串。
 
-测试用替身注入宿主面：`ctx` 提供假 `subagents.startContinuable`（记下 request 并返回一个可 resolve 的 childId）、假 `agents`、假 `configEditor`（返回钉表）。**测试不得依赖真实模型或真实子代理。**
+测试用替身注入宿主面：`ctx` 提供假 `subagents.start`（记下 request，返回一个带可 resolve 的 `result` 与 `dispose` 的 run 替身）、假 `agents`、假 `configEditor`（返回钉表）。**测试不得依赖真实模型或真实子代理。**
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `cd dsh-superpowers && node scripts/test-delegation-service.mjs`
+Run: `cd dsh-superpowers/.worktrees/feat-delegation-service && node scripts/test-delegation-service.mjs`
 Expected: FAIL（模块不存在）。
 
 - [ ] **Step 3: 实现委派服务**
@@ -304,14 +306,15 @@ Expected: FAIL（模块不存在）。
 3. 读钉表：用 `lib/settings-schema.js` 的 `resolveRoute(settings, skill)`。钉表读法照抄 `lib/skill-delegation.js` 的 `hostDelegationConfig(ctx)`（`ctx.get('configEditor')` → 找 `options.id === NAMESPACE` 的行 → 读 `fiber.config` → `unvolatile`）。
 4. 读技能正文：从本包 `preset/skills/<skill>/SKILL.md` 读全文；技能目录绝对路径 = `preset/skills/<skill>` 的绝对路径（用 `fileURLToPath(new URL(..., import.meta.url))` 解析，不依赖 cwd）。
 5. 组装孩子提示：技能正文 + 技能目录绝对路径 + `request.brief`。提示用 `[{ type: 'text', text }]`。
-6. 起子代理：`ctx.subagents.startContinuable({ provider: 'spawn', label: '[<skill>] <task>' 或 '[通用] <task>', signal, request: { parent, prompt, ...(route ? { agentOptions: route } : {}) } })`。`parent` 从 `ctx.agents.get(request.sessionId)` 取；取不到就抛错并报出 sessionId。
-7. 等结果：这是**一次性**语义——本实现**不用** `startContinuable`，改用 `ctx.subagents.start('spawn', {...})` 的 one-shot 路径：它返回一个 `SubagentRun`，其 `result` 是一个 promise，resolve 出 `{ output, structured?, stopReason }`。用 `await run.result` 取最终输出，再 `await run.dispose()`。输出转成纯文本（`output` 是 ContentBlock[]，取 `type === 'text'` 的 `text` 拼接）。
-   - **若 `ctx.subagents.start` 不可用**：退回 `startContinuable` + 轮询不可行 → 报明确错误「宿主只提供可续聊子代理，无法阻塞等结果」。
+6. 起子代理：用 **one-shot** 路径 `ctx.subagents.start('spawn', { label: '[<skill>] <task>' 或 '[通用] <task>', signal, request: { parent, prompt, ...(route ? { agentOptions: route } : {}) } })`。`parent` 从 `ctx.agents.get(request.sessionId)` 取；取不到就抛错并报出 sessionId。
+   - **为什么用 one-shot 而不是 `startContinuable`**：委派是阻塞语义——工具调用返回时必须带着子代理的最终文本。`startContinuable` 只返回 childId，结果之后异步到达，调用方无从等待。one-shot 的 `run.result` 正是那个「跑完的信号」。
+7. 等结果：`const run = await ctx.subagents.start(...)`；`const result = await run.result` 取 `{ output, structured?, stopReason }`；再 `await run.dispose()`（必须调用，否则子代理资源不释放）。`output` 是 `ContentBlock[]`，取 `type === 'text'` 的 `text` 拼成纯文本。
+   - **若 `ctx.subagents.start` 不可用**（宿主只提供可续聊子代理）：报明确错误「宿主只提供可续聊子代理，无法阻塞等结果」——不静默退化成后台委派。
 8. 返回 `{ output, model, childId }`：`model` 用钉表解析出的 `provider/model` 串；未钉定（route 为 null）时用 `'inherited'`；`childId` 取 `run.id`。
 
 - [ ] **Step 4: 跑测试确认通过**
 
-Run: `cd dglob…` → 修正：`cd dsh-superpowers && node scripts/test-delegation-service.mjs`
+Run: `cd dsh-superpowers/.worktrees/feat-delegation-service && node scripts/test-delegation-service.mjs`
 Expected: PASS。
 
 - [ ] **Step 5: 把服务挂进宿主组合**
@@ -333,13 +336,13 @@ Expected: PASS。
 
 - [ ] **Step 6: 跑 superpowers 全套检查**
 
-Run: `cd dsh-superpowers && npm test && npm run check`
+Run: `cd dsh-superpowers/.worktrees/feat-delegation-service && npm test && npm run check`
 Expected: 两个都退出 0；preset↔声明同步测试通过。
 
 - [ ] **Step 7: 提交**
 
 ```bash
-cd dsh-superpowers
+cd dsh-superpowers/.worktrees/feat-delegation-service
 git add lib/delegation-service.js lib/settings-schema.js package.json cordis.patch.yml scripts/test-delegation-service.mjs scripts/test-preset-sync.mjs
 git commit -m "feat: 委派服务——按钉表定模型、内联技能正文、起 DSH 子代理"
 ```
