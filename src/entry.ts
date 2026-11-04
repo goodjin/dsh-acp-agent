@@ -154,6 +154,14 @@ export const Config: Schema<Config> = Schema.object({
    */
   hideFromRoster: Schema.boolean(),
   /**
+   * 软接管引导语开关，默认关。
+   *
+   * 打开后该预设的每个 prompt 尾部带一句「需要子代理就调 delegate 工具」
+   * 的引导，让外部 agent 优先用我们的委派工具而不是它自带的。引导语只进
+   * prompt 载荷，会话日志里不出现。
+   */
+  delegationHint: Schema.boolean(),
+  /**
    * Which host this row is on, as named by the `hosts` filter.
    *
    * A row can only evaluate its own `hosts` list against an identity, and the
@@ -197,6 +205,8 @@ export type Config = {
   hostId?: string
   /** When true, the roster filter omits this preset id from the picker. */
   hideFromRoster?: boolean
+  /** 软接管引导语开关；语义见 AcpPresetConfig 的同名字段。 */
+  delegationHint?: boolean
 }
 
 /**
@@ -268,6 +278,8 @@ export function apply(ctx: unknown, config: Config): void {
     ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
     ...(config.models === undefined ? {} : { models: config.models }),
     ...(config.efforts === undefined ? {} : { efforts: config.efforts }),
+    // 软接管开关也走同一份映射：字段加了类型忘了接这里，配置写了也不生效。
+    ...(config.delegationHint === undefined ? {} : { delegationHint: config.delegationHint }),
     ...(config.hosts === undefined ? {} : { hosts: config.hosts }),
     ...(config.stallMs === undefined ? {} : { stallMs: config.stallMs }),
     ...(config.answerTimeoutMs === undefined ? {} : { answerTimeoutMs: config.answerTimeoutMs }),

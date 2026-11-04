@@ -355,6 +355,8 @@ export function makeSessionFactory(config: PresetConfig, deps: FactoryDeps): Acp
         cwd,
         dialect,
         mcpServers: delegationMcpServers(deps.delegation, options.dshSessionId),
+        // 软接管开关是预设配置字段，网关路径的调用方不传它——在这里从预设读。
+        ...(preset.delegationHint === true ? { delegationHint: true } : {}),
         ...(deps.onRuntimeModels === undefined ? {} : { onModels: models => { deps.onRuntimeModels!(presetId, models) } }),
         ...(deps.resumeOf === undefined ? {} : { resumeOf: dshSessionId => deps.resumeOf!(presetId, dshSessionId) }),
         ...(deps.onExternalSession === undefined ? {} : { onExternalSession: (dshSessionId, externalSessionId) => { deps.onExternalSession!(presetId, dshSessionId, externalSessionId) } }),
@@ -645,6 +647,8 @@ export function makeSessionFactory(config: PresetConfig, deps: FactoryDeps): Acp
             dshSessionId: opts.dshSessionId,
             dialect: opts.dialect,
             mcpServers: delegationMcpServers(deps.delegation, opts.dshSessionId),
+            // 同 open 路径：开关从预设配置读，接管会话与网关会话一个待遇。
+            ...(preset.delegationHint === true ? { delegationHint: true } : {}),
             ...(opts.modeId === undefined ? {} : { modeId: opts.modeId }),
             ...(opts.modelId === undefined ? {} : { modelId: opts.modelId }),
             ...(opts.openTimeoutMs === undefined ? {} : { openTimeoutMs: opts.openTimeoutMs }),

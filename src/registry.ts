@@ -107,6 +107,14 @@ export type AcpPresetConfig = {
    * 只列 agent 真的接受的值：切换时 runner 会拿 agent 自己报的选项校验。
    */
   readonly efforts?: readonly { readonly id: string; readonly name?: string }[]
+  /**
+   * 软接管引导语开关，默认关。
+   *
+   * 打开后该 agent 的每个 prompt 尾部带一句引导：需要子代理就调 `delegate`
+   * 工具（dsh-delegation MCP 服务器），别用自带的原生委派工具。只管 prompt
+   * 文本；MCP 服务器挂不挂由委派链路自己判定（一损俱损），两者独立配置。
+   */
+  readonly delegationHint?: boolean
 }
 
 export type PresetConfig = { readonly presets: Readonly<Record<string, AcpPresetConfig>> }

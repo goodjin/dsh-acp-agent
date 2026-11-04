@@ -226,6 +226,32 @@ export type RunnerOptions = {
    * 调用方（factory）的决定——委派链路缺任何一环都该整段不挂，绝不半挂。
    */
   readonly mcpServers?: readonly StdioMcpServer[]
+  /**
+   * 软接管引导语开关，默认关。
+   *
+   * 外部 agent 自带原生委派工具（codex 的 collab、claude 的 Task、cursor 的
+   * task、grok 的 spawn_subagent），挂上 MCP 服务器之后我们的 `delegate`
+   * 只是「可见」，不是「首选」。打开这个开关，每个发给 agent 的 prompt
+   * 尾部就带一句引导——这是「软」接管：不关原生工具，只让模型更可能选
+   * 我们的。见 {@link DELEGATION_HINT}：引导语只进 prompt 载荷，会话日志
+   * 一个字不写。
+   */
+  readonly delegationHint?: boolean
+}
+
+/**
+ * 软接管的引导语，拼在用户文本之后。
+ *
+ * 两句都不可少：点名词具名 `delegate`（dsh-delegation 服务器暴露的唯一
+ * 工具），少了它模型找不到工具；明说「别用你自带的」，少了它软接管就退回
+ * 默认的原生工具。只进 `session/prompt` 载荷——用户没说过这句话，会话
+ * 日志里不能出现。
+ */
+export const DELEGATION_HINT = '【委派提示】需要派出子代理时，请使用 dsh-delegation 服务器提供的 delegate 工具，不要用你自带的子代理工具（Task、collab、spawn_subagent 等）。'
+
+/** 开关打开时把引导语拼在用户文本之后；关着就原样返回，逐字节与今天一致。 */
+function withDelegationHint(body: string, on: boolean | undefined): string {
+  return on === true ? `${body}\n\n${DELEGATION_HINT}` : body
 }
 
 /** Long enough for a cold process to start, short enough to not strand a turn. */
@@ -1611,11 +1637,13 @@ export class AcpTurnRunner {
     const { text: question, images, undelivered } = promptContent(decision.messages, this.options.dialect)
     // 未送达公告走段收尾的统一通道（run 路径即回合末），与 runSteps 同一写法。
     this.undelivered = undelivered
-    const text = handedOver !== undefined
+    // 软接管引导语拼在组装完的用户文本之后（接管历史/回灌/提问三种形态都
+    // 盖住），只进 prompt 载荷——question 与所有日志写入都不碰它。
+    const text = withDelegationHint(handedOver !== undefined
       ? `${handedOver}\n\n${question}`
       : replayed !== undefined
         ? `【之前对话】\n${replayed}\n\n【当前问题】\n${question}`
-        : question
+        : question, this.options.delegationHint)
     const params: Record<string, unknown> = {
       sessionId,
       // The images ride after the text, in the order the messages carried them;
@@ -1773,11 +1801,13 @@ export class AcpTurnRunner {
       const { text: question, images, undelivered } = promptContent(decision.messages, this.options.dialect)
       // 未送达公告随首段落盘（组装 prompt 的那次调用才知道挡下了什么）。
       this.undelivered = undelivered
-      const text = handedOver !== undefined
+      // 与 run 路径同一句引导语：外部 agent 常走分段这条，漏了它恰好是
+      // 最需要引导的路径裸奔。
+      const text = withDelegationHint(handedOver !== undefined
         ? `${handedOver}\n\n${question}`
         : replayed !== undefined
           ? `【之前对话】\n${replayed}\n\n【当前问题】\n${question}`
-          : question
+          : question, this.options.delegationHint)
       const params: Record<string, unknown> = {
         sessionId,
         prompt: [{ type: 'text', text }, ...images],
