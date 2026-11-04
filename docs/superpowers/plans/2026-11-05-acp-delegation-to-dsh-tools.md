@@ -484,7 +484,9 @@ git commit -m "feat: 委派回调路由——校验令牌后转交委派服务"
 
 **Interfaces:**
 - Consumes: 宿主服务 `superpowers.delegation` 的**存在性**（决定挂不挂）；宿主配置里回调路由那一行的 `config.token`（令牌的唯一来源）；`ctx.webServer` 的 `getOrigin()`/端口（拼回调 URL）；桥接进程绝对路径。
-- Produces: `session/new` 与 `session/load`/`resume` 的 `mcpServers` 数组含一项 `{ type: 'stdio', name: 'dsh-delegation', command: <node 可执行路径>, args: [<桥接 .mjs 绝对路径>], env: [...] }`。
+- Produces: `session/new` 与 `session/load`/`resume` 的 `mcpServers` 数组含一项 `{ name: 'dsh-delegation', command: <node 可执行路径>, args: [<桥接 .mjs 绝对路径>], env: [{name, value}, …] }`。
+
+**stdio 条目的形状（2026-11-05 核实，宿主 schema + ACP v1 官方 schema + SDK 三处一致）**：**不带 `type` 字段**。`type` 是 ACP v2 才引入的判别字段；v1 的 `zMcpServerStdio` 只有 `name`、`command`、`args`、`env` 四个键，多写的 `type` 会被宿主自己的校验器当不认识拒掉。v1 的 `args` 与 `env` **必填**（v2 才可选），`env` 是 `[{name, value}]` 数组。
 
 - [ ] **Step 1: 写失败的测试**
 
@@ -493,6 +495,7 @@ git commit -m "feat: 委派回调路由——校验令牌后转交委派服务"
 1. 委派服务在场 → 数组恰有一项，`name` 是 `dsh-delegation`，`command` 指向一个存在的可执行（node），`args[0]` 指向仓库里真实存在的桥接 `.mjs` 文件，`env` 里含 `DSH_DELEGATION_URL` 与 `DSH_DELEGATION_SESSION`。
 2. 委派服务缺席 → `mcpServers` 是空数组。
 3. `session/load`/`resume` 路径同样带 `mcpServers`（现在写死空数组）。
+4. **stdio 条目不带 `type` 字段**（见上），且 `args` 与 `env` 都在。
 
 - [ ] **Step 2: 跑测试确认失败**
 
@@ -592,6 +595,8 @@ git commit -m "feat: 委派引导语——让外部 agent 优先用我们的委�
 - （若走通了）工具结果里带着子代理的输出。
 
 **另外记录每家有没有发 `ping`**——桥接进程当前不实现 `ping`（落 `-32601`），真机若发 ping 会拿到错误响应。先记下来，别急着改。
+
+**若桥接进程压根没起来，先查这一处**：桌面宿主上 `process.execPath` 可能是 **Electron 二进制**而不是 node，缺 `ELECTRON_RUN_AS_NODE` 时它不会按 node 跑，桥接起不来。修法：`env` 里加 `ELECTRON_RUN_AS_NODE: '1'`。CLI 宿主已实测可直接拉起。
 
 **任何一家失败不许跳过**——失败也要记进实测记录。
 
