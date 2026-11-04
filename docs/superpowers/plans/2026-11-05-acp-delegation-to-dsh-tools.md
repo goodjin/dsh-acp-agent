@@ -550,8 +550,12 @@ Expected: FAIL（开关不存在）。
 - [ ] **Step 3: 实现引导语**
 
 - `src/registry.ts`：`AcpPresetConfig` 加 `readonly delegationHint?: boolean`。
-- 组装 prompt 处（`src/runner.ts` 的 `promptContent` 之后、发往 `session/prompt` 之前）按开关追加引导句。引导句里点明工具名 `delegate`，并说明「用这个，别用你自己的 Task/Agent 工具」。
+- 组装 prompt 处按开关追加引导句。引导句里点明工具名 `delegate`，并说明「用这个，别用你自己的 Task/Agent 工具」。
 - 引导语只进 prompt 载荷，不进会话日志。
+
+**组装 prompt 的地方有**两处**，两处都要加**：`src/runner.ts` 里 `run` 路径（约 1585-1589 行）与 `runSteps` 路径（约 1747-1751 行）各有一个 `const text = handedOver !== undefined ? … : replayed !== undefined ? … : question` 的三元表达式。只加一处会让另一条路径（外部 agent 常走分段那条）不带引导语——而那正好是最需要引导的路径。加完用测试证明**两条路径都带**。
+
+**引导语的位置**：拼在用户文本**之前**还是之后都可行，但必须**只进 prompt 载荷**——会话日志里不能出现（用户没说过这话）。
 
 - [ ] **Step 4: 跑测试确认通过**
 
