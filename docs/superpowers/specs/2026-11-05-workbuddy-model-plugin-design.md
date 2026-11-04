@@ -198,8 +198,9 @@ SSE 逐行解析 `data:` 帧（`[DONE]` 结束）：
   - `contextWindow` = `maxInputTokens`
   - 推理档位 = `reasoning.supportedEfforts`（没有就按 `reasoning.defaultEffort` 单一档）
   - `supportsToolCall` / `supportsImages`
-- **选择器以运行时清单为准**（与其它行「agent 自报为准」的规矩一致）；拉不到（未登录或网络失败）时退回 preset 行里声明的兜底清单，并在界面标明「未登录，显示的是静态清单」。
+- **选择器以运行时清单为准**（与其它行「agent 自报为准」的规矩一致）：运行时清单写进目录的运行时账本，目录优先读它；拉不到（未登录或网络失败）时退回 preset 行里声明的兜底清单。
 - 清单按账号缓存（同一账号下模型一样），刷新时机：登录成功、显式刷新、距离上次超过 24 小时。
+- **推理档位轴不在运行时清单里**：目录的档位轴只认 preset 行声明的 `efforts`，因此档位静态声明（按 WorkBuddy 模型实际接受的档位列，不自造），运行时清单只替换模型条目。
 
 ## 八、与本仓库的接线
 
@@ -210,7 +211,7 @@ SSE 逐行解析 `data:` 帧（`[DONE]` 结束）：
 3. `src/factory.ts`——两处「这行不是 ACP 会话」的守卫各加一条 `workbuddy`（现有 `zcode`/`minimaxi` 各有一处）。
 4. `src/catalog.ts`——显示名表加 `workbuddy: 'WorkBuddy'`。
 5. `cordis.patch.yml`——新增一行 preset（`id: acp-workbuddy`、`name: WorkBuddy`、`order` 排在现有行之后），绑定 `agent: workbuddy`；这一行声明两样东西：
-   - `efforts`：推理档位轴。取运行时清单里各模型 `reasoning.supportedEfforts` 的并集；未登录时退回这里声明的静态档位（按 WorkBuddy 模型实际接受的档位列，不自造）。
+   - `efforts`：推理档位轴。静态声明——目录的档位轴只认 preset 配置，运行时清单不参与（按 WorkBuddy 模型实际接受的档位列，不自造）。
    - `models`：兜底清单（未登录或拉不到 `/v3/config` 时选择器显示的内容）。
    另加一条宿主路由行（`workbuddy-login`）承载第五节的登录/状态路由。
 6. `src/client/`——模型选择器里给未登录的 WorkBuddy 挂一枚「去授权」提示（复用 `src/client/quota-login.ts` 的画法与 `quota-pill.ts` 的登录入口接线）。
