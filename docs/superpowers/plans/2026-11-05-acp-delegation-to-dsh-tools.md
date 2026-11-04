@@ -353,14 +353,16 @@ git commit -m "feat: 委派服务——按钉表定模型、内联技能正文�
 ### Task 5: 桥接进程（MCP stdio 服务端）
 
 **Files:**
-- Create: `src/mcp-bridge.ts`（acp-agent）——但**不能**是 TypeScript 源直接跑：宿主以 strip-only 模式加载 `.ts`，而这里需要一个**独立可执行文件**被 agent 拉起。
 - Create: `bridge/dsh-acp-mcp-bridge.mjs`（acp-agent，纯 JavaScript ESM，`files` 里要带）
 - Modify: `package.json`（`files` 加 `bridge/`）
 - Test: `tests/mcp-bridge.spec.ts`
 
+**为什么是 `.mjs` 而不是 `.ts`**：宿主以 strip-only 模式加载 `.ts`，那是**宿主进程内**的加载方式。而桥接进程是由**外部 agent 拉起**的独立进程（ACP 的 stdio MCP 传输下客户端拉起服务端），agent 的运行环境不受 DSH 的加载器管辖——所以它必须是任何 node 都能直接跑的普通 JS，没有编译步骤。
+
 **Interfaces:**
-- Consumes: 环境变量 `DSH_DELEGATION_URL`（宿主回调路由的完整 URL，含会话令牌）、`DSH_DELEGATION_SESSION`（父 DSH 会话 id）。
+- Consumes: 环境变量 `DSH_DELEGATION_URL`（宿主回调路由的完整 URL）、`DSH_DELEGATION_SESSION`（父 DSH 会话 id）、`DSH_DELEGATION_TOKEN`（回调路由的令牌）。
 - Produces: 一个 stdio MCP 服务器，向 agent 暴露**一个**工具 `delegate`（参数：`skill?`、`task`、`brief`）。
+- **回调请求的形状**（与 Task 6 的路由严格对应）：`POST DSH_DELEGATION_URL`，请求头 `x-dsh-delegation-token: <DSH_DELEGATION_TOKEN>`、`Content-Type: application/json`，body 是 `{ sessionId, skill?, task, brief }`（即 `DelegationRequest`，少一个 `signal`——HTTP 请求没有取消信号）。应答：2xx + `DelegationResult` 的 JSON（`{output, model, childId}`）；非 2xx + 错误文本。
 
 - [ ] **Step 1: 写失败的测试**
 
