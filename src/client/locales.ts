@@ -35,6 +35,9 @@ export type ClientLocaleKey =
   | 'acpVisibility.error.missing' | 'acpVisibility.error.shape' | 'acpVisibility.error.failed'
   | 'progress.preparing' | 'progress.loading' | 'progress.ready'
   | 'storagePosture.local'
+  | 'workbuddy.section.label'
+  | 'workbuddy.account.signedIn' | 'workbuddy.account.signedOut'
+  | 'workbuddy.account.login' | 'workbuddy.account.refresh'
 
 export const zh: Record<ClientLocaleKey, string> = {
   'handover.title': '已切换到 {target}，对话已移到新会话',
@@ -97,6 +100,11 @@ export const zh: Record<ClientLocaleKey, string> = {
   'progress.preparing': '正在准备打开新会话 · {target}',
   'progress.loading': '正在读新会话的历史 · {target}',
   'progress.ready': '新会话已就绪，正在切换 · {target}',
+  'workbuddy.section.label': 'WorkBuddy 账号',
+  'workbuddy.account.signedIn': '已登录 WorkBuddy：',
+  'workbuddy.account.signedOut': '未登录 WorkBuddy：这一组模型发消息会被拒绝。',
+  'workbuddy.account.login': '去登录',
+  'workbuddy.account.refresh': '刷新状态',
   'storagePosture.local': '设置保存在本机',
 }
 
@@ -161,6 +169,11 @@ export const en: Record<ClientLocaleKey, string> = {
   'progress.preparing': 'Preparing to open the new session · {target}',
   'progress.loading': 'Reading the new session’s history · {target}',
   'progress.ready': 'New session ready, switching · {target}',
+  'workbuddy.section.label': 'WorkBuddy account',
+  'workbuddy.account.signedIn': 'Signed in to WorkBuddy:',
+  'workbuddy.account.signedOut': 'Not signed in to WorkBuddy: messages in this group will be refused.',
+  'workbuddy.account.login': 'Sign in',
+  'workbuddy.account.refresh': 'Refresh status',
   'storagePosture.local': 'Settings are stored on this machine',
 }
 
