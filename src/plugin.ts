@@ -308,7 +308,9 @@ export function applyAcpPlugin(
     modelsOf: presetId => modelsOfPreset(presets, factory, presetId),
     runtimeModelsOf: presetId => runtimeModelReports.modelsOf(presetId),
     dialectOf: presetId => table.get(presetId)?.dialect,
-    modelStream: modelPluginStream(presets),
+    modelStream: modelPluginStream(presets, {
+      onRuntimeModels: (presetId, models) => { runtimeModelReports.record(presetId, models) },
+    }),
   }
   // Self-report: a model row that never got claimed still shows up in the picker,
   // and the first symptom is an empty or stale answer at send time, long after

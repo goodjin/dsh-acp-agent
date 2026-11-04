@@ -81,7 +81,9 @@ export function attachAcpDispatch(
     modelsOf: presetId => modelsOfPreset(config, factory, presetId),
     runtimeModelsOf: presetId => runtimeModelReports.modelsOf(presetId),
     dialectOf: presetId => table.get(presetId)?.dialect,
-    modelStream: modelPluginStream(config),
+    modelStream: modelPluginStream(config, {
+      onRuntimeModels: (presetId, models) => { runtimeModelReports.record(presetId, models) },
+    }),
   })
 
   ctx.on('agent/created', payload => {

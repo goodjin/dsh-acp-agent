@@ -15,6 +15,7 @@ const config = {
     'acp-zcode': { agent: 'zcode', models: [{ id: 'GLM-5.3', name: 'GLM 5.3' }] },
     'acp-minimax': { agent: 'minimaxi', models: [{ id: 'MiniMax-M3.1-Flash', name: 'M3.1 Flash' }] },
     'acp-codex': { agent: 'codex', models: [{ id: 'gpt-5', name: 'gpt-5' }] },
+    'acp-workbuddy': { agent: 'workbuddy', models: [{ id: 'auto', name: 'Auto' }] },
   },
 } as unknown as PresetConfig
 
@@ -29,6 +30,10 @@ describe('modelPluginStream', () => {
     expect(modelPluginStream(config)('acp-zcode', { provider: 'zai-coding-cn', model: 'GLM-5.3', messages: [], tools: [] })).toBeDefined()
   })
 
+  it('claims the WorkBuddy row too', () => {
+    expect(modelPluginStream(config)('acp-workbuddy', { provider: 'acp:acp-workbuddy', model: 'auto', messages: [], tools: [] })).toBeDefined()
+  })
+
   it('declines an ACP agent row, which belongs to the gateway path', () => {
     expect(modelPluginStream(config)('acp-codex', request)).toBeUndefined()
   })
@@ -40,7 +45,7 @@ describe('modelPluginStream', () => {
 
 describe('describeClaimedModels', () => {
   it('names every row answered in place, so a missing one is visible in the log', () => {
-    expect(describeClaimedModels(config)).toBe('acp-zcode=zcode acp-minimax=minimaxi')
+    expect(describeClaimedModels(config)).toBe('acp-zcode=zcode acp-minimax=minimaxi acp-workbuddy=workbuddy')
   })
 
   it('says none rather than leaving an empty gap in the startup line', () => {

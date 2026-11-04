@@ -63,6 +63,10 @@
       "types": "./src/health.ts",
       "default": "./src/health.ts"
     },
+    "./workbuddy-login": {
+      "types": "./src/workbuddy-route.ts",
+      "default": "./src/workbuddy-route.ts"
+    },
     "./package.json": "./package.json"
   },
   "files": [
