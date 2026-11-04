@@ -216,6 +216,8 @@ export async function fetchCodexUsage(request: {
   credential: CodexCredential
   signal?: AbortSignal
   fetchImpl?: typeof fetch
+  /** 403 重试的间隔毫秒；缺省 250。测试传 0 免等。 */
+  retryDelayMs?: number
 }): Promise<CodexUsage | null> {
   const { credential } = request
   const headers = {
@@ -229,13 +231,45 @@ export async function fetchCodexUsage(request: {
   }
   // 走 node:https 而不是 fetch：chatgpt.com 的防护按 TLS 指纹拦 undici
   // （2026-11-01 A/B 实测，同一秒同一令牌，fetch 403、经典 https 栈 200）。
-  const response = request.fetchImpl === undefined
-    ? await httpsGet(USAGE_URL, headers, request.signal)
-    : await request.fetchImpl(USAGE_URL, {
+  const attempt = (): Promise<{ ok: boolean; status: number; json(): unknown; text(): string }> => {
+    if (request.fetchImpl === undefined) return httpsGet(USAGE_URL, headers, request.signal)
+    // fetch 面是异步读体：这里先读成字符串再包成与 httpsGet 同形的应答。
+    return request.fetchImpl(USAGE_URL, {
       method: 'GET',
       headers,
       ...(request.signal === undefined ? {} : { signal: request.signal }),
+    }).then(async (response) => {
+      const text = await response.text().catch(() => '')
+      let parsed: unknown
+      let parseError: Error | undefined
+      try {
+        parsed = JSON.parse(text)
+      } catch (error) {
+        parseError = error instanceof Error ? error : new Error(String(error))
+      }
+      return {
+        ok: response.ok,
+        status: response.status,
+        json() {
+          if (parseError !== undefined) throw parseError
+          return parsed
+        },
+        text: () => text,
+      }
     })
+  }
+  // 2026-11-04 现场：防护对同一令牌约两成请求回 403 人机页（间歇性的，紧接着重试
+  // 往往就放行）。403 重试最多两次；其余状态码不重试——401 是令牌问题、5xx 重试
+  // 该由轮询器的下一拍兜，都不该在这一层等。
+  const maxAttempts = 3
+  const retryDelayMs = request.retryDelayMs ?? 250
+  let response: { ok: boolean; status: number; json(): unknown; text(): string }
+  for (let nth = 1; ; nth += 1) {
+    response = await attempt()
+    if (response.ok || response.status !== 403 || nth >= maxAttempts) break
+    if (request.signal?.aborted === true) break
+    await new Promise((resolve) => { setTimeout(resolve, retryDelayMs) })
+  }
   if (!response.ok) {
     const detail = scrub(await Promise.resolve(response.text()).catch(() => ''), credential.accessToken).slice(0, 300)
     throw new Error(`Codex usage request failed (${String(response.status)})${detail === '' ? '' : `: ${detail}`}`)

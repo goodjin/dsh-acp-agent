@@ -193,6 +193,39 @@ describe('fetchCodexUsage（取数）', () => {
     await expect(fetchCodexUsage({ credential: { accessToken: TOKEN, accountId: ACCOUNT }, fetchImpl }))
       .rejects.toThrow(/^(?![\s\S]*test-codex-oat-token)/)
   })
+
+  it('403（防护人机页）自动重试：第二次通过即成功（2026-11-04 实测约两成请求被拦）', async () => {
+    let calls = 0
+    const usage = await fetchCodexUsage({
+      credential: { accessToken: TOKEN, accountId: ACCOUNT },
+      fetchImpl: (async () => {
+        calls += 1
+        return calls === 1
+          ? new Response('<html>just a moment</html>', { status: 403 })
+          : new Response(JSON.stringify(MEASURED), { status: 200 })
+      }) as typeof fetch,
+      retryDelayMs: 0,
+    })
+    expect(calls).toBe(2)
+    expect(usage?.weekly).toMatchObject({ kind: 'weekly', percent: 91 })
+  })
+
+  it('403 重试耗尽：抛 403', async () => {
+    const fetchImpl = (async () => new Response('<html>just a moment</html>', { status: 403 })) as typeof fetch
+    await expect(fetchCodexUsage({ credential: { accessToken: TOKEN, accountId: ACCOUNT }, fetchImpl, retryDelayMs: 0 }))
+      .rejects.toThrow(/403/)
+  })
+
+  it('401 不重试（令牌问题重试没有意义）', async () => {
+    let calls = 0
+    const fetchImpl = (async () => {
+      calls += 1
+      return new Response('denied', { status: 401 })
+    }) as typeof fetch
+    await expect(fetchCodexUsage({ credential: { accessToken: TOKEN, accountId: ACCOUNT }, fetchImpl, retryDelayMs: 0 }))
+      .rejects.toThrow(/401/)
+    expect(calls).toBe(1)
+  })
 })
 
 describe('registerCodexQuotaRoute（宿主路由）', () => {
