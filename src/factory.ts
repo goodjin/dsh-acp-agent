@@ -35,8 +35,10 @@ import { codexProgressProbe, grokProgressProbe, qoderProgressProbe } from './age
 import type { ProgressProbe } from './agent-progress.ts'
 import type { SharedAgent, OpenSessionOptions } from './registry.ts'
 import { AcpTurnRunner } from './runner.ts'
-import type { AcpClientPort } from './runner.ts'
+import type { AcpClientPort, StdioMcpServer } from './runner.ts'
 import type { SubagentSessionHost } from './subagent-sessions.ts'
+import { DELEGATION_ROUTE_PATH } from './delegation-route.ts'
+import { fileURLToPath } from 'node:url'
 
 export type FactoryDeps = {
   /** Answer an agent-initiated permission request. */
@@ -89,6 +91,78 @@ export type FactoryDeps = {
    * 缺席（或 `available:false`）时泵内子会话动作归零：只留父会话卡片。
    */
   subagents?: SubagentSessionHost
+  /**
+   * 委派挂载的宿主面：委派服务在场与否、回调路由行的令牌、宿主 web 服务器的
+   * 根 URL。三项都在建会话时现读（懒读）——superpowers 的行可能晚于本行挂上，
+   * web 服务器的端口也是 boot 后才绑，开工时拍快照会把「还没好」当成「不存在」。
+   *
+   * 缺席 = 一切会话照旧（不挂 MCP）；三项里任何一项读不到也整段不挂——半挂
+   * 的委派工具只会给 agent 一个永远失败的 delegate。
+   */
+  delegation?: DelegationMountSurface
+}
+
+/**
+ * 委派挂载要读的三样宿主事实，每次建会话现读。
+ *
+ * 全部走访问器而不是开工快照，理由见 {@link FactoryDeps.delegation}。
+ * 三个读取都不得抛：读不到就回 false/undefined，由挂载判定收口成「不挂」。
+ */
+export type DelegationMountSurface = {
+  /** 宿主委派服务（`superpowers.delegation`）在场与否，按结构探测。 */
+  servicePresent(): boolean
+  /** 回调路由行配置的令牌（唯一来源）；读不到或为空回 undefined。 */
+  token(): string | undefined
+  /** 宿主 web 服务器的本机根 URL；未绑定端口或无法构成 URL 时回 undefined。 */
+  origin(): string | undefined
+}
+
+/**
+ * 桥接进程的绝对路径。
+ *
+ * 它由外部 agent 拉起，工作目录不可知——相对路径会指到一个不存在的文件，
+ * MCP 客户端只会报「起不来」。从本包位置解析，装到哪都能找到。
+ */
+const BRIDGE_SCRIPT_PATH = fileURLToPath(new URL('../bridge/dsh-acp-mcp-bridge.mjs', import.meta.url))
+
+/**
+ * 建会话时挂给外部 agent 的 MCP 服务器列表。
+ *
+ * 挂载条件一损俱损：宿主会话 id、委派服务、令牌、origin 缺任何一样都回
+ * 空数组——外部 agent 看到的世界与不挂载时一模一样，而不是拿到一个必然
+ * 失败的 delegate 工具。令牌绝不现场生成：回调路由校验的是路由行配置的
+ * 那一枚，两处各配各的会让回调永远 401。
+ */
+function delegationMcpServers(
+  surface: DelegationMountSurface | undefined,
+  dshSessionId: string | undefined,
+): readonly StdioMcpServer[] {
+  if (surface === undefined || dshSessionId === undefined) return []
+  if (!surface.servicePresent()) return []
+  const token = surface.token()
+  if (token === undefined) {
+    // 唯一要说话的降级：服务在场说明这台宿主想要委派，令牌没配是配置错，
+    // 静默不挂会让「delegate 怎么不见了」变成无迹可寻的谜。
+    process.stderr.write(
+      '[acp-agent] 委派服务在场但回调路由行未配置 token，本次会话不挂委派 MCP（要在 profile 里给 '
+      + 'acp-agent-delegation-route 行配 token；不生成临时令牌——与路由行不一致的令牌会让回调永远 401）\n',
+    )
+    return []
+  }
+  const origin = surface.origin()
+  if (origin === undefined) return []
+  return [{
+    name: 'dsh-delegation',
+    // 桥接是 `node <file>` 形式：command 是宿主自己的 node，args[0] 是桥接脚本。
+    command: process.execPath,
+    args: [BRIDGE_SCRIPT_PATH],
+    env: [
+      { name: 'DSH_DELEGATION_URL', value: `${origin}${DELEGATION_ROUTE_PATH}` },
+      // 桥接进程拿宿主会话 id 去回调路由定位父会话（委派服务据此取父 agent）。
+      { name: 'DSH_DELEGATION_SESSION', value: dshSessionId },
+      { name: 'DSH_DELEGATION_TOKEN', value: token },
+    ],
+  }]
 }
 
 /** Which frame dialect an agent speaks. Unknown agents are not ours. */
@@ -280,6 +354,7 @@ export function makeSessionFactory(config: PresetConfig, deps: FactoryDeps): Acp
         ...options,
         cwd,
         dialect,
+        mcpServers: delegationMcpServers(deps.delegation, options.dshSessionId),
         ...(deps.onRuntimeModels === undefined ? {} : { onModels: models => { deps.onRuntimeModels!(presetId, models) } }),
         ...(deps.resumeOf === undefined ? {} : { resumeOf: dshSessionId => deps.resumeOf!(presetId, dshSessionId) }),
         ...(deps.onExternalSession === undefined ? {} : { onExternalSession: (dshSessionId, externalSessionId) => { deps.onExternalSession!(presetId, dshSessionId, externalSessionId) } }),
@@ -569,6 +644,7 @@ export function makeSessionFactory(config: PresetConfig, deps: FactoryDeps): Acp
             cwd: opts.cwd,
             dshSessionId: opts.dshSessionId,
             dialect: opts.dialect,
+            mcpServers: delegationMcpServers(deps.delegation, opts.dshSessionId),
             ...(opts.modeId === undefined ? {} : { modeId: opts.modeId }),
             ...(opts.modelId === undefined ? {} : { modelId: opts.modelId }),
             ...(opts.openTimeoutMs === undefined ? {} : { openTimeoutMs: opts.openTimeoutMs }),

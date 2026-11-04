@@ -79,6 +79,27 @@ export type TurnStreamPort = {
   toolBoundary?(): number | void
 }
 
+/** ACP v1 stdio MCP 服务器条目里的一个环境变量（协议形状是有序键值数组，不是记录）。 */
+export type McpEnvVariable = {
+  readonly name: string
+  readonly value: string
+}
+
+/**
+ * 一条 stdio MCP 服务器声明，随建会话请求交给 agent。
+ *
+ * 形状按 ACP v1 的 stdio 变体（@agentclientprotocol/sdk 1.3.0 的
+ * zMcpServerStdio）：**不带** `type` 字段——联合类型的判别字段只存在于
+ * http/sse/acp 变体上；宿主自己的 dsh-acp 校验器（mountAcpMcpServers）把
+ * 带了 `type` 的条目一律当不认识的传输拒掉，写了反而挂不上。
+ */
+export type StdioMcpServer = {
+  readonly name: string
+  readonly command: string
+  readonly args: readonly string[]
+  readonly env: readonly McpEnvVariable[]
+}
+
 /** How to reach an agent, and where its work happens. */
 export type RunnerOptions = {
   readonly cwd: string
@@ -197,6 +218,14 @@ export type RunnerOptions = {
    * nobody journals; the open proceeds exactly as before.
    */
   readonly onExternalSession?: (dshSessionId: string, externalSessionId: string) => void
+  /**
+   * 建会话时挂给外部 agent 的 MCP 服务器（`session/new` 与
+   * `session/load`/`resume` 三条路径都带）。
+   *
+   * 缺席 = 空数组：agent 看到的世界与从来没有这回事一模一样。挂载与否是
+   * 调用方（factory）的决定——委派链路缺任何一环都该整段不挂，绝不半挂。
+   */
+  readonly mcpServers?: readonly StdioMcpServer[]
 }
 
 /** Long enough for a cold process to start, short enough to not strand a turn. */
@@ -2213,7 +2242,7 @@ export class AcpTurnRunner {
     }
     const openSession = () => this.client.request('session/new', {
       cwd: this.options.cwd,
-      mcpServers: [],
+      mcpServers: this.options.mcpServers ?? [],
     })
     // A journaled external session gets one reattach attempt first: when it
     // works, the conversation continues exactly as the agent kept it — same
@@ -2240,7 +2269,7 @@ export class AcpTurnRunner {
         const reattached = await this.client.request(reattachVia, {
           sessionId: journaled,
           cwd: this.options.cwd,
-          mcpServers: [],
+          mcpServers: this.options.mcpServers ?? [],
         })
         this.resumedLastOpen = true
         await this.adoptSession(reattached, journaled, onStage)

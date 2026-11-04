@@ -43,6 +43,9 @@ import type { SelectionSource } from './selection.ts'
 import { switchDrivenSession } from './switch-mount.ts'
 import { switchShared } from './switch-shared.ts'
 import type { AcpPresetConfig } from './registry.ts'
+import type { DelegationMountSurface } from './factory.ts'
+import { DELEGATION_SERVICE } from './delegation-contract.ts'
+import { name as delegationRouteRowId } from './delegation-route.ts'
 import type { AcpDialect } from './index.ts'
 import { projectStepContent } from './index.ts'
 import { AcpAssistantStream } from './stream.ts'
@@ -245,6 +248,11 @@ export function apply(ctx: unknown, config: Config): void {
      * `agentPresets`) through the mounted plugin.
      */
     get?(key: string): unknown
+    /**
+     * 宿主的装载树（`ctx.loader`），委派挂载从这里读回调路由行的令牌。
+     * 与 `get('loader')` 两条路都试（宿主面只给其中之一，见 health 的同款）。
+     */
+    loader?: { entries(): Iterable<unknown> }
     /** 宿主事件总线：子代理影子会话的实时流从这里发（`agent/assistant-stream`）。 */
     emit?(event: string, payload: unknown): unknown
     logger?: { info(message: string): void; warn(message: string): void }
@@ -436,6 +444,7 @@ export function apply(ctx: unknown, config: Config): void {
 
   applyAcpPlugin(host, config.presetId, preset, {
     runtimeModels: runtimeModelReports,
+    delegation: delegationMountSurface(host),
     ...(readProjection(host) === undefined ? {} : { presetOf: readProjection(host) }),
     ...(sessionAppend === undefined ? {} : { sessionAppend }),
     ...(sessionPositionOf === undefined ? {} : { sessionPositionOf }),
@@ -485,6 +494,103 @@ export function apply(ctx: unknown, config: Config): void {
       if (!installed) host.logger?.warn(`acp takeover: ${line} could not be installed`)
     },
   })
+}
+
+/**
+ * 委派挂载要读的宿主面：令牌、服务在场、origin。
+ *
+ * 三样都包成访问器交给 factory 懒读：本行挂上时 superpowers 的行可能还没
+ * 挂、web 服务器的端口可能还没绑——开工拍快照会把「还没好」永远当成「不
+ * 存在」，委派就再也挂不上了。每次建会话现读，读到的一定是当下的实况。
+ *
+ * @param host - 本行的宿主上下文（get / loader 两条读法都支持）。
+ * @returns 三样事实的访问器；任何一样读不到都不抛，由挂载判定收口成不挂。
+ */
+export function delegationMountSurface(host: DelegationHostSurface): DelegationMountSurface {
+  return {
+    servicePresent: () => delegationServicePresent(host),
+    token: () => delegationTokenOf(host),
+    origin: () => webServerOriginOf(host),
+  }
+}
+
+/** delegationMountSurface 需要的宿主面；窄接口，测试立桩照这个来。 */
+export type DelegationHostSurface = {
+  get?(key: string): unknown
+  /** 宿主装载树；与 `get('loader')` 互为备选。 */
+  loader?: { entries(): Iterable<unknown> }
+}
+
+/** 装载条目里回调路由行要读的那一面：id 在 options 上，config 挂上前在 options、挂上后在 fiber。 */
+type LoaderEntryWithConfig = {
+  options?: { id?: unknown; config?: unknown }
+  fiber?: { config?: unknown } | undefined
+}
+
+/** 找装载服务：注入面与 `get` 两条路都试（与 health 的 loaderOf 同一约定）。 */
+function loaderOf(host: DelegationHostSurface): { entries(): Iterable<unknown> } | undefined {
+  if (typeof host.loader?.entries === 'function') return host.loader
+  const viaGet = host.get?.('loader')
+  if (typeof viaGet === 'object' && viaGet !== null && typeof (viaGet as { entries?: unknown }).entries === 'function') {
+    return viaGet as { entries(): Iterable<unknown> }
+  }
+  return undefined
+}
+
+/**
+ * 回调路由行的令牌——委派回调鉴权的唯一令牌来源。
+ *
+ * 路由行（acp-agent-delegation-route）校验的是它自己 config 里的 token，
+ * 桥接进程 env 里必须放同一个值：两处各配各的会让回调永远 401。所以这里
+ * 从装载树里找到那一行、读它配置里的 token，而不是接受任何别的来源。
+ * fiber 的 config 是挂上后的生效值，优先读；行还没挂上（等依赖服务）时
+ * 配置已经在 options 上，回落去读——令牌在不在与行挂没挂上无关。
+ */
+function delegationTokenOf(host: DelegationHostSurface): string | undefined {
+  const loader = loaderOf(host)
+  if (loader === undefined) return undefined
+  let entries: Iterable<unknown>
+  try {
+    entries = loader.entries()
+  } catch {
+    // 装载树坏掉与「没有这一行」同罪：读不到令牌就是不挂。
+    return undefined
+  }
+  for (const candidate of entries) {
+    const entry = candidate as LoaderEntryWithConfig | null | undefined
+    if (entry?.options?.id !== delegationRouteRowId) continue
+    const config = entry.fiber?.config ?? entry.options.config
+    const token = (config as { token?: unknown } | null | undefined)?.token
+    return typeof token === 'string' && token !== '' ? token : undefined
+  }
+  return undefined
+}
+
+/** 委派服务在场与否：按结构探测（有可调用的 delegate 才算），与回调路由的读法一致。 */
+function delegationServicePresent(host: DelegationHostSurface): boolean {
+  const found = host.get?.(DELEGATION_SERVICE)
+  if (typeof found !== 'object' || found === null) return false
+  return typeof (found as { delegate?: unknown }).delegate === 'function'
+}
+
+/**
+ * 宿主 web 服务器的本机根 URL。
+ *
+ * `getOrigin()` 在端口未绑定或绑定地址无法构成 URL 时会抛——那正是「还没
+ * 好」的两种时刻，折成 undefined 让挂载判定整段不挂，而不是让一次建会话
+ * 被异常带走。
+ */
+function webServerOriginOf(host: DelegationHostSurface): string | undefined {
+  const found = host.get?.('webServer')
+  if (typeof found !== 'object' || found === null) return undefined
+  const getOrigin = (found as { getOrigin?: unknown }).getOrigin
+  if (typeof getOrigin !== 'function') return undefined
+  try {
+    const origin = (getOrigin as () => unknown).call(found)
+    return typeof origin === 'string' && origin !== '' ? origin : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /**

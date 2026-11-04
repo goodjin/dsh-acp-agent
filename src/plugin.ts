@@ -28,6 +28,7 @@ import { projectStepContent } from './index.ts'
 import { buildPresetTable, cwdForOpen, openSessionsOf, sessionsRegistry } from './registry.ts'
 import type { AcpPresetConfig, PresetConfig } from './registry.ts'
 import { makeSessionFactory } from './factory.ts'
+import type { DelegationMountSurface } from './factory.ts'
 import { forgetSession, stepPositionOfSession } from './step-position.ts'
 import { modelsOfPreset, registerCatalog, runtimeModels } from './catalog-registration.ts'
 import { cwdOfSession, servicesOf } from './switch-mount.ts'
@@ -166,6 +167,13 @@ export type AcpPluginDeps = {
    * Omitted uses a private ledger, as a plain plugin mount needs nothing more.
    */
   runtimeModels?: import('./catalog-registration.ts').RuntimeModels
+  /**
+   * 委派挂载的宿主面（令牌 / 服务在场 / origin），原样转给 factory。
+   *
+   * 缺席 = 所有会话照旧（不挂 MCP）。这里只做传递不做判定：挂不挂是 factory
+   * 建会话时按三样事实的实况决定的。
+   */
+  delegation?: DelegationMountSurface
 }
 
 /**
@@ -235,6 +243,7 @@ export function applyAcpPlugin(
       if (reportedPresetId === presetId) externalSessions.set(dshSessionId, externalSessionId)
     },
     ...(deps.subagents === undefined ? {} : { subagents: deps.subagents }),
+    ...(deps.delegation === undefined ? {} : { delegation: deps.delegation }),
   })
   const dialect = factory.dialectFor(presetId, config)
   // zcode is a model inside the native loop: it still registers, and it does
