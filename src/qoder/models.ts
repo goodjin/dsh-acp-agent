@@ -1,8 +1,8 @@
 /**
  * Qoder 国际版的模型清单。
  *
- * 核对时间：2026-11-05。清单来自 `{catalogBase}/api/v2/model/list?Encode=1`，
- * 要登录才有（带 Bearer）。
+ * 核对时间：2026-11-05。清单**借 Qoder 应用自带的 SDK 拿**（见 `catalog.ts`）：
+ * 站点那份清单要 Qoder 自己的原生模块算签名，JS 复刻不了。
  *
  * **应答是按场景分组的对象**，不是数组：`{"assistant": [ … ], "其他场景": [ … ] }`。
  * 取 `assistant` 那一组——CLI 侧用的场景名就是 `assistant`。
@@ -10,9 +10,10 @@
  * 每条模型的 `key` 就是请求体里要发的模型 id；`display_name` 是给人看的名字。
  */
 
-import { qoderIdentityHeaders, resolveEndpoints } from './endpoints.ts'
+import { resolveEndpoints } from './endpoints.ts'
 import type { QoderEndpoints } from './endpoints.ts'
 import type { QoderCredential } from './auth.ts'
+import { fetchCatalogViaSdk } from './catalog.ts'
 
 /** 一条模型。 */
 export type QoderModel = {
@@ -28,6 +29,8 @@ export type QoderModel = {
   readonly efforts?: readonly string[] | undefined
   /** 支不支持图片。 */
   readonly supportsImages?: boolean | undefined
+  /** 官方倍率（如 `0.8`）。 */
+  readonly credits?: string | undefined
   /**
    * 请求体里「最大 token」用哪个字段名。
    *
@@ -97,23 +100,25 @@ export async function fetchModels(options: {
   readonly credential: QoderCredential
   readonly endpoints?: QoderEndpoints | undefined
   readonly fetchImpl?: typeof fetch | undefined
+  /** 换掉「起 SDK 进程」这一步（测试用）。 */
+  readonly spawnSdk?: Parameters<typeof fetchCatalogViaSdk>[0]['spawnSdk']
+  /** 换一个 SDK 路径（测试用）。 */
+  readonly sdkPath?: string | undefined
 }): Promise<QoderModel[]> {
-  const endpoints = options.endpoints ?? resolveEndpoints()
-  const fetchImpl = options.fetchImpl ?? fetch
-  const response = await fetchImpl(endpoints.modelListUrl, {
-    method: 'GET',
-    redirect: 'error',
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${options.credential.accessToken}`,
-      ...qoderIdentityHeaders(),
-    },
+  const catalog = await fetchCatalogViaSdk({
+    accessToken: options.credential.accessToken,
+    ...(options.credential.account?.uid === undefined ? {} : { uid: options.credential.account.uid }),
+    ...(options.spawnSdk === undefined ? {} : { spawnSdk: options.spawnSdk }),
+    ...(options.sdkPath === undefined ? {} : { sdkPath: options.sdkPath }),
   })
-  if (!response.ok) {
-    await response.body?.cancel()
-    throw new Error(`Qoder 模型清单取不到（HTTP ${response.status}）`)
-  }
-  return parseModels(await response.json())
+  return catalog.map(model => ({
+    id: model.id,
+    name: model.name,
+    ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
+    ...(model.efforts === undefined ? {} : { efforts: model.efforts }),
+    ...(model.supportsImages === undefined ? {} : { supportsImages: model.supportsImages }),
+    ...(model.credits === undefined ? {} : { description: `积分 ${model.credits}`, credits: model.credits }),
+  }))
 }
 
 /** 推理档位：支持列表优先，没有就用默认档。 */

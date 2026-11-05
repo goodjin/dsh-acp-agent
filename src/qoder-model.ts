@@ -70,7 +70,7 @@ export function qoderDeclaredModelIds(): readonly string[] {
  * 站点的整份清单要 Qoder 自己的签名才拿得到（见 docs/agent-acp/qoder-global.md），
  * 所以设置里的列表在拿不到站点清单时退回这一份——空着更没用。
  */
-export function qoderDeclaredModels(): readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[] {
+export function qoderDeclaredModels(): readonly QoderModel[] {
   const first = [...declaredModels.values()][0]
   return first === undefined ? [] : [...first]
 }

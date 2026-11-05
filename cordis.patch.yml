@@ -627,14 +627,68 @@
               # 不出帧，120 秒会把这一轮杀掉。
               stallMs: 300000
               # 独立浏览器登录；DSH 执行工具。保留国内版 acp-qoder。
-              # 兜底清单：登录后由宿主从 Qoder 国际版拉运行时清单，选择器以那份
-              # 为准；这里声明的是「没登录、或清单拉不到」时显示的那一项——worker
-              # 内置的默认模型。不复制国内版的模型 ID 与计费信息。
+              #
+              # 清单：站点那份要 Qoder 自己的原生模块算签名，JS 复刻不了，所以宿主
+              # **借应用自带的 SDK** 去拉（src/qoder/catalog.ts）。选择器以运行时那份
+              # 为准；下面这份是兜底（拉不到时显示），用的是站点真实的模型 id 与倍率
+              # （2026-11-05 实测拉到的 15 个）。
+              #
+              # 强度档位：各模型支持的档位不同（清单里逐模型带），插件会按模型过滤，
+              # 这里声明的是它们的并集。
+              efforts:
+                - id: low
+                  name: Low
+                - id: medium
+                  name: Medium
+                - id: high
+                  name: High
+                - id: max
+                  name: Max
+                - id: xhigh
+                  name: xHigh
               models:
-                # 服务端只认 `auto`（它自己解析到具体模型）：2026-11-05 实测
-                # qwen3.8-max 回 `invalid_model_error: Unsupported model`。
-                # 整份清单要靠 Qoder 自己的签名才拿得到（见 docs/agent-acp/qoder-global.md），
-                # 所以这里只声明这个确实能用的。
+                - id: gmodel
+                  name: "GLM-5.3"
+                  description: "GLM-5.3（积分 x0.8） · 180k 上下文"
+                - id: gfmodel
+                  name: "GLM-5.3-Flash"
+                  description: "GLM-5.3-Flash（积分 x0.1） · 1000k 上下文"
+                - id: dmodel
+                  name: "DeepSeek-V4-Pro"
+                  description: "DeepSeek-V4-Pro（积分 x0.5） · 1000k 上下文"
+                - id: dfmodel
+                  name: "DeepSeek-Flash"
+                  description: "DeepSeek-Flash（积分 x0.1） · 1000k 上下文"
+                - id: mmodel
+                  name: "MiniMax-M3.1-Flash"
+                  description: "MiniMax-M3.1-Flash（积分 x0.1） · 180k 上下文"
+                - id: kmodel_latest
+                  name: "Kimi-K3.1-Pro"
+                  description: "Kimi-K3.1-Pro（积分 x1） · 180k 上下文"
+                - id: kmodel
+                  name: "Kimi-K2.8-Preview"
+                  description: "Kimi-K2.8-Preview（积分 x0.8）"
+                - id: qmodel_38max
+                  name: "Qwen3.8-Max"
+                  description: "Qwen3.8-Max（积分 x0.5） · 180k 上下文"
+                - id: qfmodel
+                  name: "Qwen3.8-Flash"
+                  description: "Qwen3.8-Flash（积分 x0） · 180k 上下文"
+                - id: ultimate
+                  name: "Ultimate"
+                  description: "Ultimate（积分 x2） · 1000k 上下文"
+                - id: smodel
+                  name: "Sonus"
+                  description: "Sonus（积分 x8） · 180k 上下文"
+                - id: cmodel
+                  name: "Cantus"
+                  description: "Cantus（积分 x4） · 180k 上下文"
+                - id: fast
+                  name: "Fast"
+                  description: "Fast（积分 x0.8） · 200k 上下文"
+                - id: efficient
+                  name: "Efficient"
+                  description: "Efficient（积分 x0.3） · 200k 上下文"
                 - id: auto
-                  name: Auto
-                  description: Qoder 国际版 · 默认模型
+                  name: "Auto"
+                  description: "Auto（积分 x0.5） · 200k 上下文"
