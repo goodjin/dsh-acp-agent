@@ -177,7 +177,13 @@ export const ASSISTANT_STEP_FALLBACK_PRIORITY = -40
  *    `AcpProcessBlock`，非 ACP 段调原生——保证只装 acp-agent 时 ACP 段完整渲染。
  * 2. 把 `AcpProcessBlock` 注册进 `SEGMENT_RENDERER_SLOT`；座位由
  *    `@goodjin2/dsh-chat-area` 声明（它包 `assistant-step` 用 -50，恒在本层之外），
- *    它渲染 ACP 段时就从这里取组件。
+ *    它渲染 ACP 段时就从这里取组件。注册必须带座位名：座位是父行 `children`
+ *    表里声明的子槽，只给 id/order 会以 `name: undefined` 去查表并被拒。
+ *
+ * 错误边界：本包交给宿主的回调（座位 inject、插槽 subscribe、视图 subscribe）
+ * 都在**别人的调用栈**里执行；抛出去会打断对方的注册流程，2026-11-05 就是这样
+ * 把同时声明座位的 chat-area 判成 failed、整页起不来。因此这些回调与返回的
+ * 卸载函数一律就地吞错、只记一条日志，本包的故障不外溢。
  *
  * 为什么本包**不**声明座位：一个插槽只能有一个声明者，后声明的会抛
  * 「already-declared child key」。两边都声明时结果取决于装配顺序——一种顺序答案
@@ -187,7 +193,11 @@ export const ASSISTANT_STEP_FALLBACK_PRIORITY = -40
  * 优先级约定（跨包，只能靠字面量与测试对表）：chat-area -50 < 本包 -40，
  * 「数值最低的渲染」，所以 chat-area 在外层；只装本包时座位没人声明，本层生效。
  */
-export function registerAcpProcessSurface(ctx: Surface): void {
+export function registerAcpProcessSurface(ctx: Surface, report?: (message: string) => void): void {
+  const say = (message: string): void => {
+    if (report !== undefined) report(message)
+    else if (typeof console !== 'undefined') console.warn(`[acp-agent] ${message}`)
+  }
   const ui = ctx.get('uiConversation') as Registry | undefined
   const slots = ctx.slots as NodeSlots
   if (typeof ui?.views?.entries !== 'function' || typeof ui.views.subscribe !== 'function'
@@ -197,15 +207,22 @@ export function registerAcpProcessSurface(ctx: Surface): void {
     let active: ConversationViewDefinition | undefined
     let restore: (() => void) | undefined
     let removeDefinition: (() => void) | undefined
+    // 下面几个回调都是交给宿主、在**别人的调用栈**里执行的：抛出去会打断调用方的
+    // 注册流程（2026-11-05 现场：本包的座位回调抛错，把同时声明座位的 chat-area
+    // 判成 failed，整页启动失败）。所以一律就地吞掉，只留一条日志。
     const attachView = (): void => {
-      const view = ui.views.entries().find(candidate => candidate.target === 'chat')
-      if (view === undefined || view === active) return
-      restore?.()
-      active = view
-      restore = wrapChatView(view)
-      // Registration invalidates existing builders too, including already open tabs.
-      removeDefinition?.()
-      removeDefinition = ui.events.register(acpProcessDefinition as ConversationNodeDefinition)
+      try {
+        const view = ui.views.entries().find(candidate => candidate.target === 'chat')
+        if (view === undefined || view === active) return
+        restore?.()
+        active = view
+        restore = wrapChatView(view)
+        // Registration invalidates existing builders too, including already open tabs.
+        removeDefinition?.()
+        removeDefinition = ui.events.register(acpProcessDefinition as ConversationNodeDefinition)
+      } catch (error) {
+        say(`acp process view: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
     const unsubscribeView = ui.views.subscribe(attachView)
     attachView()
@@ -217,41 +234,59 @@ export function registerAcpProcessSurface(ctx: Surface): void {
     let installing = false
     const attachWrap = (): void => {
       if (installing) return
-      const entry = slots.entries('conversation.chat.node').find(
-        candidate => candidate.options.key === 'assistant-step' && (candidate.options.priority as number | undefined ?? 0) >= 0,
-      )
-      if (entry === undefined || entry.component === originalComponent) return
-      installing = true
       try {
-        removeWrap?.()
-        originalComponent = entry.component
-        const Native = entry.component as ComponentType<AssistantStepProps>
-        const Renderer = (props: AssistantStepProps) => {
-          const segment = (props.node?.data as SegmentChatData | undefined)?.acpProcessSegment
-          if (segment !== undefined) return createElement(AcpProcessBlock, { segment, t: props.t })
-          return createElement(Native, props)
-        }
-        removeWrap = slots.register({
-          name: 'conversation.chat.node', key: 'assistant-step', priority: ASSISTANT_STEP_FALLBACK_PRIORITY,
-          ...(entry.locale === undefined ? {} : { locale: entry.locale }),
-          ...(entry.inject === undefined ? {} : { inject: entry.inject }),
-        }, Renderer)
-      } finally { installing = false }
+        const entry = slots.entries('conversation.chat.node').find(
+          candidate => candidate.options.key === 'assistant-step' && (candidate.options.priority as number | undefined ?? 0) >= 0,
+        )
+        if (entry === undefined || entry.component === originalComponent) return
+        installing = true
+        try {
+          removeWrap?.()
+          originalComponent = entry.component
+          const Native = entry.component as ComponentType<AssistantStepProps>
+          const Renderer = (props: AssistantStepProps) => {
+            const segment = (props.node?.data as SegmentChatData | undefined)?.acpProcessSegment
+            if (segment !== undefined) return createElement(AcpProcessBlock, { segment, t: props.t })
+            return createElement(Native, props)
+          }
+          removeWrap = slots.register({
+            name: 'conversation.chat.node', key: 'assistant-step', priority: ASSISTANT_STEP_FALLBACK_PRIORITY,
+            ...(entry.locale === undefined ? {} : { locale: entry.locale }),
+            ...(entry.inject === undefined ? {} : { inject: entry.inject }),
+          }, Renderer)
+        } finally { installing = false }
+      } catch (error) {
+        say(`acp process wrap: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
     const unsubscribeWrap = slots.subscribe('conversation.chat.node', attachWrap)
     attachWrap()
 
     // 把 ACP 段渲染器挂到座位：座位由 chat-area 声明，它在外层渲染时从这里取组件。
     // 只装本包时座位永远没人声明，这个 inject 就一直不触发——无害，本包的 wrap 兜底。
-    const removeHook = slots.inject(SEGMENT_RENDERER_SLOT, () => slots.register(
-      { id: 'acp-agent-acp-segment-renderer', order: 0 },
-      AcpProcessBlock,
-    ))
+    // 注册必须带座位名（`name`）：座位是 chat-area 声明的**子槽**，只给 id/order 时
+    // 槽位服务拿到的是 `name: undefined`，会抛「slot "undefined" is not declared」。
+    const removeHook = slots.inject(SEGMENT_RENDERER_SLOT, () => {
+      try {
+        return slots.register(
+          { name: SEGMENT_RENDERER_SLOT, id: 'acp-agent-acp-segment-renderer', order: 0 },
+          AcpProcessBlock,
+        )
+      } catch (error) {
+        say(`acp process seat: ${error instanceof Error ? error.message : String(error)}`)
+        return undefined
+      }
+    })
 
+    const attempt = (label: string, fn: () => void): void => {
+      try { fn() } catch (error) {
+        say(`${label}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
     return () => {
-      unsubscribeView(); restore?.(); removeDefinition?.()
-      unsubscribeWrap(); removeWrap?.()
-      if (typeof removeHook === 'function') removeHook()
+      attempt('acp process view dispose', () => { unsubscribeView(); restore?.(); removeDefinition?.() })
+      attempt('acp process wrap dispose', () => { unsubscribeWrap(); removeWrap?.() })
+      attempt('acp process seat dispose', () => { if (typeof removeHook === 'function') removeHook() })
     }
   }, 'acp-agent ACP process segments')
 }

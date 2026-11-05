@@ -191,7 +191,7 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
 
   // ACP process view
   safeRegister('acp process surface', () => {
-    return registerAcpProcessSurface(ctx)
+    return registerAcpProcessSurface(ctx, say)
   }, say)
 
   // Switch progress bar
