@@ -791,3 +791,15 @@
                 - id: doubao-default
                   name: 豆包
                   description: 豆包桌面端 · 网页版模型
+
+          # DSH 工具行：与其它走 ACP 的预设同理——父会话的回合由豆包驱动，
+          # 但 DSH 侧起的委派子会话继承本预设组合，没有这几行孩子拿到的是空
+          # 工具表，bash/fs 都用不了。别删。
+          - id: acp-tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+          - id: acp-tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: acp-tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+          - id: acp-tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
