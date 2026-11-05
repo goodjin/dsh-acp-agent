@@ -35,6 +35,16 @@ export type ClientLocaleKey =
   | 'acpVisibility.error.missing' | 'acpVisibility.error.shape' | 'acpVisibility.error.failed'
   | 'progress.preparing' | 'progress.loading' | 'progress.ready'
   | 'storagePosture.local'
+  | 'workbuddy.section.label'
+  | 'workbuddy.account.signedIn' | 'workbuddy.account.signedOut'
+  | 'workbuddy.account.login' | 'workbuddy.account.refresh' | 'workbuddy.account.relogin'
+  | 'workbuddy.models.section.label' | 'workbuddy.models.summary'
+  | 'workbuddy.models.custom' | 'workbuddy.models.defaultHint'
+  | 'workbuddy.models.noTool' | 'workbuddy.models.restore'
+  | 'workbuddy.models.search' | 'workbuddy.models.empty' | 'workbuddy.models.title'
+  | 'qoder.section.label'
+  | 'qoder.account.signedIn' | 'qoder.account.signedOut'
+  | 'qoder.account.login' | 'qoder.account.refresh' | 'qoder.account.relogin'
 
 export const zh: Record<ClientLocaleKey, string> = {
   'handover.title': '已切换到 {target}，对话已移到新会话',
@@ -97,6 +107,27 @@ export const zh: Record<ClientLocaleKey, string> = {
   'progress.preparing': '正在准备打开新会话 · {target}',
   'progress.loading': '正在读新会话的历史 · {target}',
   'progress.ready': '新会话已就绪，正在切换 · {target}',
+  'workbuddy.section.label': 'WorkBuddy 账号',
+  'workbuddy.account.signedIn': '已登录 WorkBuddy：',
+  'workbuddy.account.signedOut': '未登录 WorkBuddy：这一组模型发消息会被拒绝。',
+  'workbuddy.account.login': '登录 WorkBuddy',
+  'workbuddy.account.relogin': '重新登录',
+  'workbuddy.account.refresh': '检查授权',
+  'workbuddy.models.section.label': 'WorkBuddy 模型',
+  'workbuddy.models.summary': '站点共 {total} 个模型，勾上的 {selected} 个会出现在模型选择器里。',
+  'workbuddy.models.custom': '当前用的是你自己勾的。',
+  'workbuddy.models.defaultHint': '当前用的是默认那一份（还没自己勾过）。',
+  'workbuddy.models.noTool': '不能带工具（只能聊天）',
+  'workbuddy.models.restore': '恢复默认那一份',
+  'workbuddy.models.title': '模型',
+  'workbuddy.models.search': '搜模型名、id 或倍率',
+  'workbuddy.models.empty': '没有匹配上的模型。',
+  'qoder.section.label': 'Qoder 国际版账号',
+  'qoder.account.signedIn': '已登录 Qoder 国际版：',
+  'qoder.account.signedOut': '未登录 Qoder 国际版：这一组模型发消息会被拒绝。',
+  'qoder.account.login': '登录 Qoder 国际版',
+  'qoder.account.relogin': '重新登录',
+  'qoder.account.refresh': '检查授权',
   'storagePosture.local': '设置保存在本机',
 }
 
@@ -161,6 +192,27 @@ export const en: Record<ClientLocaleKey, string> = {
   'progress.preparing': 'Preparing to open the new session · {target}',
   'progress.loading': 'Reading the new session’s history · {target}',
   'progress.ready': 'New session ready, switching · {target}',
+  'workbuddy.section.label': 'WorkBuddy account',
+  'workbuddy.account.signedIn': 'Signed in to WorkBuddy:',
+  'workbuddy.account.signedOut': 'Not signed in to WorkBuddy: messages in this group will be refused.',
+  'workbuddy.account.login': 'Sign in to WorkBuddy',
+  'workbuddy.account.relogin': 'Sign in again',
+  'workbuddy.account.refresh': 'Check authorisation',
+  'workbuddy.models.section.label': 'WorkBuddy models',
+  'workbuddy.models.summary': 'The site lists {total} models; the {selected} you tick show up in the model picker.',
+  'workbuddy.models.custom': 'Using your own selection.',
+  'workbuddy.models.defaultHint': 'Using the default selection (nothing ticked by hand yet).',
+  'workbuddy.models.noTool': 'no tools (chat only)',
+  'workbuddy.models.restore': 'Restore the default set',
+  'workbuddy.models.title': 'Models',
+  'workbuddy.models.search': 'Search by name, id or multiplier',
+  'workbuddy.models.empty': 'No model matches.',
+  'qoder.section.label': 'Qoder international account',
+  'qoder.account.signedIn': 'Signed in to Qoder international:',
+  'qoder.account.signedOut': 'Not signed in to Qoder international: messages in this group will be refused.',
+  'qoder.account.login': 'Sign in to Qoder international',
+  'qoder.account.relogin': 'Sign in again',
+  'qoder.account.refresh': 'Check authorisation',
   'storagePosture.local': 'Settings are stored on this machine',
 }
 

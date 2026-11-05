@@ -13,7 +13,9 @@
  */
 
 import type { AcpDialect } from './index.ts'
+import type { MiniMaxStreamChunk } from './minimaxi/index.ts'
 import type { GlmStreamChunk } from './zcode/index.ts'
+import type { WorkBuddyStreamChunk } from './workbuddy/sse.ts'
 import type { PresetConfig } from './registry.ts'
 import { baseIdOf } from './selection.ts'
 import { GatewayChunkQueue } from './gateway.ts'
@@ -218,6 +220,16 @@ export type CatalogDeps = {
   /** The frame dialect of one preset's agent. */
   dialectOf(presetId: string): AcpDialect | undefined
   /**
+   * Make sure one preset's model list is in the runtime ledger before the
+   * catalog answers.
+   *
+   * A model plugin can learn its list on its own (it logs in and asks the
+   * upstream). The picker asks for the list when the user opens it — which is
+   * before anyone sent a message — so the list has to be ready by then, or the
+   * user sees the static fallback instead of the real one.
+   */
+  ensureModels?(presetId: string): Promise<void>
+  /**
    * The in-place answerer for sessions this row does not drive. When the
    * adapter is absent, a foreign conversation request can only be refused.
    */
@@ -237,7 +249,7 @@ export type CatalogDeps = {
    * here — tools included — and the native loop keeps the turn. Returning
    * `undefined` leaves the request on the gateway path.
    */
-  modelStream?(presetId: string, request: CatalogTurnRequest): AsyncIterable<GlmStreamChunk> | undefined
+  modelStream?(presetId: string, request: CatalogTurnRequest): AsyncIterable<GlmStreamChunk | MiniMaxStreamChunk | WorkBuddyStreamChunk> | undefined
 }
 
 const ROUTE_PREFIX = 'acp:'
@@ -285,8 +297,10 @@ const DISPLAY: Readonly<Record<string, string>> = {
   codex: 'Codex',
   cursor: 'Cursor',
   qoder: 'Qoder',
+  'qoder-global': 'Qoder 国际版',
   zcode: 'ZCode',
   minimaxi: 'MiniMax',
+  workbuddy: 'WorkBuddy',
 }
 
 /**
@@ -310,7 +324,7 @@ export type CatalogTurnRequest = {
 }
 
 /** Chunks a catalog stream may yield: the gateway's text, or a real model's tool calls. */
-export type CatalogStreamChunk = GatewayChunk | GlmStreamChunk
+export type CatalogStreamChunk = GatewayChunk | GlmStreamChunk | MiniMaxStreamChunk | WorkBuddyStreamChunk
 
 /**
  * The catalog-facing adapter.
@@ -339,6 +353,8 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
       const presetId = presetOfRoute(provider)
       if (presetId === undefined) return []
       if (config.presets[presetId] === undefined) return []
+      // 先让模型插件把清单备好（它自己登录、自己问上游），再回答。
+      await deps.ensureModels?.(presetId)
       const models = modelsFor(presetId)
       // Collapse same-base entries (one model published as base[low]…base[ultra])
       // into a single row carrying its efforts, so the picker shows the model

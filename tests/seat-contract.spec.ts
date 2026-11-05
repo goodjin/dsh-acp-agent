@@ -40,6 +40,24 @@ describe('assistant-step 的座位契约', () => {
     expect(SURFACE).toContain('acp-agent-acp-segment-renderer')
   })
 
+  it('注册座位时带座位名（子槽按名字声明，缺了会以 undefined 查表被拒）', () => {
+    const start = SURFACE.indexOf('slots.inject(SEGMENT_RENDERER_SLOT')
+    expect(start).toBeGreaterThan(-1)
+    const block = SURFACE.slice(start, start + 700)
+    expect(block).toContain('name: SEGMENT_RENDERER_SLOT')
+  })
+
+  it('交给宿主的回调就地吞错，不把异常抛进对方的注册流程', () => {
+    // 座位 inject 的回调
+    const seat = SURFACE.slice(SURFACE.indexOf('slots.inject(SEGMENT_RENDERER_SLOT'))
+    expect(seat).toMatch(/try\s*\{[\s\S]*catch/)
+    // 插槽订阅（attachWrap）与视图订阅（attachView）的回调
+    const wrap = SURFACE.slice(SURFACE.indexOf('const attachWrap'), SURFACE.indexOf('const unsubscribeWrap'))
+    expect(wrap).toMatch(/catch\s*\(/)
+    const view = SURFACE.slice(SURFACE.indexOf('const attachView'), SURFACE.indexOf('const unsubscribeView'))
+    expect(view).toMatch(/catch\s*\(/)
+  })
+
   it('兜底优先级 -40，比 chat-area 的 -50 更内层', () => {
     const fallback = constantOf('ASSISTANT_STEP_FALLBACK_PRIORITY')
     expect(fallback).toBe(-40)

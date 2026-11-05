@@ -60,6 +60,7 @@ export const EXPECTED_ROWS: readonly RowExpectation[] = [
   { id: 'acp-agent-claude-quota', what: 'Claude 额度接口' },
   { id: 'acp-agent-grok-quota', what: 'Grok 额度接口' },
   { id: 'acp-agent-delegation-route', what: '外部 agent 委派回调路由（superpowers 委派服务的宿主入口）' },
+  { id: 'acp-agent-workbuddy-login', what: 'WorkBuddy 登录与状态接口' },
   { id: 'acp-codex', what: 'Codex 预置' },
   { id: 'acp-claude', what: 'Claude 预置' },
   { id: 'acp-grok', what: 'Grok 预置' },
@@ -67,6 +68,9 @@ export const EXPECTED_ROWS: readonly RowExpectation[] = [
   { id: 'acp-zcode', what: 'ZCode 预置' },
   { id: 'acp-minimax', what: 'MiniMax 预置' },
   { id: 'acp-qoder', what: 'Qoder 预置' },
+  { id: 'acp-agent-qoder-login', what: 'Qoder 国际版登录接口' },
+  { id: 'acp-qoder-global', what: 'Qoder 国际版模型预置' },
+  { id: 'acp-workbuddy', what: 'WorkBuddy 预置' },
 ]
 
 /** 一行的核对结果。 */

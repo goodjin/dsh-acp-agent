@@ -67,7 +67,15 @@
       "types": "./src/delegation-route.ts",
       "default": "./src/delegation-route.ts"
     },
-    "./package.json": "./package.json"
+    "./workbuddy-login": {
+      "types": "./src/workbuddy-route.ts",
+      "default": "./src/workbuddy-route.ts"
+    },
+    "./package.json": "./package.json",
+    "./qoder-login": {
+      "types": "./src/qoder-route.ts",
+      "default": "./src/qoder-route.ts"
+    }
   },
   "files": [
     "LICENSE",

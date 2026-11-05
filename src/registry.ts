@@ -33,6 +33,13 @@ export type AcpPresetConfig = {
   readonly model?: string
   readonly mode?: string
   /**
+   * 这一行指向的站点（模型插件用）。
+   *
+   * 模型插件要直连上游时，端点必须由配置说了算：登录接口与模型接口必须同源，
+   * 所以这里只有一个站点地址，插件从它派生全部地址。缺省是上游的默认站点。
+   */
+  readonly baseUrl?: string
+  /**
    * Accepted so an old config still loads. Never used as a workspace.
    *
    * An external conversation opens only in the DSH session's own workspace.
