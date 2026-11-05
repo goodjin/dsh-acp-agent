@@ -189,6 +189,8 @@ export function registerWorkBuddyRoutes(ctx: WorkBuddyRouteContext, deps: WorkBu
               selected: [...selected],
               // 自己勾过没有：界面据此显示「已自定义」并给一个「恢复默认」。
               custom: stored !== undefined,
+              // 默认那一份（挂载行里声明的）：界面上「恢复默认」按它存。
+              default: [...workBuddyDeclaredModelIds()],
             }))
           } catch (error) {
             respondJson(res, 200, JSON.stringify({

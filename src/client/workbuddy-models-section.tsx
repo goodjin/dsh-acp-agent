@@ -38,6 +38,8 @@ export type WorkBuddyModelList = {
   readonly selected: readonly string[]
   /** 用户自己勾过没有（没勾过就是用默认那一份）。 */
   readonly custom: boolean
+  /** 默认那一份（挂载行里声明的）：「恢复默认」按它存。 */
+  readonly default?: readonly string[] | undefined
 }
 
 /** 文案座位。 */
@@ -77,6 +79,9 @@ export async function readWorkBuddyModels(options: {
     }),
     selected: selected.filter((id): id is string => typeof id === 'string'),
     custom: body['custom'] === true,
+    ...(Array.isArray(body['default'])
+      ? { default: body['default'].filter((id): id is string => typeof id === 'string') }
+      : {}),
   }
 }
 
@@ -99,10 +104,35 @@ export async function saveWorkBuddySelection(
   if (body['ok'] !== true) throw new Error('WorkBuddy 的勾选没存上')
 }
 
+/**
+ * 按搜索词过滤清单。
+ *
+ * 名字、id、倍率、描述都算——用户记得住的是「Hy4」「GLM」「x0.29」里的任意一个。
+ * @param models - 整份清单。
+ * @param query - 搜索词；空或只有空白等于不过滤。
+ * @returns 匹配的那些。
+ */
+export function filterModels(
+  models: readonly WorkBuddyListedModel[],
+  query: string,
+): WorkBuddyListedModel[] {
+  const needle = query.trim().toLowerCase()
+  if (needle === '') return [...models]
+  return models.filter(model => (
+    model.name.toLowerCase().includes(needle)
+    || model.id.toLowerCase().includes(needle)
+    || (model.credits ?? '').toLowerCase().includes(needle)
+    || (model.description ?? '').toLowerCase().includes(needle)
+  ))
+}
+
 /** 视图要什么。 */
 export type WorkBuddyModelsViewProps = {
   readonly list: WorkBuddyModelList
   readonly busy?: boolean | undefined
+  /** 搜索词。 */
+  readonly query?: string | undefined
+  readonly onQueryChange?: ((value: string) => void) | undefined
   readonly onToggle?: ((id: string, checked: boolean) => void) | undefined
   readonly onRestoreDefault?: (() => void) | undefined
   readonly t?: WorkBuddyModelsT | undefined
@@ -116,7 +146,9 @@ export type WorkBuddyModelsViewProps = {
 export function workBuddyModelsView(props: WorkBuddyModelsViewProps): ReactNode {
   const t = props.t ?? fallbackT
   const selected = new Set(props.list.selected)
-  const rows = props.list.models.map(model => {
+  const query = props.query ?? ''
+  const visible = filterModels(props.list.models, query)
+  const rows = visible.map(model => {
     const checked = selected.has(model.id)
     return (
       <label key={model.id} data-workbuddy-model-row={model.id} style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
@@ -131,7 +163,23 @@ export function workBuddyModelsView(props: WorkBuddyModelsViewProps): ReactNode 
         <code data-workbuddy-model-id="true">{model.id}</code>
         {model.credits === undefined
           ? null
-          : <span data-workbuddy-model-credits={true}>积分 {model.credits}</span>}
+          : (
+            <span
+              data-workbuddy-model-credits={true}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '1px 8px',
+                borderRadius: '999px',
+                fontVariantNumeric: 'tabular-nums',
+                whiteSpace: 'nowrap',
+                color: 'var(--dsw-alias-label-tertiary)',
+              }}
+            >
+              积分 {model.credits}
+            </span>
+          )}
         {model.supportsToolCall === false
           ? <span data-workbuddy-model-notool={true}>{t('workbuddy.models.noTool')}</span>
           : null}
@@ -141,6 +189,14 @@ export function workBuddyModelsView(props: WorkBuddyModelsViewProps): ReactNode 
 
   return (
     <div data-workbuddy-models="root">
+      <input
+        type="search"
+        data-workbuddy-models-search={true}
+        value={query}
+        placeholder={t('workbuddy.models.search')}
+        disabled={props.busy === true}
+        onChange={(event: { target: { value: string } }) => { props.onQueryChange?.(event.target.value) }}
+      />
       <p data-workbuddy-models-summary={true}>
         {t('workbuddy.models.summary', {
           total: props.list.models.length,
@@ -150,7 +206,11 @@ export function workBuddyModelsView(props: WorkBuddyModelsViewProps): ReactNode 
       {props.list.custom
         ? <span data-workbuddy-models-custom={true}>{t('workbuddy.models.custom')}</span>
         : <span data-workbuddy-models-default={true}>{t('workbuddy.models.defaultHint')}</span>}
-      <div data-workbuddy-models-list={true}>{rows}</div>
+      <div data-workbuddy-models-list={true}>
+        {rows.length === 0
+          ? <p data-workbuddy-models-empty={true}>{t('workbuddy.models.empty')}</p>
+          : rows}
+      </div>
       <button
         type="button"
         data-workbuddy-models-restore={true}
@@ -166,6 +226,7 @@ export function workBuddyModelsView(props: WorkBuddyModelsViewProps): ReactNode 
 /** 组件：取一次清单，勾一下存一次。 */
 export function WorkBuddyModelsSection(props: { readonly t?: WorkBuddyModelsT }): ReactNode {
   const [list, setList] = useState<WorkBuddyModelList>({ models: [], selected: [], custom: false })
+  const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
 
@@ -199,14 +260,15 @@ export function WorkBuddyModelsSection(props: { readonly t?: WorkBuddyModelsT })
 
   const restoreDefault = useCallback(() => {
     setBusy(true)
-    const defaults = list.models.map(model => model.id)
+    // 恢复成「默认那一份」，不是把六十几个全勾上。
+    const defaults = list.default ?? []
     void saveWorkBuddySelection(defaults)
       .then(() => reload())
       .catch((problem: unknown) => {
         setError(problem instanceof Error ? problem.message : String(problem))
         setBusy(false)
       })
-  }, [list.models, reload])
+  }, [list.default, reload])
 
   return (
     <div>
@@ -216,6 +278,8 @@ export function WorkBuddyModelsSection(props: { readonly t?: WorkBuddyModelsT })
       {workBuddyModelsView({
         list,
         busy,
+        query,
+        onQueryChange: (value: string) => { setQuery(value) },
         onToggle: (id, checked) => { toggle(id, checked) },
         onRestoreDefault: () => { restoreDefault() },
         ...(props.t === undefined ? {} : { t: props.t }),

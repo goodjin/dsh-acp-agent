@@ -41,6 +41,7 @@ export type ClientLocaleKey =
   | 'workbuddy.models.section.label' | 'workbuddy.models.summary'
   | 'workbuddy.models.custom' | 'workbuddy.models.defaultHint'
   | 'workbuddy.models.noTool' | 'workbuddy.models.restore'
+  | 'workbuddy.models.search' | 'workbuddy.models.empty'
   | 'qoder.section.label'
   | 'qoder.account.signedIn' | 'qoder.account.signedOut'
   | 'qoder.account.login' | 'qoder.account.refresh'
@@ -116,7 +117,9 @@ export const zh: Record<ClientLocaleKey, string> = {
   'workbuddy.models.custom': '当前用的是你自己勾的。',
   'workbuddy.models.defaultHint': '当前用的是默认那一份（还没自己勾过）。',
   'workbuddy.models.noTool': '不能带工具（只能聊天）',
-  'workbuddy.models.restore': '全部勾上并保存',
+  'workbuddy.models.restore': '恢复默认那一份',
+  'workbuddy.models.search': '搜模型名、id 或倍率',
+  'workbuddy.models.empty': '没有匹配上的模型。',
   'qoder.section.label': 'Qoder 国际版账号',
   'qoder.account.signedIn': '已登录 Qoder 国际版：',
   'qoder.account.signedOut': '未登录 Qoder 国际版：这一组模型发消息会被拒绝。',
@@ -196,7 +199,9 @@ export const en: Record<ClientLocaleKey, string> = {
   'workbuddy.models.custom': 'Using your own selection.',
   'workbuddy.models.defaultHint': 'Using the default selection (nothing ticked by hand yet).',
   'workbuddy.models.noTool': 'no tools (chat only)',
-  'workbuddy.models.restore': 'Tick all and save',
+  'workbuddy.models.restore': 'Restore the default set',
+  'workbuddy.models.search': 'Search by name, id or multiplier',
+  'workbuddy.models.empty': 'No model matches.',
   'qoder.section.label': 'Qoder international account',
   'qoder.account.signedIn': 'Signed in to Qoder international:',
   'qoder.account.signedOut': 'Not signed in to Qoder international: messages in this group will be refused.',
