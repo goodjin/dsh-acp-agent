@@ -462,3 +462,72 @@ git checkout main && git merge --no-ff feat/qoder-international
 
 请用户在设置页点「去登录」→ 浏览器里授权一次 → 回 DSH 选一个模型发一条消息，
 观察是否走通；把结果记回 `docs/agent-acp/qoder-global.md` 的「实测」一节。
+
+---
+
+## 执行记录（ledger）
+
+# SDD ledger — plan: docs/superpowers/plans/2026-11-05-qoder-global-agent.md
+
+## Pre-flight（共享接口）
+
+| 生产方 | 消费方 | 计划里的接口 | 实际发现 | 裁决 |
+|---|---|---|---|---|
+| Task 1 endpoints | Task 2/4/5 | `resolveEndpoints(env?)`、`QoderEndpoints` | 仓库里还没有这个模块（上个会话把地址写死在 `auth.ts` 的两个常量里） | 新建 `src/qoder/endpoints.ts`，把 `OPEN_API`/`MODEL_URL` 两个散常量收编进去 |
+| Task 2 auth | Task 3/4/5/7 | `startLogin(options?)`、`pollForToken`、`refreshCredential(old, options)`、`credentialOfPoll`、`credentialOfRefresh` | 上个会话的签名是 `startLogin()` 无参、`refreshCredential(old, fetchImpl)` 位置参数、解析函数叫 `credentialOf(value, machineId, refresh)` | 按计划改签名：`refreshCredential` 收 `{fetchImpl}`；解析拆成 poll/refresh 两个函数（字段名不同：poll 是 `token`，refresh 是 `device_token`） |
+| Task 3 credential | Task 6 | `resolveCredential({file?, rejectedToken?, fetchImpl?})` | 已存在，签名一致 | 沿用；补一条「目录已存在也收紧」的测试钉住 |
+| Task 4 models | Task 6 | `parseModels`、`fetchModels` | 不存在（上个会话把模型写死成 `auto`） | 新建 |
+| Task 5 chat | Task 6 | `buildQoderBody`、`streamQoder` | 存在，但地址写死、没有身份头、model 直接取 `request.model` | 按计划重写：地址来自端点、加 `Cosy-*` 头 |
+| Task 2 auth | Task 7 route | `startLogin`/`pollForToken` | route 里已 import 这两个 | 签名变化后同步改 route |
+
+Ruling: 上个会话留下的单一测试文件 `tests/qoder-global.spec.ts` 拆成按模块分文件（endpoints/auth/credential/models/chat/model/route），另留一份跨接线的集成断言 — 理由：一个文件里混着六个模块的断言，失败时定位不到是哪一层；代价是一次性改动量。
+
+Ruling: 保留 `agent: qoder-global` 这个 id（上个会话已用），CN 版仍是 `qoder` — 理由：两行并存且都已在 catalog 的 DISPLAY 表里；代价：若将来改 id，要同步 catalog.ts 与 health.ts。
+
+## 任务
+
+Task 1: complete (commits 048fa56..HEAD, tests: npx vitest run tests/qoder-endpoints.spec.ts → 5/5 pass)
+Task 2: complete (commits 00b3f17..HEAD, tests: npx vitest run tests/qoder-auth.spec.ts → 10/10 pass)
+Task 3: complete (commits 00b3f17..HEAD, tests: npx vitest run tests/qoder-credential.spec.ts → 7/7 pass)
+Task 3: Ruling: 续期后**不沿用旧的到期时间** — 旧的 expiresAt 跟着新令牌会让每个后来者都判过期、每个都去续一次（续期风暴）；代价：上游不告知新到期时间时，要等下一次 401 才发现令牌又失效了。
+Task 4: complete (commits 67db44f..HEAD, tests: npx vitest run tests/qoder-models.spec.ts → 5/5 pass)
+Task 5: complete (commits 67db44f..HEAD, tests: npx vitest run tests/qoder-chat.spec.ts → 9/9 pass)
+Task 6: complete (commits 67db44f..HEAD, tests: npx vitest run tests/qoder-model.spec.ts → 5/5 pass)
+Task 7: complete (commits 67db44f..HEAD, tests: npx vitest run tests/qoder-route.spec.ts → 5/5 pass; tests/qoder-account-section.spec.ts → 11/11 pass)
+Task 7: Ruling: 浏览器侧这一段按 WorkBuddy 的形状重写（纯函数 + 组件） — 上个会话写成了一个全是 hook 的组件，没法断言；代价：多了一个纯函数层。
+Task 7: Ruling: 路由测试直接注入依赖，不做模块 mock — 路由本来就接受 deps 注入，mock 整个模块反而会替换掉没打算替换的东西。
+
+## 最终整支审查（自审——本环境的子代理通道坏了）
+
+`delegate_skill` 报 `ctx.subagents.startContinuable is not a function`，与参考流程里
+「子代理 5 次全部启动失败」是同一个毛病：派不出独立审查者。按 executing-plans 的
+「没有子代理工具」分支，我自己按 code-reviewer.md 逐项过了一遍 diff。
+
+**Review Focus 五条逐一核对**：
+1. 令牌泄露：错误信息只带状态码；轮询/续期/清单/模型请求的失败路径都不带令牌；浏览器只拿
+   「登了没」与授权地址。→ 已由测试钉住。
+2. 目录已存在时权限不收紧：`prepare()` 先 mkdir 再 chmod 0700，测试造一个 0755 的目录
+   再写，断言目录 0700、文件 0600。→ 已钉住。
+3. 没登录时每轮都撞上游：模型行**先**解凭据（没登录直接报错），清单拉不到有 5 分钟退避。→ 已钉住。
+4. 断流当成成功：SSE 结束没有 finish_reason 就抛「中断」。→ 已钉住。
+5. CN 版 `acp-qoder` 被牵连：`qoder` 与 `qoder-global` 是两个 agent id；dialect 表、spawn
+   参数表都没碰 CN 那条。→ 已钉住。
+
+**自审查出的三处（都先写失败测试再改）**：
+- Important: 宿主说「登录没成」时，浏览器把那句话丢了 → 用户只看到「未登录」。已修
+  （readQoderSession 带出 reason）。
+- Important: 模型行名单在 factory 里写死成 zcode/minimaxi/workbuddy 三个，**漏了 qoder-global**
+  → 这一行可能被当成进程拉起，报错是「file 不能为空」，看不懂。已改成读同一张名单
+  （isModelBackedAgent），并加测试。
+- Minor→修: 这一行没配 stallMs，默认 120 秒的静默看门狗会在模型长时间思考时把这一轮杀掉
+  → 已配 300000（同 CN 版的做法）。
+
+**Final: minor (deferred): 端点覆盖要成组覆盖**（只换 QODER_MODEL_BASE 会让令牌与模型
+   请求不同源，表现为每请求 401）——文档已写明「成组覆盖」；没有做成运行时告警，
+   代价：踩到的人要自己读文档。
+
+**Final: Ruling: 不发 Cosy-MachineHostname 头** — worker 给推理请求带它，但那是机器名
+   遥测，服务端不靠它认请求；发它等于把本机名字报给厂商。代价：若服务端真的要求这个头，
+   真机回合会失败，届时补上即可（改动一行）。
+
+**Final review: self-review (no subagent tool)**
