@@ -67,6 +67,8 @@ export const EXPECTED_ROWS: readonly RowExpectation[] = [
   { id: 'acp-zcode', what: 'ZCode 预置' },
   { id: 'acp-minimax', what: 'MiniMax 预置' },
   { id: 'acp-qoder', what: 'Qoder 预置' },
+  { id: 'acp-agent-qoder-login', what: 'Qoder 国际版登录接口' },
+  { id: 'acp-qoder-global', what: 'Qoder 国际版模型预置' },
   { id: 'acp-workbuddy', what: 'WorkBuddy 预置' },
 ]
 

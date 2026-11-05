@@ -287,6 +287,7 @@ const DISPLAY: Readonly<Record<string, string>> = {
   codex: 'Codex',
   cursor: 'Cursor',
   qoder: 'Qoder',
+  'qoder-global': 'Qoder 国际版',
   zcode: 'ZCode',
   minimaxi: 'MiniMax',
   workbuddy: 'WorkBuddy',

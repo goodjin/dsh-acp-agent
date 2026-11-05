@@ -86,3 +86,7 @@ acp-agent health: 12/13 行已挂载；未挂载 1 行 — acp-agent-minimaxi-qu
 ## 许可证
 
 MIT
+
+## Qoder 国际版
+
+新增独立模型预置（DSH 执行工具），在设置的「Qoder 国际版账号」中浏览器授权。国内版 ACP 预置保留。当前仅提供 Auto；真实授权回合尚待验证。详见 [拆解、协议与验证边界](docs/agent-acp/qoder-global.md)。

@@ -71,6 +71,8 @@
     # WorkBuddy 登录与状态接口：浏览器在设置里点「登录」时，宿主向 WorkBuddy 的
     # 站点要一个授权地址并在那侧轮询令牌。令牌只留在宿主进程与本机一份 0600 的
     # 文件里，浏览器只拿到地址与「登了没」。
+    - id: acp-agent-qoder-login
+      name: '@goodjin2/dsh-acp-agent/qoder-login'
     - id: acp-agent-workbuddy-login
       name: '@goodjin2/dsh-acp-agent/workbuddy-login'
     # Mermaid 渲染已迁往 @goodjin2/dsh-chat-area（浏览器渲染 + /acp-agent/mermaid.js
@@ -586,3 +588,23 @@
                 - id: "deep-model"
                   name: "极致"
                   description: "优先深度与准确性，适合复杂分析与高要求任务（积分 x1.00）"
+
+    - id: acp-qoder-global
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: acp-qoder-global
+        name: Qoder 国际版
+        order: 56
+        plugins:
+          - id: acp-qoder-global-binding
+            name: '@goodjin2/dsh-acp-agent'
+            config:
+              presetId: acp-qoder-global
+              agent: qoder-global
+              hideFromRoster: true
+              # 独立浏览器登录；DSH 执行工具。保留国内版 acp-qoder。
+              # auto 是 worker 的默认选择；不复制国内版模型 ID/计费信息。
+              models:
+                - id: auto
+                  name: Auto
+                  description: Qoder 国际版 · 自动选择

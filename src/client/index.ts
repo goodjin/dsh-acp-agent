@@ -1,3 +1,4 @@
+import { registerQoderAccountSection } from './qoder-account-section.tsx'
 /**
  * Browser-side plugin entry for the ACP agent framework.
  *
@@ -220,6 +221,7 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
     if (reader !== undefined) face.catalogReader = reader
     registerAcpVisibilitySection(slots as never, face as never, () => t('acpVisibility.label'))
     registerWorkBuddyAccountSection(slots as never, () => t('workbuddy.section.label'), t)
+    registerQoderAccountSection(slots as never)
 
     return () => {}
   }, say)
