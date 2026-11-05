@@ -18,7 +18,7 @@ import {
   workBuddyAccountView,
   workBuddySettingsView,
 } from '../src/client/workbuddy-account-section.tsx'
-import { workBuddyModelsView } from '../src/client/workbuddy-models-section.tsx'
+import { modelChecklistView } from '../src/client/model-checklist.tsx'
 import type { WorkBuddyAccountState } from '../src/client/workbuddy-account-section.tsx'
 
 /** 按顺序收元素树里的文本。 */
@@ -183,14 +183,14 @@ describe('排版', () => {
   })
 
   it('模型列表自己那部分也是一件一件分开排的', () => {
-    const view = workBuddyModelsView({
+    const view = modelChecklistView({
       list: {
         models: [{ id: 'glm-5.3', name: 'GLM-5.3', credits: 'x0.69', supportsToolCall: true }],
         selected: ['glm-5.3'],
         custom: false,
       },
     })
-    const root = find(view, props => props['data-workbuddy-models'] === 'root')
+    const root = find(view, props => props['data-model-checklist'] === 'root')
     const style = root?.props?.style as Record<string, unknown> | undefined
     expect(style?.['gap']).toBeDefined()
     expect(style?.['flexDirection']).toBe('column')
@@ -201,7 +201,7 @@ describe('排版', () => {
     const children = (view as ReactElement & { props?: { children?: unknown } }).props?.children
     const list = Array.isArray(children) ? children : [children]
     expect((list[0] as ReactElement & { props?: Record<string, unknown> })?.props?.['data-workbuddy-account']).toBe('root')
-    expect((list[1] as ReactElement & { props?: Record<string, unknown> })?.props?.['data-workbuddy-models']).toBe('root')
+    expect((list[1] as ReactElement & { props?: Record<string, unknown> })?.props?.['data-model-checklist']).toBe('root')
   })
 })
 

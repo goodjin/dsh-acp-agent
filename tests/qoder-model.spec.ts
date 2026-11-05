@@ -57,7 +57,8 @@ const config = {
   presets: {
     // 清单缓存按 preset 记，所以这两条各用各的 id。
     global: { agent: 'qoder-global', models: [{ id: 'auto', name: 'Auto' }] },
-    global2: { agent: 'qoder-global', models: [{ id: 'auto', name: 'Auto' }] },
+    global2: { agent: 'qoder-global', models: [{ id: 'qwen3.8-max', name: 'Qwen 3.8 Max' }] },
+    global4: { agent: 'qoder-global', models: [{ id: 'auto', name: 'Auto' }] },
     global3: { agent: 'qoder-global', models: [{ id: 'auto', name: 'Auto' }] },
     cn: { agent: 'qoder', models: [{ id: 'qwen3.8-max', name: 'Qwen 3.8 Max' }] },
   },
@@ -97,6 +98,13 @@ describe('Qoder 国际版的模型行', () => {
     expect(reports).toHaveLength(1)
     expect(reports[0]?.presetId).toBe('global2')
     expect(reports[0]?.models.map(model => model.id)).toEqual(['qwen3.8-max'])
+  })
+
+  it('这一行只提供声明过的模型（白名单）：站点清单里没声明的不进账本', async () => {
+    const reports: { presetId: string; models: readonly { id: string; name: string }[] }[] = []
+    const stream = qoderModelStream(config, { onRuntimeModels: (presetId, models) => { reports.push({ presetId, models }) } })
+    await drain(stream('global4', request))
+    expect(reports[0]?.models.map(model => model.id)).toEqual(['auto'])
   })
 
   it('清单拉不到不影响发消息，但也不会每轮都去撞一次上游', async () => {

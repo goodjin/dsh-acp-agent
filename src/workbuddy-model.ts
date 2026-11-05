@@ -11,13 +11,13 @@
 
 import type { CatalogTurnRequest } from './catalog.ts'
 import type { PresetConfig } from './registry.ts'
+import { readSelection } from './model-selection.ts'
 import {
   attachAccount,
   credentialResolver,
   fetchAccount,
   forceRefreshCredential,
   loadCatalog,
-  readSelection,
   resolveEndpoints,
   streamWorkBuddy,
 } from './workbuddy/index.ts'
@@ -65,7 +65,7 @@ export function invalidateWorkBuddyCatalog(): void {
 async function effectiveDeclared(
   declared: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[],
 ): Promise<readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[]> {
-  const selected = await readSelection().catch(() => undefined)
+  const selected = await readSelection('workbuddy').catch(() => undefined)
   if (selected === undefined) return declared
   // 勾选只给 id：名字与描述从站点那份清单里补（勾了但站点没有的，按 id 显示）。
   return selected.map(id => ({ id, name: id }))

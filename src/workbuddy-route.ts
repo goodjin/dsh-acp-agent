@@ -18,7 +18,7 @@ import { fetchAccount, pollForToken, startLogin } from './workbuddy/auth.ts'
 import type { WorkBuddyAccount, WorkBuddyCredential, WorkBuddyLoginStart } from './workbuddy/auth.ts'
 import { attachAccount, credentialFilePath, readStoredCredential, writeStoredCredential } from './workbuddy/credential.ts'
 import { loadCatalog } from './workbuddy/models.ts'
-import { readSelection, writeSelection } from './workbuddy/selection.ts'
+import { readSelection, writeSelection } from './model-selection.ts'
 import { resolveEndpoints } from './workbuddy/endpoints.ts'
 import { ensureWorkBuddyModels, invalidateWorkBuddyCatalog, workBuddyDeclaredModelIds } from './workbuddy-model.ts'
 
@@ -113,8 +113,8 @@ export function registerWorkBuddyRoutes(ctx: WorkBuddyRouteContext, deps: WorkBu
     const loaded = await loadCatalog({ credential }).catch(() => undefined)
     return loaded?.models ?? []
   })
-  const selectedIds = deps.readSelection ?? (() => readSelection(file))
-  const saveSelection = deps.writeSelection ?? ((ids: readonly string[]) => writeSelection(ids, file))
+  const selectedIds = deps.readSelection ?? (() => readSelection('workbuddy', file))
+  const saveSelection = deps.writeSelection ?? ((ids: readonly string[]) => writeSelection('workbuddy', ids, file))
   const saveAccount = deps.attachAccount ?? ((who: WorkBuddyAccount) => attachAccount(who, file))
 
   ctx.effect(() => {
