@@ -46,9 +46,11 @@ const EDITOR_SCRIPT = `(() => {
     const r = el.getBoundingClientRect()
     return r.width > 20 && r.height > 5 && r.bottom > 0 && r.top < window.innerHeight
   }
+  // 工作模式（agent 形态）用的是 tiptap 的 contenteditable；对话模式用一个
+  // textarea。优先取前者：那是我们要驱动的那种形态。
   const textarea = document.querySelector('textarea')
   const editable = document.querySelector('[contenteditable=true]')
-  const el = visible(textarea) ? textarea : (visible(editable) ? editable : (textarea || editable))
+  const el = visible(editable) ? editable : (visible(textarea) ? textarea : (editable || textarea))
   if (!el) return null
   el.scrollIntoView({ block: 'center' })
   const r = el.getBoundingClientRect()
@@ -74,6 +76,34 @@ const SEND_SCRIPT = `(() => {
   if (candidates.length === 0) return null
   candidates.sort((a, b) => b.left - a.left)
   return center(candidates[0].el)
+})()`
+
+/**
+ * The mode tabs on the chat home: 对话 (compact) and 工作 (agent-shaped).
+ *
+ * 豆包 answers the same question in two shapes (measured 2026-11-05): 对话 gives
+ * one flat line with a search card and a compact link list; 工作 gives the
+ * agent's step titles, its narration, and an answer with summaries and
+ * sources. We drive 工作, so this switches to it.
+ */
+const WORK_MODE_SCRIPT = `(() => {
+  const tabs = [...document.querySelectorAll('span,div,button')].filter(e => (e.innerText || '').trim() === '工作')
+  const el = tabs[tabs.length - 1]
+  if (!el) return { found: false }
+  el.click()
+  return { found: true }
+})()`
+
+/** Start a fresh 豆包 conversation (the chat home, where the mode tabs live). */
+const NEW_CHAT_SCRIPT = `(() => {
+  const els = [...document.querySelectorAll('span,div,a,button')].filter(e => {
+    const text = (e.innerText || '').trim()
+    return text === '新对话' || text.startsWith('新对话') || text.startsWith('新工作任务')
+  })
+  const el = els[els.length - 1]
+  if (!el) return { found: false }
+  el.click()
+  return { found: true }
 })()`
 
 /** Where the stop control is, while the model is still generating. */
@@ -214,7 +244,7 @@ export class DoubaoBrowser {
    * about it; a programmatically assigned value does not survive.
    */
   async sendPrompt(text: string): Promise<void> {
-    const editor = await evaluate<Point | null>(this.connection, this.session.sessionId, EDITOR_SCRIPT)
+    const editor = await this.waitForEditor()
     if (!editor) throw new Error('豆包页面上找不到输入框（输入区可能还在加载）')
     await this.click(editor)
     await this.connection.send('Input.insertText', { text }, this.session.sessionId)
@@ -222,6 +252,43 @@ export class DoubaoBrowser {
     const send = await evaluate<Point | null>(this.connection, this.session.sessionId, SEND_SCRIPT)
     if (!send) throw new Error('豆包页面上找不到发送按钮')
     await this.click(send)
+  }
+
+  /**
+   * Switch the chat to 工作模式.
+   *
+   * The mode tabs only exist on the chat home, and a conversation keeps the
+   * mode it started in — so this is what a new session does before its first
+   * prompt.
+   */
+  async enterWorkMode(): Promise<boolean> {
+    const result = await evaluate<{ found: boolean }>(this.connection, this.session.sessionId, WORK_MODE_SCRIPT)
+    if (result.found) await new Promise(resolve => setTimeout(resolve, 1500))
+    return result.found
+  }
+
+  /** Start a fresh 豆包 conversation. */
+  async startNewChat(): Promise<boolean> {
+    const result = await evaluate<{ found: boolean }>(this.connection, this.session.sessionId, NEW_CHAT_SCRIPT)
+    if (result.found) await new Promise(resolve => setTimeout(resolve, 3000))
+    return result.found
+  }
+
+  /**
+   * Wait for the input box to show up.
+   *
+   * The app takes a moment to render its input area after the chat page
+   * appears, and the page can be attached to before that (measured
+   * 2026-11-05: the first attempt right after startup found no editor).
+   */
+  private async waitForEditor(timeoutMs = 20_000): Promise<Point | null> {
+    const deadline = Date.now() + timeoutMs
+    for (;;) {
+      const editor = await evaluate<Point | null>(this.connection, this.session.sessionId, EDITOR_SCRIPT)
+      if (editor) return editor
+      if (Date.now() > deadline) return null
+      await new Promise(resolve => setTimeout(resolve, 300))
+    }
   }
 
   /** Click the stop control, if the model is still generating. */
