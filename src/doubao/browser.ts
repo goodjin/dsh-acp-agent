@@ -214,7 +214,7 @@ export class DoubaoBrowser {
    * about it; a programmatically assigned value does not survive.
    */
   async sendPrompt(text: string): Promise<void> {
-    const editor = await evaluate<Point | null>(this.connection, this.session.sessionId, EDITOR_SCRIPT)
+    const editor = await this.waitForEditor()
     if (!editor) throw new Error('豆包页面上找不到输入框（输入区可能还在加载）')
     await this.click(editor)
     await this.connection.send('Input.insertText', { text }, this.session.sessionId)
@@ -222,6 +222,23 @@ export class DoubaoBrowser {
     const send = await evaluate<Point | null>(this.connection, this.session.sessionId, SEND_SCRIPT)
     if (!send) throw new Error('豆包页面上找不到发送按钮')
     await this.click(send)
+  }
+
+  /**
+   * Wait for the input box to show up.
+   *
+   * The app takes a moment to render its input area after the chat page
+   * appears, and the page can be attached to before that (measured
+   * 2026-11-05: the first attempt right after startup found no editor).
+   */
+  private async waitForEditor(timeoutMs = 20_000): Promise<Point | null> {
+    const deadline = Date.now() + timeoutMs
+    for (;;) {
+      const editor = await evaluate<Point | null>(this.connection, this.session.sessionId, EDITOR_SCRIPT)
+      if (editor) return editor
+      if (Date.now() > deadline) return null
+      await new Promise(resolve => setTimeout(resolve, 300))
+    }
   }
 
   /** Click the stop control, if the model is still generating. */
