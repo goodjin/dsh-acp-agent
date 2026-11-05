@@ -38,7 +38,7 @@ vi.mock('../src/qoder/index.ts', async (importOriginal) => {
     fetchModels: async () => {
       fetches += 1
       if (modelListFails) throw new Error('no model list')
-      return [{ id: 'qwen3.8-max', name: 'Qwen 3.8 Max', efforts: ['low', 'high'] }]
+      return [{ id: 'auto', name: 'Qwen 3.8 Max', efforts: ['low', 'high'] }]
     },
     streamQoder: (request: Captured, deps: { maxTokensField?: string }) => {
       captured.model = request.model
@@ -57,16 +57,16 @@ const config = {
   presets: {
     // 清单缓存按 preset 记，所以这两条各用各的 id。
     global: { agent: 'qoder-global', models: [{ id: 'auto', name: 'Auto' }] },
-    global2: { agent: 'qoder-global', models: [{ id: 'qwen3.8-max', name: 'Qwen 3.8 Max' }] },
+    global2: { agent: 'qoder-global', models: [{ id: 'auto', name: 'Qwen 3.8 Max' }] },
     global4: { agent: 'qoder-global', models: [{ id: 'auto', name: 'Auto' }] },
     global3: { agent: 'qoder-global', models: [{ id: 'auto', name: 'Auto' }] },
-    cn: { agent: 'qoder', models: [{ id: 'qwen3.8-max', name: 'Qwen 3.8 Max' }] },
+    cn: { agent: 'qoder', models: [{ id: 'auto', name: 'Qwen 3.8 Max' }] },
   },
 } as unknown as PresetConfig
 
 const request = {
   provider: 'acp:global',
-  model: 'qwen3.8-max',
+  model: 'auto',
   messages: [{ role: 'user', content: [{ type: 'text', text: '你好' }] }],
   tools: [],
 }
@@ -88,7 +88,7 @@ describe('Qoder 国际版的模型行', () => {
   it('把这一轮的历史原样发给模型', async () => {
     await drain(modelPluginStream(config)('global', request))
     expect(captured.messages).toEqual(request.messages)
-    expect(captured.model).toBe('qwen3.8-max')
+    expect(captured.model).toBe('auto')
   })
 
   it('拉到清单后写进目录的账本', async () => {
@@ -97,7 +97,7 @@ describe('Qoder 国际版的模型行', () => {
     await drain(stream('global2', request))
     expect(reports).toHaveLength(1)
     expect(reports[0]?.presetId).toBe('global2')
-    expect(reports[0]?.models.map(model => model.id)).toEqual(['qwen3.8-max'])
+    expect(reports[0]?.models.map(model => model.id)).toEqual(['auto'])
   })
 
   it('这一行只提供声明过的模型（白名单）：站点清单里没声明的不进账本', async () => {
@@ -120,7 +120,7 @@ describe('Qoder 国际版的模型行', () => {
   it('清单还没拉到时，内置模型也用对最大 token 字段名', async () => {
     modelListFails = true
     const stream = qoderModelStream(config)
-    await drain(stream('global3', { ...request, model: 'qwen3.8-max' } as never))
+    await drain(stream('global3', { ...request, model: 'auto' } as never))
     expect(captured.maxTokensField).toBe('max_completion_tokens')
     modelListFails = false
   })

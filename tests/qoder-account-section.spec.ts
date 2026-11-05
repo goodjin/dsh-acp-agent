@@ -196,10 +196,12 @@ describe('排版', () => {
 })
 
 describe('视图', () => {
-  it('登上了显示是谁，登录按钮灰着（不藏——两个按钮是一组）', () => {
+  it('登上了显示是谁，登录按钮变成「重新登录」（不藏——两个按钮是一组）', () => {
     const view = qoderAccountView({ state: SIGNED_IN })
     expect(textOf(view)).toContain('某人')
-    expect(find(view, props => props['data-qoder-login'] === true)?.props?.disabled).toBe(true)
+    const login = find(view, props => props['data-qoder-login'] === true)
+    expect(login?.props?.disabled).toBe(false)
+    expect(textOf(login)).toContain('重新登录')
   })
 
   it('没登录给出登录按钮', () => {

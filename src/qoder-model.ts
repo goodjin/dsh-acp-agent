@@ -40,7 +40,7 @@ const modelListAt = new Map<string, { at: number; ok: boolean }>()
 const modelEfforts = new Map<string, readonly string[]>()
 
 /** 每一行声明了哪些模型（按 preset 记，跨 preset 共用）。 */
-const declaredIds = new Map<string, readonly string[]>()
+const declaredModels = new Map<string, readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[]>()
 
 /** 每一行的清单发布口（写进目录的运行时账本）。 */
 const publishers = new Map<string, {
@@ -60,7 +60,18 @@ for (const [id, model] of Object.entries(BUILTIN_MODELS)) modelMaxTokensField.se
  * 设置界面要显示「当前生效的是哪些」——用户还没自己勾过时，生效的就是这一份。
  */
 export function qoderDeclaredModelIds(): readonly string[] {
-  const first = [...declaredIds.values()][0]
+  const first = [...declaredModels.values()][0]
+  return first === undefined ? [] : first.map(entry => entry.id)
+}
+
+/**
+ * 声明的那份模型（带名字）。
+ *
+ * 站点的整份清单要 Qoder 自己的签名才拿得到（见 docs/agent-acp/qoder-global.md），
+ * 所以设置里的列表在拿不到站点清单时退回这一份——空着更没用。
+ */
+export function qoderDeclaredModels(): readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[] {
+  const first = [...declaredModels.values()][0]
   return first === undefined ? [] : [...first]
 }
 
@@ -132,7 +143,11 @@ export function qoderModelStream(
   // 登记默认清单与发布口：设置界面要显示「默认勾了哪些」，勾完要立刻重发清单。
   for (const [presetId, preset] of Object.entries(config.presets)) {
     if (preset.agent !== 'qoder-global') continue
-    declaredIds.set(presetId, (preset.models ?? []).map(model => model.id))
+    declaredModels.set(presetId, (preset.models ?? []).map(model => ({
+      id: model.id,
+      name: model.name,
+      ...(model.description === undefined ? {} : { description: model.description }),
+    })))
     publishers.set(presetId, {
       declared: preset.models ?? [],
       publish: models => { deps?.onRuntimeModels?.(presetId, models) },

@@ -150,3 +150,25 @@ worker 内置的默认模型是 **`qwen3.8-max`**（`Qwen 3.8 Max`），它的
 - 勾完立刻重发清单，选择器下一次打开就是新的那份。
 - 清单里没勾的模型**不进账本**：这一行只提供勾上的那些（与 WorkBuddy 同一套规矩）。
 - 宿主那边的路由：`GET /acp-agent/qoder-global/session`、`POST /acp-agent/qoder-global/login`、`GET`/`POST /acp-agent/qoder-global/models`。
+
+## 模型清单：站点那份要 Qoder 自己的签名（核对时间 2026-11-05）
+
+我们**拿不到** Qoder 站点那份完整的模型清单，实测过程：
+
+- 地址是 `https://api3.qoder.sh/api/v2/model/list?Encode=1`，但真正要打的是
+  `https://api3.qoder.sh/algo/api/v2/model/list?Encode=1`——少了 `/algo` 这一段
+  直接 404（SDK 里拼地址的 `GK()` 会加它）。
+- 加上 `/algo` 之后是 **403 `Signature invalid`**：这一发请求要带 Qoder 自己
+  生成的签名，而签名逻辑在他们的**原生模块**里（`qodercontext_prepareRequest`），
+  不是 JS 能复刻的。
+- 桌面版拿得到，是因为它自带那份原生 SDK。
+- 应用缓存的清单（`~/.qoder/.models/<uid>/catalog-v7`）是**加密**的（Electron 的
+  safe storage），我们读不了。
+
+所以设置里的清单在拿不到站点清单时**退回预置声明的那一份**（目前只有 `auto`）。
+`auto` 是服务端认的 id：2026-11-05 实测 `qwen3.8-max` 会回
+`invalid_model_error: Unsupported model`，而 `auto` 被接受（后端偶发
+`All backends failed`，与 id 无关）。
+
+**推理请求本身不需要签名**：`{api2-v2}/model/v1/chat/completions` 用我们的设备令牌
+就能通（`Cosy-Version` / `Cosy-ClientType` / `Cosy-MachineOS` 三个头就够）。

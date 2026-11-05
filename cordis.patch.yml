@@ -631,6 +631,10 @@
               # 为准；这里声明的是「没登录、或清单拉不到」时显示的那一项——worker
               # 内置的默认模型。不复制国内版的模型 ID 与计费信息。
               models:
-                - id: qwen3.8-max
-                  name: Qwen 3.8 Max
+                # 服务端只认 `auto`（它自己解析到具体模型）：2026-11-05 实测
+                # qwen3.8-max 回 `invalid_model_error: Unsupported model`。
+                # 整份清单要靠 Qoder 自己的签名才拿得到（见 docs/agent-acp/qoder-global.md），
+                # 所以这里只声明这个确实能用的。
+                - id: auto
+                  name: Auto
                   description: Qoder 国际版 · 默认模型

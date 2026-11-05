@@ -50,7 +50,9 @@ export const BUILTIN_MODELS: Readonly<Record<string, {
   readonly displayName: string
   readonly maxTokensField: 'max_tokens' | 'max_completion_tokens'
 }>> = {
-  'qwen3.8-max': { displayName: 'Qwen 3.8 Max', maxTokensField: 'max_completion_tokens' },
+  // 服务端只认 `auto`（它自己解析到具体模型）：2026-11-05 实测 qwen3.8-max 会回
+  // `invalid_model_error: Unsupported model`。
+  'auto': { displayName: 'Auto', maxTokensField: 'max_completion_tokens' },
 }
 
 /**
