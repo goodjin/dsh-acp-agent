@@ -19,5 +19,6 @@ export {
   writeStoredCredential,
 } from './credential.ts'
 export type { CredentialStoreOptions } from './credential.ts'
+export { clearSelection, readSelection, selectionFilePath, writeSelection } from './selection.ts'
 export { fetchModels, loadCatalog, parseModels, readDesktopCatalog } from './models.ts'
 export type { WorkBuddyCatalog, WorkBuddyCatalogSource, WorkBuddyModel } from './models.ts'

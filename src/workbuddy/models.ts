@@ -34,6 +34,8 @@ export type WorkBuddyModel = {
   readonly efforts?: readonly string[] | undefined
   readonly supportsToolCall?: boolean | undefined
   readonly supportsImages?: boolean | undefined
+  /** 官方积分倍率（站点给的原值，如 `x0.29`）。 */
+  readonly credits?: string | undefined
 }
 
 /** 清单从哪来的。 */
@@ -69,6 +71,7 @@ export function parseModels(payload: unknown): WorkBuddyModel[] {
     const efforts = effortsOf(model)
     const supportsToolCall = typeof model['supportsToolCall'] === 'boolean' ? model['supportsToolCall'] : undefined
     const supportsImages = typeof model['supportsImages'] === 'boolean' ? model['supportsImages'] : undefined
+    const credits = typeof model['credits'] === 'string' ? model['credits'] : undefined
     parsed.push({
       id,
       name,
@@ -77,6 +80,7 @@ export function parseModels(payload: unknown): WorkBuddyModel[] {
       ...(efforts === undefined ? {} : { efforts }),
       ...(supportsToolCall === undefined ? {} : { supportsToolCall }),
       ...(supportsImages === undefined ? {} : { supportsImages }),
+      ...(credits === undefined ? {} : { credits }),
     })
   }
   return parsed

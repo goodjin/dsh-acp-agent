@@ -14,6 +14,7 @@ import {
   apply,
   registerWorkBuddyRoutes,
   WORKBUDDY_LOGIN_ROUTE_PATH,
+  WORKBUDDY_MODELS_ROUTE_PATH,
   WORKBUDDY_SESSION_ROUTE_PATH,
 } from '../src/workbuddy-route.ts'
 import type { WorkBuddyRouteContext } from '../src/workbuddy-route.ts'
@@ -83,12 +84,17 @@ async function call(
   routes: readonly CapturedRoute[],
   path: string,
   method: string,
-  options: { rejection?: number } = {},
+  options: { rejection?: number; body?: unknown } = {},
 ): Promise<Call> {
   const route = routes.find(candidate => candidate.path === path)
   if (route === undefined) throw new Error(`no route for ${path}`)
   const calls: Call[] = []
-  const req = { method, headers: { cookie: 'dsh-session=good' } } as unknown as IncomingMessage
+  const payload = options.body === undefined ? '' : JSON.stringify(options.body)
+  const req = Object.assign(
+    { method, headers: { cookie: 'dsh-session=good' } },
+    // 请求体按异步可迭代读（宿主转发的请求就是这样过来的）。
+    { [Symbol.asyncIterator]: async function* () { if (payload !== '') yield Buffer.from(payload) } },
+  ) as unknown as IncomingMessage
   await route.handler(req, fakeResponse(calls))
   return calls[0] ?? { status: 0, body: '' }
 }
@@ -124,12 +130,84 @@ describe('登录之后', () => {
   })
 })
 
+describe('模型清单与勾选', () => {
+  it('给的是整份清单（不只勾了的），带着倍率与能不能用工具', async () => {
+    const { ctx, routes } = rig()
+    registerWorkBuddyRoutes(ctx, {
+      loadCatalog: async () => [
+        { id: 'glm-5.3', name: 'GLM-5.3', description: '旗舰（积分 x0.69）', credits: 'x0.69', supportsToolCall: true },
+        { id: 'hy4free', name: 'Hy4', description: '免费（积分 x0.00）', credits: 'x0.00', supportsToolCall: true },
+      ],
+      readSelection: async () => ['glm-5.3'],
+    })
+    const result = await call(routes, WORKBUDDY_MODELS_ROUTE_PATH, 'GET')
+    expect(result.status).toBe(200)
+    const body = JSON.parse(result.body) as { ok: boolean; models: unknown[]; selected: unknown }
+    expect(body.ok).toBe(true)
+    expect(body.models).toHaveLength(2)
+    expect(body.selected).toEqual(['glm-5.3'])
+  })
+
+  it('没自己勾过时：给的是默认那一份，并说明还没自定义', async () => {
+    const { ctx, routes } = rig()
+    registerWorkBuddyRoutes(ctx, {
+      loadCatalog: async () => [{ id: 'glm-5.3', name: 'GLM-5.3' }],
+      readSelection: async () => undefined,
+    })
+    const result = await call(routes, WORKBUDDY_MODELS_ROUTE_PATH, 'GET')
+    const body = JSON.parse(result.body) as { selected: string[]; custom: boolean }
+    expect(body.custom).toBe(false)
+    expect(Array.isArray(body.selected)).toBe(true)
+  })
+
+  it('自己勾过时：给的就是勾的那份，并说明已自定义', async () => {
+    const { ctx, routes } = rig()
+    registerWorkBuddyRoutes(ctx, {
+      loadCatalog: async () => [{ id: 'glm-5.3', name: 'GLM-5.3' }],
+      readSelection: async () => ['hy4free'],
+    })
+    const result = await call(routes, WORKBUDDY_MODELS_ROUTE_PATH, 'GET')
+    const body = JSON.parse(result.body) as { selected: string[]; custom: boolean }
+    expect(body.custom).toBe(true)
+    expect(body.selected).toEqual(['hy4free'])
+  })
+
+  it('勾完存下来，并立刻重发清单：选择器下一次打开就是新的', async () => {
+    const { ctx, routes } = rig()
+    const saved: string[][] = []
+    let refreshed = 0
+    registerWorkBuddyRoutes(ctx, {
+      loadCatalog: async () => [{ id: 'glm-5.3', name: 'GLM-5.3' }],
+      writeSelection: async (ids) => { saved.push([...ids]) },
+      ensureModels: async () => { refreshed += 1 },
+    })
+    const result = await call(routes, WORKBUDDY_MODELS_ROUTE_PATH, 'POST', { body: { ids: ['glm-5.3', 'hy4free'] } })
+    expect(result.status).toBe(200)
+    expect(JSON.parse(result.body)).toEqual({ ok: true, selected: ['glm-5.3', 'hy4free'] })
+    expect(saved).toEqual([['glm-5.3', 'hy4free']])
+    expect(refreshed).toBe(1)
+  })
+
+  it('不支持工具调用的模型也在清单里：用户看得见、也能勾', async () => {
+    const { ctx, routes } = rig()
+    registerWorkBuddyRoutes(ctx, {
+      loadCatalog: async () => [{ id: 'kling-video-v3', name: 'Kling-Video-V3', supportsToolCall: false }],
+      readSelection: async () => undefined,
+    })
+    const result = await call(routes, WORKBUDDY_MODELS_ROUTE_PATH, 'GET')
+    expect(JSON.parse(result.body).models).toEqual([
+      { id: 'kling-video-v3', name: 'Kling-Video-V3', supportsToolCall: false },
+    ])
+  })
+})
+
 describe('路由', () => {
   it('两条路由挂在约定的路径上', () => {
     const { ctx, routes } = rig()
     registerWorkBuddyRoutes(ctx)
     expect(routes.map(route => route.path).sort()).toEqual([
       WORKBUDDY_LOGIN_ROUTE_PATH,
+      WORKBUDDY_MODELS_ROUTE_PATH,
       WORKBUDDY_SESSION_ROUTE_PATH,
     ].sort())
   })
@@ -141,6 +219,7 @@ describe('路由', () => {
     apply(ctx, { startLogin: async () => ({ state: 'x', url: 'https://x.example' }) })
     expect(routes.map(route => route.path).sort()).toEqual([
       WORKBUDDY_LOGIN_ROUTE_PATH,
+      WORKBUDDY_MODELS_ROUTE_PATH,
       WORKBUDDY_SESSION_ROUTE_PATH,
     ].sort())
   })

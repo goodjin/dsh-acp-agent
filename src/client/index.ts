@@ -29,6 +29,7 @@ import type { QuotaPillServices } from './quota-pill.ts'
 import { registerInterruptedTurnRecovery } from './interrupted-turn-recovery.ts'
 import { registerAcpVisibilitySection } from './acp-visibility-panel.tsx'
 import { registerWorkBuddyAccountSection } from './workbuddy-account-section.tsx'
+import { registerWorkBuddyModelsSection } from './workbuddy-models-section.tsx'
 import { startAcpVisibility } from './acp-visibility.ts'
 import type { AcpVisibilityStore } from './acp-visibility.ts'
 import { createAcpCatalogStore } from './acp-visibility-catalog.ts'
@@ -221,6 +222,7 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
     if (reader !== undefined) face.catalogReader = reader
     registerAcpVisibilitySection(slots as never, face as never, () => t('acpVisibility.label'))
     registerWorkBuddyAccountSection(slots as never, () => t('workbuddy.section.label'), t)
+    registerWorkBuddyModelsSection(slots as never, () => t('workbuddy.models.section.label'), t)
     registerQoderAccountSection(slots as never, () => t('qoder.section.label'), t)
 
     return () => {}
