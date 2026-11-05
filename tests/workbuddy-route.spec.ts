@@ -14,6 +14,7 @@ import {
   apply,
   registerWorkBuddyRoutes,
   WORKBUDDY_CHECKIN_ROUTE_PATH,
+  WORKBUDDY_CREDITS_ROUTE_PATH,
   WORKBUDDY_LOGIN_ROUTE_PATH,
   WORKBUDDY_MODELS_ROUTE_PATH,
   WORKBUDDY_SESSION_ROUTE_PATH,
@@ -208,6 +209,7 @@ describe('路由', () => {
     registerWorkBuddyRoutes(ctx)
     expect(routes.map(route => route.path).sort()).toEqual([
       WORKBUDDY_CHECKIN_ROUTE_PATH,
+      WORKBUDDY_CREDITS_ROUTE_PATH,
       WORKBUDDY_LOGIN_ROUTE_PATH,
       WORKBUDDY_MODELS_ROUTE_PATH,
       WORKBUDDY_SESSION_ROUTE_PATH,
@@ -221,6 +223,7 @@ describe('路由', () => {
     apply(ctx, { startLogin: async () => ({ state: 'x', url: 'https://x.example' }) })
     expect(routes.map(route => route.path).sort()).toEqual([
       WORKBUDDY_CHECKIN_ROUTE_PATH,
+      WORKBUDDY_CREDITS_ROUTE_PATH,
       WORKBUDDY_LOGIN_ROUTE_PATH,
       WORKBUDDY_MODELS_ROUTE_PATH,
       WORKBUDDY_SESSION_ROUTE_PATH,
@@ -417,5 +420,50 @@ describe('每日签到', () => {
     expect(started).toHaveLength(1)
     for (const cleanup of cleanups) cleanup()
     expect(stopped).toHaveLength(1)
+  })
+})
+
+
+describe('套餐与积分', () => {
+  it('GET 给的是胶囊要用的形状：套餐名 + 积分', async () => {
+    const { ctx, routes } = rig()
+    registerWorkBuddyRoutes(ctx, {
+      credits: async () => ({
+        plan: '体验版',
+        remaining: 1766.43,
+        capacity: 1800,
+        used: 33.57,
+        groups: [
+          { kind: 'plan_base', name: '套餐基础积分', total: 500, remain: 500, used: 0 },
+          { kind: 'benefit', name: '平台奖励积分', total: 1300, remain: 1266.43, used: 33.57 },
+        ],
+      }),
+    })
+    const result = await call(routes, WORKBUDDY_CREDITS_ROUTE_PATH, 'GET')
+    expect(result.status).toBe(200)
+    const body = JSON.parse(result.body)
+    expect(body.ok).toBe(true)
+    expect(body.quota.tier).toBe('体验版')
+    expect(body.quota.credit.remaining).toBeCloseTo(1766.43, 2)
+    expect(body.quota.credit.limit).toBeCloseTo(1800, 2)
+    expect(body.quota.credit.groups).toHaveLength(2)
+    expect(body.quota.credit.groups[1].name).toBe('平台奖励积分')
+  })
+
+  it('没登录时说的是「需要登录」', async () => {
+    const { ctx, routes } = rig()
+    registerWorkBuddyRoutes(ctx, { credits: async () => undefined })
+    const result = await call(routes, WORKBUDDY_CREDITS_ROUTE_PATH, 'GET')
+    expect(result.status).toBe(200)
+    const body = JSON.parse(result.body)
+    expect(body.ok).toBe(false)
+    expect(String(body.error)).toContain('登录')
+  })
+
+  it('方法不对时说清楚', async () => {
+    const { ctx, routes } = rig()
+    registerWorkBuddyRoutes(ctx, {})
+    const result = await call(routes, WORKBUDDY_CREDITS_ROUTE_PATH, 'POST')
+    expect(result.status).toBe(405)
   })
 })

@@ -25,6 +25,8 @@ import { loadCatalog } from './workbuddy/models.ts'
 import { readSelection, writeSelection } from './model-selection.ts'
 import { resolveEndpoints } from './workbuddy/endpoints.ts'
 import { claimDailyCheckin, fetchCheckinStatus, startDailyCheckin } from './workbuddy/checkin.ts'
+import { fetchWorkBuddyCredits } from './workbuddy/credits.ts'
+import type { WorkBuddyCredits } from './workbuddy/credits.ts'
 import type { WorkBuddyCheckinResult, WorkBuddyCheckinSchedulerOptions, WorkBuddyCheckinStatus } from './workbuddy/checkin.ts'
 import { ensureWorkBuddyModels, invalidateWorkBuddyCatalog, workBuddyDeclaredModelIds } from './workbuddy-model.ts'
 
@@ -44,6 +46,9 @@ export const WORKBUDDY_MODELS_ROUTE_PATH = '/acp-agent/workbuddy/models'
 
 /** 每日签到：GET 查状态，POST 领一次。 */
 export const WORKBUDDY_CHECKIN_ROUTE_PATH = '/acp-agent/workbuddy/checkin'
+
+/** 套餐与积分：GET。答的是胶囊要用的形状。 */
+export const WORKBUDDY_CREDITS_ROUTE_PATH = '/acp-agent/workbuddy/credits'
 
 /** 这个入口需要的宿主面（窄接口，测试立桩照这个来）。 */
 export interface WorkBuddyRouteContext {
@@ -90,6 +95,8 @@ export interface WorkBuddyRouteDeps {
   readonly claimCheckin?: (() => Promise<WorkBuddyCheckinResult>) | undefined
   /** 起每天 10:00 的定时器；返回停掉它的函数。 */
   readonly startDaily?: ((options: WorkBuddyCheckinSchedulerOptions) => () => void) | undefined
+  /** 取套餐与积分；返回 `undefined` 表示没登录。 */
+  readonly credits?: (() => Promise<WorkBuddyCredits | undefined>) | undefined
 }
 
 /**
@@ -145,6 +152,12 @@ export function registerWorkBuddyRoutes(ctx: WorkBuddyRouteContext, deps: WorkBu
     return claimDailyCheckin({ credential, endpoints })
   })
   const startDaily = deps.startDaily ?? startDailyCheckin
+  const credits = deps.credits ?? (async () => {
+    const credential = await read().catch(() => undefined)
+    if (credential === undefined) return undefined
+    const endpoints = resolveEndpoints()
+    return fetchWorkBuddyCredits({ credential, endpoints }).catch(() => undefined)
+  })
 
   ctx.effect(() => {
     ctx.webServer.register({
@@ -330,6 +343,51 @@ export function registerWorkBuddyRoutes(ctx: WorkBuddyRouteContext, deps: WorkBu
       },
     })
   }, 'acp-agent-workbuddy-login: checkin route')
+
+  ctx.effect(() => {
+    ctx.webServer.register({
+      kind: 'exact',
+      path: WORKBUDDY_CREDITS_ROUTE_PATH,
+      async handler(req, res) {
+        if (!admit(ctx, req, res)) return
+        if (req.method !== 'GET') {
+          res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8', allow: 'GET' })
+          res.end('method not allowed')
+          return
+        }
+        try {
+          const found = await credits()
+          if (found === undefined) {
+            // 胶囊那套约定：取不到就 ok:false + 原因，胶囊自己整行不画。
+            respondJson(res, 200, JSON.stringify({ ok: false, error: 'WorkBuddy 未登录：请先登录 WorkBuddy' }))
+            return
+          }
+          respondJson(res, 200, JSON.stringify({
+            ok: true,
+            quota: {
+              ...(found.plan === '' ? {} : { tier: found.plan }),
+              credit: {
+                remaining: found.remaining,
+                used: found.used,
+                limit: found.capacity,
+                groups: found.groups.map(group => ({
+                  name: group.name,
+                  total: group.total,
+                  remain: group.remain,
+                  used: group.used,
+                })),
+              },
+            },
+          }))
+        } catch (error) {
+          respondJson(res, 200, JSON.stringify({
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          }))
+        }
+      },
+    })
+  }, 'acp-agent-workbuddy-login: credits route')
 
   // 每天 10:00 自动领一次积分：定时器挂在这个 effect 里，插件卸载时随之撤销。
   ctx.effect(() => {
