@@ -230,3 +230,53 @@ describe('失败路径', () => {
       .rejects.toThrow(/abort/i)
   })
 })
+
+describe('网关的渠道校验（11128）', () => {
+  const BLOCKED = JSON.stringify({
+    code: 11128,
+    msg: 'Illegal API invocation from an unapproved channel',
+    requestId: 'req-1',
+  })
+
+  it('被拦时用兜底力度再发一次，第二次过了就接着跑', async () => {
+    const bodies: string[] = []
+    let attempts = 0
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      attempts += 1
+      bodies.push(String(init?.body))
+      if (attempts === 1) return new Response(BLOCKED, { status: 400 })
+      return sseResponse()
+    }
+
+    const chunks = await collect(streamWorkBuddy(request({
+      fetchImpl,
+      system: '另有一段带 @ 的说明文字。',
+    })))
+
+    expect(attempts).toBe(2)
+    expect(chunks[1]).toEqual({ type: 'text-delta', index: 0, text: '在' })
+    // 第一发是常规改写，第二发是兜底：剩下的 @ 也换掉。
+    expect(JSON.parse(bodies[0] ?? '{}').messages[0].content).toContain('@')
+    expect(JSON.parse(bodies[1] ?? '{}').messages[0].content).not.toContain('@')
+  })
+
+  it('两次都被拦时，说清是渠道校验（不是含糊的 400）', async () => {
+    let attempts = 0
+    const fetchImpl: typeof fetch = async () => {
+      attempts += 1
+      return new Response(BLOCKED, { status: 400 })
+    }
+    await expect(collect(streamWorkBuddy(request({ fetchImpl })))).rejects.toThrow(/渠道校验/)
+    expect(attempts).toBe(2)
+  })
+
+  it('不是渠道校验的 400 不重发', async () => {
+    let attempts = 0
+    const fetchImpl: typeof fetch = async () => {
+      attempts += 1
+      return new Response('{"code":11102,"msg":"model service info not found"}', { status: 400 })
+    }
+    await expect(collect(streamWorkBuddy(request({ fetchImpl })))).rejects.toThrow(/400/)
+    expect(attempts).toBe(1)
+  })
+})

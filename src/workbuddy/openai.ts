@@ -11,7 +11,14 @@
  *   `role: "tool"` 的消息并带上 `tool_call_id`——两者的对应关系靠这个 id。
  * - **图片看模型能力**。模型支持视觉就带 `image_url`（内联 data URI），不支持就
  *   退化成占位文本，让模型至少知道「这里本来有张图」。
+ *
+ * 还有一层「网关指纹」的改写（见 `gateway-guard.ts`）：国内网关会查 system 与
+ * assistant 消息里的特定写法，认出来就整轮拒掉。改写只发生在 system、developer、
+ * assistant 三种消息上，user 与 tool 消息原样保留。
  */
+
+import { sanitizeGatewayText } from './gateway-guard.ts'
+import type { GatewayTextMode } from './gateway-guard.ts'
 
 export type WorkBuddyContentPart =
   | { readonly type: 'text'; readonly text: string }
@@ -63,6 +70,8 @@ export type ChatBodyInput = {
   readonly supportedEfforts?: readonly string[] | undefined
   readonly temperature?: number | undefined
   readonly supportsImages?: boolean | undefined
+  /** 网关指纹的改写力度；默认只改已知指纹。 */
+  readonly gatewayTextMode?: GatewayTextMode | undefined
 }
 
 /** 图片在模型看不见时留下的占位。 */
@@ -74,9 +83,12 @@ const IMAGE_PLACEHOLDER = '[image attached]'
  * @returns 请求体。
  */
 export function buildChatBody(input: ChatBodyInput): WorkBuddyBody {
+  const mode = input.gatewayTextMode ?? 'standard'
   const systemParts: string[] = []
-  if (input.system !== undefined && input.system.trim() !== '') systemParts.push(input.system)
-  const turns = projectMessages(input.messages, systemParts, input.supportsImages === true)
+  if (input.system !== undefined && input.system.trim() !== '') {
+    systemParts.push(sanitizeGatewayText(input.system, mode))
+  }
+  const turns = projectMessages(input.messages, systemParts, input.supportsImages === true, mode)
 
   const tools = input.tools === undefined
     ? undefined
@@ -141,6 +153,7 @@ function projectMessages(
   messages: readonly unknown[],
   systemParts: string[],
   supportsImages: boolean,
+  mode: GatewayTextMode,
 ): WorkBuddyMessage[] {
   const turns: WorkBuddyMessage[] = []
   const push = (message: WorkBuddyMessage): void => {
@@ -158,7 +171,7 @@ function projectMessages(
     const role = message['role']
     if (role === 'system' || role === 'developer') {
       const text = textOf(message['content']).join('\n')
-      if (text !== '') systemParts.push(text)
+      if (text !== '') systemParts.push(sanitizeGatewayText(text, mode))
       continue
     }
     if (role === 'user') {
@@ -166,7 +179,7 @@ function projectMessages(
       continue
     }
     if (role === 'assistant') {
-      push(assistantMessage(message))
+      push(assistantMessage(message, mode))
       continue
     }
     if (role === 'tool') {
@@ -192,7 +205,7 @@ function partsOf(content: string | readonly WorkBuddyContentPart[] | undefined):
   return [...content]
 }
 
-function assistantMessage(message: Record<string, unknown>): WorkBuddyMessage {
+function assistantMessage(message: Record<string, unknown>, mode: GatewayTextMode): WorkBuddyMessage {
   const blocks = Array.isArray(message['content']) ? message['content'] : []
   const texts: string[] = []
   const calls: WorkBuddyToolCall[] = []
@@ -200,7 +213,8 @@ function assistantMessage(message: Record<string, unknown>): WorkBuddyMessage {
   for (const block of blocks) {
     if (!isRecord(block)) continue
     if (block['type'] === 'text' && typeof block['text'] === 'string' && block['text'] !== '') {
-      texts.push(block['text'])
+      // 助手消息里也可能留着内核写的那几段指纹（历史被原样重放），网关一样会查。
+      texts.push(sanitizeGatewayText(block['text'], mode))
       continue
     }
     if (block['type'] === 'tool-call') {

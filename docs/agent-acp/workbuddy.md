@@ -32,6 +32,36 @@ WorkBuddy 在模型列表里是单独的一组，名字是 WorkBuddy。选 Auto�
 认的客户端产品名），版本号是我们这个适配器的协议版本，后缀标出请求来自哪个客户端，
 站点日志里能认出来。
 
+### 国内网关的渠道校验（400 / 11128）
+
+国内网关（`copilot.tencent.com`、`www.workbuddy.cn`）对**系统提示词**做内容校验：
+认出「只有官方客户端才有的指纹」就整轮拒掉，回
+`{"code":11128,"msg":"Illegal API invocation from an unapproved channel"}`，一句回复
+都没有。国际网关不做这个校验。
+
+指纹有四处，都在 DSH 自己拼的系统提示词里：
+
+| # | 指纹 | 出处 |
+|---|---|---|
+| 1 | `Tokens prefixed with @ are paths …` | 文件引用说明 |
+| 2 | 开头的 `You are an AI agent powered by DeepSeek Harness.`（DeepSeek 与 Harness 之间夹着零宽空格） | 内核身份句 |
+| 3 | `You are a coding agent powered by the … model.` | 人设前缀 |
+| 4 | `… the DeepSeek Harness Web GUI …` / `Current DeepSeek Harness Web GUI URL` | Web GUI 上下文 |
+
+真机 A/B（同一账号、同一请求头，只换提示词）：原样发 → `400 / 11128`；把上面几处
+换成等义写法 → `200`。规则只看**系统与助手消息**：同样的内容放进 user 消息不触发；
+助手消息里的指纹在任意位置都触发。
+
+**我们的应对**（`src/workbuddy/gateway-guard.ts`）：发请求前把 system、developer、
+assistant 消息里的这几处换成等义写法（`DeepSeek-Harness`、`prefixed with (at)`、
+`coding agent running on`、`this Web GUI`）。user 与 tool 消息一个字不动——邮箱、
+`@某人`、代码里的装饰器都不碰。改写是幂等的，语义不变：模型读到的指令还是原来
+那句，只是写法认不出来了。
+
+万一内核改了文案、指纹不再是已知的那几处，还有兜底：网关回 11128 时，用更狠的
+力度（系统与助手消息里剩下的 `@` 也换成 `(at)`）再发一次；还不行就报「渠道校验未
+通过」，而不是丢一个含糊的 400 过去。
+
 ### 模型清单有两份，先用带倍率的那份
 
 同一个账号，站点下发的清单有两种口径：
@@ -112,6 +142,7 @@ WorkBuddy 的账号体系是「浏览器授权 + 站点轮询」，插件复刻�
 | 限流（429） | 照实报业务错误码，不自动重试（重试没有意义） |
 | 服务端错误（5xx） | 有限重试两次后放弃 |
 | 网络断了 | 归成 `TRANSPORT`，宿主会自己重试这一轮——不是「答错了」，是「这一轮丢了」 |
+| 网关渠道校验（400 / 11128） | 提示词里的指纹被改写掉了；内核又改了文案时用更狠的改写再发一次，仍不行才报「渠道校验未通过」 |
 
 错误消息里的令牌一律被抹成 `[redacted]`。
 

@@ -177,3 +177,49 @@ describe('推理档位', () => {
     expect(resolveReasoningEffort(undefined, ['low'])).toBeUndefined()
   })
 })
+
+describe('网关指纹改写（请求体这一层）', () => {
+  const IDENTITY = 'You are an AI agent powered by DeepSeek Harness.'
+  const FILE_REFERENCE = 'Tokens prefixed with @ are paths the user explicitly referenced.'
+
+  it('系统提示里的指纹在进请求体前就改掉了', () => {
+    const body = buildChatBody({
+      model: 'auto',
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }],
+      system: `${IDENTITY}\n${FILE_REFERENCE}`,
+    })
+    expect(body.messages[0]?.content).toBe(
+      'You are an AI agent powered by DeepSeek-Harness.\nTokens prefixed with (at) are paths the user explicitly referenced.',
+    )
+  })
+
+  it('历史里的助手消息也改（网关对助手消息一样查）', () => {
+    const body = buildChatBody({
+      model: 'auto',
+      messages: [{ role: 'assistant', content: [{ type: 'text', text: IDENTITY }] }],
+    })
+    expect(body.messages[0]?.content).toBe('You are an AI agent powered by DeepSeek-Harness.')
+  })
+
+  it('用户与工具消息一个字不动', () => {
+    const body = buildChatBody({
+      model: 'auto',
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: `前缀 @ 的路径是 ${IDENTITY}` }] },
+        { role: 'tool', toolCallId: 'call-1', content: [{ type: 'text', text: 'Tokens prefixed with @ are paths' }] },
+      ],
+    })
+    expect(body.messages[0]?.content).toContain(IDENTITY)
+    expect(body.messages[1]?.content).toBe('Tokens prefixed with @ are paths')
+  })
+
+  it('兜底力度下系统提示里剩下的 @ 也换掉', () => {
+    const body = buildChatBody({
+      model: 'auto',
+      messages: [],
+      system: '另有一段带 @ 的说明文字。',
+      gatewayTextMode: 'aggressive',
+    })
+    expect(body.messages[0]?.content).toBe('另有一段带 (at) 的说明文字。')
+  })
+})

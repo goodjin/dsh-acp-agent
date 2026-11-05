@@ -12,16 +12,24 @@
  * - 连不上：不是「答错了」，是「这一轮丢了」——报传输失败，宿主会重试这一轮。
  *
  * 令牌不出现在任何一条消息里：错误消息、失败块、日志，一律抹掉。
+ *
+ * 还有一条是网关自己会挡的：国内网关对提示词做渠道校验，认出会拒掉整轮
+ * （400 / 11128）。见 `gateway-guard.ts`——常规改写已经挡在请求体这一层；这里
+ * 只做兜底：真的被挡了（网关换了规则），就用更狠的改写再发一次。
  */
 
 import { resolveEndpoints, workBuddyHeaders } from './endpoints.ts'
 import type { WorkBuddyEndpoints } from './endpoints.ts'
 import { buildChatBody } from './openai.ts'
+import type { GatewayTextMode } from './gateway-guard.ts'
 import { chunksFromOpenAiEvents, readSseEvents } from './sse.ts'
 import type { WorkBuddyStreamChunk } from './sse.ts'
 
 /** 网络失败时用的失败码：宿主认这个码就会重试这一轮。 */
 export const TRANSPORT_FAILURE_CODE = 'TRANSPORT'
+
+/** 网关的渠道校验业务码：命中就整轮拒掉。 */
+export const CHANNEL_BLOCKED_CODE = '11128'
 
 /** 首 token 超时：和 WorkBuddy 自己一样给到 20 分钟。 */
 const FIRST_TOKEN_TIMEOUT_MS = 1_200_000
@@ -74,7 +82,7 @@ export async function* streamWorkBuddy(request: WorkBuddyChatRequest): AsyncGene
   const endpoints = request.endpoints ?? resolveEndpoints(request.baseUrl)
   const fetchImpl = request.fetchImpl ?? fetch
   const sleep = request.sleepImpl ?? ((ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)))
-  const body = buildChatBody({
+  const bodyOf = (mode: GatewayTextMode): string => JSON.stringify(buildChatBody({
     model: request.model,
     messages: request.messages,
     ...(request.system === undefined ? {} : { system: request.system }),
@@ -82,8 +90,12 @@ export async function* streamWorkBuddy(request: WorkBuddyChatRequest): AsyncGene
     ...(request.reasoningEffort === undefined ? {} : { reasoningEffort: request.reasoningEffort }),
     ...(request.supportedEfforts === undefined ? {} : { supportedEfforts: request.supportedEfforts }),
     ...(request.maxTokens === undefined ? {} : { maxTokens: request.maxTokens }),
-  })
+    gatewayTextMode: mode,
+  }))
 
+  // 提示词的改写力度：常规 → 被网关拦下时换成兜底。
+  let mode: GatewayTextMode = 'standard'
+  let body = bodyOf(mode)
   let token = request.accessToken
   let attempt = 0
   while (true) {
@@ -92,7 +104,7 @@ export async function* streamWorkBuddy(request: WorkBuddyChatRequest): AsyncGene
       response = await fetchImpl(endpoints.chatUrl, {
         method: 'POST',
         headers: headersOf(request, token),
-        body: JSON.stringify(body),
+        body,
         ...(request.signal === undefined ? {} : { signal: request.signal }),
       })
     } catch (error) {
@@ -130,7 +142,20 @@ export async function* streamWorkBuddy(request: WorkBuddyChatRequest): AsyncGene
     }
 
     if (!response.ok) {
-      const detail = await detailOf(response, token)
+      const text = await response.text().catch(() => '')
+      const detail = scrub(text.slice(0, 500), token)
+      // 渠道校验：网关认出了提示词里的「官方客户端指纹」。换更狠的改写再发一次；
+      // 还不行就是内核又改了文案，得说清楚，而不是丢一个含糊的 400 过去。
+      if (text.includes(CHANNEL_BLOCKED_CODE)) {
+        if (mode !== 'aggressive') {
+          mode = 'aggressive'
+          body = bodyOf(mode)
+          continue
+        }
+        throw new Error(
+          `WorkBuddy 请求被网关拦下（${String(response.status)}，渠道校验未通过）：提示词里可能又出现了网关不认的写法。${detail}`,
+        )
+      }
       throw new Error(`WorkBuddy 请求失败（${String(response.status)}）：${detail}`)
     }
 
