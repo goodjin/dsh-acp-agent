@@ -194,11 +194,11 @@ export function workBuddyAccountView(props: WorkBuddyAccountViewProps): ReactNod
         type="button"
         data-workbuddy-login={true}
         style={ACCOUNT_BUTTON_STYLE}
-        // 已经登上了就把登录按钮灰掉——两个按钮并排才看得出是一组。
-        disabled={props.busy === true || state.authenticated}
+        // 已经登上了就把按钮改成「重新登录」——写成「登录」会让人以为又要登录一次。
+        disabled={props.busy === true}
         onClick={() => { props.onLogin?.() }}
       >
-        {t('workbuddy.account.login')}
+        {t(state.authenticated ? 'workbuddy.account.relogin' : 'workbuddy.account.login')}
       </button>
       <button
         type="button"

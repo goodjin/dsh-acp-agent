@@ -37,14 +37,14 @@ export type ClientLocaleKey =
   | 'storagePosture.local'
   | 'workbuddy.section.label'
   | 'workbuddy.account.signedIn' | 'workbuddy.account.signedOut'
-  | 'workbuddy.account.login' | 'workbuddy.account.refresh'
+  | 'workbuddy.account.login' | 'workbuddy.account.refresh' | 'workbuddy.account.relogin'
   | 'workbuddy.models.section.label' | 'workbuddy.models.summary'
   | 'workbuddy.models.custom' | 'workbuddy.models.defaultHint'
   | 'workbuddy.models.noTool' | 'workbuddy.models.restore'
   | 'workbuddy.models.search' | 'workbuddy.models.empty' | 'workbuddy.models.title'
   | 'qoder.section.label'
   | 'qoder.account.signedIn' | 'qoder.account.signedOut'
-  | 'qoder.account.login' | 'qoder.account.refresh'
+  | 'qoder.account.login' | 'qoder.account.refresh' | 'qoder.account.relogin'
 
 export const zh: Record<ClientLocaleKey, string> = {
   'handover.title': '已切换到 {target}，对话已移到新会话',
@@ -111,6 +111,7 @@ export const zh: Record<ClientLocaleKey, string> = {
   'workbuddy.account.signedIn': '已登录 WorkBuddy：',
   'workbuddy.account.signedOut': '未登录 WorkBuddy：这一组模型发消息会被拒绝。',
   'workbuddy.account.login': '登录 WorkBuddy',
+  'workbuddy.account.relogin': '重新登录',
   'workbuddy.account.refresh': '检查授权',
   'workbuddy.models.section.label': 'WorkBuddy 模型',
   'workbuddy.models.summary': '站点共 {total} 个模型，勾上的 {selected} 个会出现在模型选择器里。',
@@ -125,6 +126,7 @@ export const zh: Record<ClientLocaleKey, string> = {
   'qoder.account.signedIn': '已登录 Qoder 国际版：',
   'qoder.account.signedOut': '未登录 Qoder 国际版：这一组模型发消息会被拒绝。',
   'qoder.account.login': '登录 Qoder 国际版',
+  'qoder.account.relogin': '重新登录',
   'qoder.account.refresh': '检查授权',
   'storagePosture.local': '设置保存在本机',
 }
@@ -194,6 +196,7 @@ export const en: Record<ClientLocaleKey, string> = {
   'workbuddy.account.signedIn': 'Signed in to WorkBuddy:',
   'workbuddy.account.signedOut': 'Not signed in to WorkBuddy: messages in this group will be refused.',
   'workbuddy.account.login': 'Sign in to WorkBuddy',
+  'workbuddy.account.relogin': 'Sign in again',
   'workbuddy.account.refresh': 'Check authorisation',
   'workbuddy.models.section.label': 'WorkBuddy models',
   'workbuddy.models.summary': 'The site lists {total} models; the {selected} you tick show up in the model picker.',
@@ -208,6 +211,7 @@ export const en: Record<ClientLocaleKey, string> = {
   'qoder.account.signedIn': 'Signed in to Qoder international:',
   'qoder.account.signedOut': 'Not signed in to Qoder international: messages in this group will be refused.',
   'qoder.account.login': 'Sign in to Qoder international',
+  'qoder.account.relogin': 'Sign in again',
   'qoder.account.refresh': 'Check authorisation',
   'storagePosture.local': 'Settings are stored on this machine',
 }

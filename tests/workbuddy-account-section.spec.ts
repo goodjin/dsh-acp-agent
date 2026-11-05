@@ -67,10 +67,11 @@ describe('视图', () => {
     expect(textOf(view)).toContain('登录')
   })
 
-  it('登了就说清是谁，登录按钮灰着（不藏——两个按钮是一组）', () => {
+  it('登了就说清是谁，登录按钮变成「重新登录」（不藏——两个按钮是一组）', () => {
     const view = workBuddyAccountView({ state: LOGGED_IN })
     const login = find(view, props => props['data-workbuddy-login'] === true)
-    expect(login?.props?.disabled).toBe(true)
+    expect(login?.props?.disabled).toBe(false)
+    expect(textOf(login)).toContain('重新登录')
     expect(textOf(view)).toContain('某人')
     expect(textOf(view)).toContain('uid-1')
   })

@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { WorkBuddyRouteContext } from './workbuddy-route.ts'
 import { fetchModels, pollForToken, readCredential, startLogin, writeCredential } from './qoder/index.ts'
 import { readSelection, writeSelection } from './model-selection.ts'
-import { invalidateQoderCatalog, qoderDeclaredModelIds, refreshQoderModels } from './qoder-model.ts'
+import { invalidateQoderCatalog, qoderDeclaredModelIds, qoderDeclaredModels, refreshQoderModels } from './qoder-model.ts'
 
 export const name = 'acp-agent-qoder-login'
 export const inject = ['webServer', 'connection']
@@ -72,7 +72,10 @@ export function registerQoderRoutes(ctx: WorkBuddyRouteContext, deps: QoderRoute
         try {
           if (req.method === 'GET') {
             const credential = await deps.readCredential()
-            const models = credential === undefined ? [] : await listModels({ credential }).catch(() => [])
+            const fetched = credential === undefined ? [] : await listModels({ credential }).catch(() => [])
+            // 站点的整份清单要 Qoder 自己的签名才拿得到；拿不到就用声明的那份，
+            // 空着对用户没用。
+            const models = fetched.length > 0 ? fetched : qoderDeclaredModels()
             const stored = await selectedIds().catch(() => undefined)
             send(res, {
               ok: true,
