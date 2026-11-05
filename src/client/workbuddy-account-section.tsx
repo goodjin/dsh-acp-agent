@@ -226,7 +226,15 @@ export function workBuddyAccountView(props: WorkBuddyAccountViewProps): ReactNod
     </div>,
   )
 
-  return <div data-workbuddy-account="root">{children}</div>
+  // 竖着排，每件之间留出间距——挨在一起看着是一坨。
+  return (
+    <div
+      data-workbuddy-account="root"
+      style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+    >
+      {children}
+    </div>
+  )
 }
 
 /**
@@ -236,7 +244,10 @@ export function workBuddyAccountView(props: WorkBuddyAccountViewProps): ReactNod
  */
 export function workBuddySettingsView(props: WorkBuddySettingsViewProps): ReactNode {
   return (
-    <div data-workbuddy-settings="root">
+    <div
+      data-workbuddy-settings="root"
+      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+    >
       {workBuddyAccountView(props)}
       {props.models === undefined
         ? null
