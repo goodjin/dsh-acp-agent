@@ -1,30 +1,35 @@
 /**
  * GLM 套餐配额胶囊：挂在输入框下方的 dock 里，与 token 用量同一排。
  *
- * 数据链路：宿主侧的 `acp-agent-zcode-quota` 插件（本包）
- * 在 `/acp-agent/zcode/quota` 上用本机 ZCode 登录密钥转发 Coding Plan 的
- * monitor 应答；这里只做同源 GET，密钥永不出宿主进程。轮询器由 apply 创建
- * 一份、全浏览器共享——套餐是账号级数字，不是会话级。
- *
- * 出现条件（用户 2026-10-16 拍板）：只在当前会话选的模型是 GLM（zcode 那组）
- * 时渲染；拿不到配额就整行不渲染，原因经 report 留一条日志（同一原因不重复
- * 报）。子代理会话与模型座位同判：subagentAddress 存在即隐藏。
- *
- * 渲染走 session-id-bar 的既定样式：.ts + createElement + 内联样式 + 词典 t
- * （title 属于检查器盯的文案属性，必须来自 t）。颜色只用主题令牌：过八成
- * `--dsw-static-red-500`，过半 `--dsw-alias-state-warn-label`。
+ * 「机器」（取值口径、轮询器、取数、画法、dock 注册）已迁到 @goodjin2/dsh-model-kit/client；
+ * 本文件只剩 agent-acp 自己的两样东西：
+ * 1. 各家**规格常量**（dock id、路由、模型前缀、目录 provider id）与路由路径；
+ * 2. DeepSeek 官方账号余额的取数器（走设置页同一条 remote 通道，是这家的私事）。
  */
 
-import { createElement } from 'react'
-import type { ReactNode } from 'react'
-import { IconDatabaseOutlineRegular, IconGaugeOutlineRegular, IconWarningOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import { loginChipOf, loginOfferOfBody, sameLoginOffer } from './quota-login.ts'
-import type { QuotaLoginOffer } from './quota-login.ts'
-
-export { loginOfferOfBody, sameLoginOffer } from './quota-login.ts'
-export type { QuotaLoginOffer } from './quota-login.ts'
-import { fallbackT, NAMESPACE } from './locales.ts'
-import type { RuntimeT } from './locales.ts'
+import type { QuotaAnswer, QuotaPillSpec } from '@goodjin2/dsh-model-kit/client'
+export {
+  createQuotaPoller,
+  loginChip,
+  loginChipOf,
+  creditPillOf,
+  pillOf,
+  registerQuotaDockPills,
+  routeQuotaFetcher,
+  sameLoginOffer,
+  loginOfferOfBody,
+  QuotaPillRow,
+} from '@goodjin2/dsh-model-kit/client'
+export type {
+  QuotaPillServices,
+  QuotaWindow,
+  QuotaWindows,
+  QuotaAnswer,
+  QuotaPillSpec,
+  QuotaLoginOffer,
+  QuotaPoller,
+  DockSlotHost,
+} from '@goodjin2/dsh-model-kit/client'
 
 /** 与宿主侧 zcode-quota 路由登记的同一路径。 */
 export const QUOTA_ROUTE_PATH = '/acp-agent/zcode/quota'
@@ -47,28 +52,6 @@ export const QUOTA_DOCK_ORDER = 10
 
 /** zcode 那组模型在目录里的 id 前缀；选了它才轮到配额胶囊出场。 */
 const GLM_MODEL_PREFIX = 'GLM-'
-
-/**
- * 一套胶囊的取值口径。各家同源同骨架，差别只有四处：选谁才出现（模型前缀或
- * 目录里的 provider id）、percent 是「已用」还是「剩余」（决定变色方向与文案）、
- * 有没有积分胶囊、以及宿主路由与文案命名空间。spec 把这些收成一个值，dock 按
- * 它各挂一条，GLM 那条是缺省值。
- */
-export interface QuotaPillSpec {
-  /** 取值口径来源：决定文案命名空间与变色方向。 */
-  readonly provider: 'zcode' | 'minimaxi' | 'claude' | 'codex' | 'deepseek' | 'grok' | 'workbuddy'
-  /** 当前会话目录里的 provider id（如 `acp:acp-claude`）与此相等才渲染。 */
-  readonly providerId?: string
-  /** 模型 id 前缀匹配；providerId 已给时可以不填（Claude 的模型 id 是通用别名）。 */
-  readonly prefix?: string
-  /** 是否渲染积分胶囊（MiniMax/Codex/Claude/DeepSeek 有，GLM 无）。 */
-  readonly showCredit: boolean
-  /** 宿主路由路径；只有走路由取数的口径才有。DeepSeek 走 remote 余额接口，没有。 */
-  readonly routePath?: string
-  /** dock 条目 id 与顺序。 */
-  readonly dockId: string
-  readonly dockOrder: number
-}
 
 /** GLM 那套：缺省口径，dock 注册不传 spec 时就是它。 */
 export const GLM_QUOTA_PILL_SPEC: QuotaPillSpec = {
@@ -110,13 +93,7 @@ export const CLAUDE_QUOTA_PILL_SPEC: QuotaPillSpec = {
   dockOrder: 13,
 }
 
-/**
- * DeepSeek 官方账号那套：按目录里的 provider id 精确认（`deepseek-account` 是
- * 账号渠道自己的 id，不会误伤 API key 渠道）。余额不走宿主路由——设置页的余额
- * 是浏览器直接调 `remote.account.getBalance(...)` 拿的，本包客户端注入的是同一个
- * `@deepseek-ai/dsh-api-remotes`，所以胶囊读同一个源：同一个数、不碰令牌、
- * 不用新开后端。
- */
+/** DeepSeek 那套：没有宿主路由——取数走 remote 余额接口（见 remoteBalanceFetcher）。 */
 export const DEEPSEEK_QUOTA_PILL_SPEC: QuotaPillSpec = {
   provider: 'deepseek',
   providerId: 'deepseek-account',
@@ -125,11 +102,7 @@ export const DEEPSEEK_QUOTA_PILL_SPEC: QuotaPillSpec = {
   dockOrder: 14,
 }
 
-/**
- * Grok 那套：按目录里的 provider id 精确认（`acp:acp-grok`）。数据来自 grok-cli
- * 自己的代理域（`/v1/billing?format=credits` 的周窗 + `/v1/user` 的档位），宿主侧
- * 的 grok-quota 行把它们折成一条周窗——只有一个窗口，档位进悬停提示。
- */
+/** Grok 那套：同按 provider id 认；percent 是「已用」，跟 Codex/Claude 一个方向。 */
 export const GROK_QUOTA_PILL_SPEC: QuotaPillSpec = {
   provider: 'grok',
   providerId: 'acp:acp-grok',
@@ -139,10 +112,7 @@ export const GROK_QUOTA_PILL_SPEC: QuotaPillSpec = {
   dockOrder: 15,
 }
 
-/**
- * WorkBuddy 那套：没有窗口，只有积分池。按目录里的 provider id 精确认
- * （`acp:acp-workbuddy`）——模型 id 是 `hy4free` 这类通用名，按前缀认会误伤。
- */
+/** WorkBuddy 那套：同按 provider id 认；多一枚积分胶囊（走宿主 credits 路由）。 */
 export const WORKBUDDY_QUOTA_PILL_SPEC: QuotaPillSpec = {
   provider: 'workbuddy',
   providerId: 'acp:acp-workbuddy',
@@ -152,7 +122,7 @@ export const WORKBUDDY_QUOTA_PILL_SPEC: QuotaPillSpec = {
   dockOrder: 16,
 }
 
-/** 全部口径：apply 按这张表各建一只轮询器、各挂一条 dock。 */
+/** 全部口径，按 dock 顺序——apply 按它各挂一条轮询器、各进一个 dock 条目。 */
 export const QUOTA_PILL_SPECS: readonly QuotaPillSpec[] = [
   GLM_QUOTA_PILL_SPEC,
   MINIMAX_QUOTA_PILL_SPEC,
@@ -162,202 +132,6 @@ export const QUOTA_PILL_SPECS: readonly QuotaPillSpec[] = [
   GROK_QUOTA_PILL_SPEC,
   WORKBUDDY_QUOTA_PILL_SPEC,
 ]
-
-/**
- * One consumed window as the host route forwards it. GLM carries used/total;
- * MiniMax a remaining percent + unlimited; Codex a used percent + window
- * length（决定标签叫「5小时」还是「周」）——optional fields so one shape serves all.
- */
-export interface QuotaWindow {
-  readonly kind: 'five-hour' | 'weekly'
-  readonly used?: number
-  readonly total?: number
-  /** zcode/claude/codex: percent used; minimaxi: percent remaining. */
-  readonly percent?: number
-  /** minimaxi only: the window is unlimited (`status === 3`). */
-  readonly unlimited?: boolean
-  /** codex only: the window's length in seconds（≥3 天按「周」标）。 */
-  readonly windowSeconds?: number
-  readonly resetAt?: number
-}
-
-/** The quota one coding plan reports, mirroring the route's `quota` member. */
-export interface QuotaWindows {
-  readonly level?: string
-  readonly fiveHour?: QuotaWindow
-  readonly weekly?: QuotaWindow
-  /**
-   * 有积分套餐才带：MiniMax/Codex 是余额，Claude 是按量已用与上限，DeepSeek 是
-   * 账户余额（recharge/bonus/extra 只进悬停明细：数字只认充值钱包的 CNY 合计，
-   * 没有汇率就不该把别的币种瞎合并进来）。
-   */
-  readonly credit?: {
-    readonly remaining?: number
-    readonly used?: number
-    readonly limit?: number
-    readonly recharge?: number
-    readonly bonus?: number
-    /** 非 CNY 钱包的提示（预拼好的字符串，如「另有 $12.00」）；通常为空。 */
-    readonly extra?: string
-    /**
-     * 积分构成（WorkBuddy 有）：每一类积分的名称与总额/剩余/已用，进悬停明细。
-     */
-    readonly groups?: readonly {
-      readonly name: string
-      readonly total: number
-      readonly remain: number
-      readonly used: number
-    }[]
-  }
-  /** 套餐档位（如 Grok 的 `SuperGrok`/`GrokPro`）；进悬停提示的第一句。 */
-  readonly tier?: string
-}
-
-/** The route's whole answer body. */
-export type QuotaAnswer =
-  | { readonly ok: true; readonly quota: QuotaWindows }
-  | { readonly ok: false; readonly error: string; readonly login?: QuotaLoginOffer }
-
-/** The model-directory snapshot shape the pill reads (upstream's directory store). */
-interface QuotaDirectorySnapshot {
-  readonly current: { readonly provider: string; readonly model: string } | null
-}
-
-/** 轮询周期：5 分钟一拍；宿主侧还有 30 秒应答缓存兜着。 */
-const POLL_INTERVAL_MS = 300_000
-
-/** 重置时刻的显示格式：月/日 + 时:分（周窗口重置在几天外，只写时刻会误导）。 */
-let resetFormatter: Intl.DateTimeFormat | undefined
-
-function formatReset(unixMs: number): string {
-  resetFormatter ??= new Intl.DateTimeFormat(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-  return resetFormatter.format(new Date(unixMs))
-}
-
-/**
- * 配额轮询器：一份共享快照 + 订阅面，供给 dock 注册的 hooks 仓。
- *
- * 快照引用稳定：内容没变的取数不换对象、不通知（无谓重渲染一票否决）。
- * 失败清空快照；原因去重——同一个原因只 report 一次，变了才再报。
- */
-export interface QuotaPoller {
-  subscribe(listener: () => void): () => void
-  getSnapshot(): QuotaWindows | undefined
-  /** 当前「去授权」信息；没有过期时是 undefined。 */
-  getLogin(): QuotaLoginOffer | undefined
-  refresh(): Promise<void>
-  start(): void
-  dispose(): void
-}
-
-/**
- * 建一个轮询器（不启动；apply 调 start）。
- * @param deps - 取数器、定时器与报错通道，全部可注入，测试不碰真网络真计时。
- * @returns 轮询器。
- */
-export function createQuotaPoller(deps: {
-  fetchQuota(): Promise<QuotaAnswer>
-  setInterval?: (handler: () => void, ms: number) => unknown
-  clearInterval?: (handle: unknown) => void
-  intervalMs?: number
-  report?: (message: string) => void
-}): QuotaPoller {
-  const intervalMs = deps.intervalMs ?? POLL_INTERVAL_MS
-  const setTimer = deps.setInterval ?? ((handler: () => void, ms: number) => globalThis.setInterval(handler, ms))
-  const clearTimer = deps.clearInterval ?? ((handle: unknown) => { globalThis.clearInterval(handle as number) })
-  const listeners = new Set<() => void>()
-  let quota: QuotaWindows | undefined
-  let handle: unknown
-  let lastReason: string | undefined
-  let login: QuotaLoginOffer | undefined
-
-  const notify = (): void => { for (const listener of listeners) listener() }
-
-  const fail = (reason: string, offer: QuotaLoginOffer | undefined): void => {
-    let changed = false
-    if (quota !== undefined) {
-      quota = undefined
-      changed = true
-    }
-    // 授权信息变了也要通知：胶囊旁边那枚链接要跟着换地址/消失。
-    if (!sameLoginOffer(login, offer)) {
-      login = offer
-      changed = true
-    }
-    if (changed) notify()
-    if (reason !== lastReason) {
-      lastReason = reason
-      deps.report?.(reason)
-    }
-  }
-
-  return {
-    subscribe(listener: () => void) {
-      listeners.add(listener)
-      return () => { listeners.delete(listener) }
-    },
-    getSnapshot: () => quota,
-    getLogin: () => login,
-    async refresh() {
-      try {
-        const answer = await deps.fetchQuota()
-        if (!answer.ok) {
-          fail(answer.error, answer.login)
-          return
-        }
-        lastReason = undefined
-        if (login !== undefined) {
-          login = undefined
-          notify()
-        }
-        if (quota !== undefined && JSON.stringify(quota) === JSON.stringify(answer.quota)) return
-        quota = answer.quota
-        notify()
-      } catch (error) {
-        fail(`GLM quota poll failed unexpectedly: ${error instanceof Error ? error.message : String(error)}`, undefined)
-      }
-    },
-    start() {
-      handle = setTimer(() => { void this.refresh() }, intervalMs)
-      void this.refresh()
-    },
-    dispose() {
-      if (handle !== undefined) clearTimer(handle)
-      handle = undefined
-    },
-  }
-}
-
-/**
- * 同源取一次宿主路由，折成 QuotaAnswer；任何故障（非 JSON、坏状态码、网络
- * 拒绝）都折成 ok:false 的原因，绝不抛出——轮询器的 catch 只是最后一道网。
- * @param fetchImpl - 取数实现；缺省全局 fetch，测试注入假件。
- * @param routePath - 宿主路由路径；缺省 GLM 那条，MiniMax 传 MINIMAX_QUOTA_ROUTE_PATH。
- * @returns 取数函数。
- */
-export function routeQuotaFetcher(fetchImpl: typeof fetch = fetch, routePath: string = QUOTA_ROUTE_PATH): () => Promise<QuotaAnswer> {
-  return async () => {
-    try {
-      const response = await fetchImpl(routePath, { headers: { accept: 'application/json' } })
-      let body: unknown
-      try {
-        body = await response.json()
-      } catch (error) {
-        return { ok: false, error: `HTTP ${String(response.status)}: the quota route answered no JSON (${error instanceof Error ? error.message : String(error)})` }
-      }
-      if (isRecord(body) && body['ok'] === true && isRecord(body['quota'])) {
-        return { ok: true, quota: body['quota'] as QuotaWindows }
-      }
-      if (isRecord(body) && body['ok'] === false && typeof body['error'] === 'string') {
-        const login = loginOfferOfBody(body)
-        return { ok: false, error: body['error'], ...(login === undefined ? {} : { login }) }
-      }
-      return { ok: false, error: `HTTP ${String(response.status)}: the quota route answered an unrecognised body` }
-    } catch (error) {
-      return { ok: false, error: `quota route request failed: ${error instanceof Error ? error.message : String(error)}` }
-    }
-  }
-}
 
 /**
  * 请求方身份：宿主拿它派生 Platform 请求头。设置页传的是「应用版本 + 界面语言 +
@@ -452,357 +226,4 @@ export function remoteBalanceFetcher(deps: {
       quota: { credit: { remaining: recharge, recharge, bonus: bonusCny, ...(extra === undefined ? {} : { extra }) } },
     }
   }
-}
-
-/**
- * 渲染器绑定的快照钩子。真机上 ui-renderer 用 useSyncExternalStoreWithSelector
- * 把注入的 hooks 源包成 (selector, isEqual) => S：**每次调用都必须带选择器**，
- * 空参调用会抛 "selector is not a function"，条目被槽位错误边界收成空块。
- * 这里只需要恒等选择器，所以按「选择器必填」声明，形状与真机一致。
- */
-type SnapshotHook<T> = <S>(selector: (value: T | undefined) => S) => S
-
-/**
- * Render the quota pills for the composer dock.
- * @param props - the two reactive seats (framework-bound selector hooks in
- * production, plain functions in tests), the subagent visibility flag, the
- * locale seat, and the provider spec (defaults to GLM).
- * @returns the pills, or null whenever the row should not appear.
- */
-export function QuotaPillRow({ useQuota, useModelDirectory, useLogin, visible = true, t = fallbackT, spec = GLM_QUOTA_PILL_SPEC }: {
-  useQuota?: SnapshotHook<QuotaWindows>
-  useModelDirectory?: SnapshotHook<QuotaDirectorySnapshot>
-  /** 登录过期时宿主给的授权信息；有它就画一枚「去授权」链接取代数字。 */
-  useLogin?: SnapshotHook<QuotaLoginOffer>
-  visible?: boolean
-  t?: RuntimeT
-  spec?: QuotaPillSpec
-}): ReactNode {
-  // 钩子必须每次渲染都按同一顺序调用：同一挂载实例会经历模型从非本组切到本组，
-  // 条件调用让 hook 数 1→2，React #310 会把整个 dock 条目收成空块。
-  // （2026-10-30 真机：会话里切 ZCode 后胶囊消失。）
-  const directory = useModelDirectory?.((value) => value)
-  const model = directory?.current?.model
-  const providerId = directory?.current?.provider
-  const quota = useQuota?.((value) => value)
-  const login = useLogin?.((value) => value)
-  if (visible === false) return null
-  // 认谁：优先按目录里的 provider id（preset id，如 acp:acp-claude——Claude 的
-  // 模型 id 是 default/opus 这类通用别名，按前缀认会误伤别家）；没给 providerId
-  // 的口径（GLM/MiniMax）按模型 id 前缀认。
-  const mine = spec.providerId !== undefined
-    ? providerId === spec.providerId
-    : model !== undefined && model.startsWith(spec.prefix ?? '')
-  if (!mine) return null
-  // 登录过期：这一行不再画数字，改画一枚能点开的授权链接（授权完成后自动恢复）。
-  if (login !== undefined) return loginChip(login, t, spec)
-  if (quota === undefined) return null
-  const windows = [quota.fiveHour, quota.weekly].filter((window): window is QuotaWindow => window !== undefined)
-  const credit = spec.showCredit ? quota.credit : undefined
-  if (windows.length === 0 && credit === undefined) return null
-  return createElement('div', {
-    'data-quota-pills': true,
-    [`data-${spec.provider}-quota`]: true,
-    style: {
-      display: 'flex',
-      justifyContent: 'center',
-      gap: '12px',
-      fontSize: 'calc(var(--dsh-content-font-size-secondary, 13px) - 1px)',
-      color: 'var(--dsw-alias-label-tertiary)',
-    },
-  },
-    formatResetLine(quota.fiveHour?.resetAt, t) !== null && createElement('div', {
-      key: 'reset',
-      style: { textAlign: 'center', opacity: 0.8, marginBottom: '2px' },
-    }, formatResetLine(quota.fiveHour?.resetAt, t)),
-    ...windows.map(window => pillOf(window, t, spec, quota.tier)),
-    ...(credit === undefined ? [] : [creditPillOf(credit, t, spec, quota.tier)]),
-  )
-}
-
-/** 「去授权」那一枚（带上提示图标与各家口径的 data-* 标记）。 */
-export function loginChip(login: QuotaLoginOffer, t: RuntimeT, spec: QuotaPillSpec = GLM_QUOTA_PILL_SPEC): ReactNode {
-  return loginChipOf(login, t, { provider: spec.provider, icon: createElement(IconWarningOutlineRegular) })
-}
-
-/** 重置时刻那行：只在 5 小时窗口带 resetAt 时出现（周窗口重置在几天外，写时刻会误导）。 */
-function formatResetLine(resetAt: number | undefined, t: RuntimeT): string | null {
-  return resetAt === undefined ? null : t('quota.resetAt', { reset: formatReset(resetAt) })
-}
-
-/** 文案命名空间：各家窗口标题各有一套（percent 口径在标题里写明）。 */
-function titleKey(provider: QuotaPillSpec['provider'], fiveHour: boolean):
-  | 'quota.fiveHour.title'
-  | 'quota.weekly.title'
-  | 'quota.minimaxi.fiveHour.title'
-  | 'quota.minimaxi.weekly.title'
-  | 'quota.claude.fiveHour.title'
-  | 'quota.claude.weekly.title'
-  | 'quota.codex.window.title'
-  | 'quota.grok.weekly.title' | 'quota.grok.weekly.title.tier' {
-  if (provider === 'minimaxi') return fiveHour ? 'quota.minimaxi.fiveHour.title' : 'quota.minimaxi.weekly.title'
-  if (provider === 'claude') return fiveHour ? 'quota.claude.fiveHour.title' : 'quota.claude.weekly.title'
-  if (provider === 'codex') return 'quota.codex.window.title'
-  if (provider === 'grok') return 'quota.grok.weekly.title'
-  return fiveHour ? 'quota.fiveHour.title' : 'quota.weekly.title'
-}
-
-/** One pill: icon + 「5小时 1%」，悬停给详情与重置时刻，按用量变色。 */
-export function pillOf(window: QuotaWindow, t: RuntimeT, spec: QuotaPillSpec, tier?: string): ReactNode {
-  const fiveHour = window.kind === 'five-hour'
-  const unlimited = window.unlimited === true
-  const percent = window.percent ?? 0
-  // zcode/claude/codex/grok 的 percent 是「已用」：越高越红。minimaxi 的是「剩余」：越低越红。
-  const tone = unlimited
-    ? undefined
-    : spec.provider === 'minimaxi'
-      ? (percent <= 20 ? 'danger' : percent <= 50 ? 'warn' : undefined)
-      : (percent >= 80 ? 'danger' : percent >= 50 ? 'warn' : undefined)
-  const color = tone === 'danger'
-    ? 'var(--dsw-static-red-500)'
-    : tone === 'warn'
-      ? 'var(--dsw-alias-state-warn-label)'
-      : undefined
-  const reset = window.resetAt === undefined ? '' : t('quota.resetAt', { reset: formatReset(window.resetAt) })
-  const title = unlimited
-    ? t('quota.minimaxi.unlimitedTitle') + reset
-    : spec.provider === 'zcode'
-      // GLM 的标题带已用/总量；其余家只有百分比口径。
-      ? t(titleKey(spec.provider, fiveHour), {
-        used: String(window.used ?? 0),
-        total: String(window.total ?? 0),
-      }) + reset
-      : spec.provider === 'grok'
-        // Grok 的悬停第一句带档位（SuperGrok / GrokPro …）；档位没拿到就退回不带
-        // 档位的句子，宁缺毋滥——界面上不该出现「{tier}」这样的占位符。
-        ? (tier === undefined
-          ? t('quota.grok.weekly.title', { percent: String(Math.round(percent)) })
-          : t('quota.grok.weekly.title.tier', { tier, percent: String(Math.round(percent)) })) + reset
-        : t(titleKey(spec.provider, fiveHour), { percent: String(Math.round(percent)) }) + reset
-  const label = unlimited
-    ? t('quota.minimaxi.unlimited')
-    : t(fiveHour ? 'quota.fiveHour.label' : 'quota.weekly.label', { percent: String(Math.round(percent)) })
-  return createElement('span', {
-    key: window.kind,
-    title,
-    ...(tone === undefined ? {} : { 'data-tone': tone }),
-    style: {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '6px',
-      padding: '1px 8px',
-      borderRadius: '999px',
-      fontVariantNumeric: 'tabular-nums',
-      whiteSpace: 'nowrap',
-      ...(color === undefined ? {} : { color }),
-    },
-  },
-    createElement(fiveHour ? IconGaugeOutlineRegular : IconDatabaseOutlineRegular),
-    createElement('span', null, label))
-}
-
-/**
- * 积分胶囊：MiniMax/Codex 是余额（「积分 0」），Claude 是按量已用
- * （「按量 4.5 / 100」）。文案命名空间跟 provider 走。
- */
-function creditKeys(provider: QuotaPillSpec['provider']): {
-  credit: 'quota.minimaxi.credit' | 'quota.codex.credit' | 'quota.claude.credit' | 'quota.deepseek.credit' | 'quota.workbuddy.credit'
-  title: 'quota.minimaxi.creditTitle' | 'quota.codex.creditTitle' | 'quota.claude.creditTitle' | 'quota.deepseek.creditTitle' | 'quota.workbuddy.creditTitle'
-} {
-  if (provider === 'claude') return { credit: 'quota.claude.credit', title: 'quota.claude.creditTitle' }
-  if (provider === 'codex') return { credit: 'quota.codex.credit', title: 'quota.codex.creditTitle' }
-  if (provider === 'deepseek') return { credit: 'quota.deepseek.credit', title: 'quota.deepseek.creditTitle' }
-  if (provider === 'workbuddy') return { credit: 'quota.workbuddy.credit', title: 'quota.workbuddy.creditTitle' }
-  return { credit: 'quota.minimaxi.credit', title: 'quota.minimaxi.creditTitle' }
-}
-
-/** 画积分胶囊的那只（导出只为测试：文案与数字的对应关系是用户看得见的行为）。 */
-export function creditPillOf(credit: {
-  readonly remaining?: number
-  readonly used?: number
-  readonly limit?: number
-  readonly recharge?: number
-  readonly bonus?: number
-  readonly extra?: string
-  readonly groups?: readonly {
-    readonly name: string
-    readonly total: number
-    readonly remain: number
-    readonly used: number
-  }[]
-}, t: RuntimeT, spec: QuotaPillSpec, tier?: string): ReactNode {
-  const keys = creditKeys(spec.provider)
-  const isDeepseek = spec.provider === 'deepseek'
-  const isWorkbuddy = spec.provider === 'workbuddy'
-  // DeepSeek 的数字是钱：固定两位小数并带上币种符号；其余家照旧。
-  const detail = isDeepseek
-    ? `¥${(credit.remaining ?? 0).toFixed(2)}`
-    : isWorkbuddy
-      ? `${String(credit.remaining ?? 0)}${credit.limit === undefined ? '' : ` / ${credit.limit}`}`
-      : credit.remaining !== undefined
-        ? String(credit.remaining)
-        : `${credit.used ?? 0}${credit.limit === undefined ? '' : ` / ${credit.limit}`}`
-  const title = isDeepseek
-    ? t('quota.deepseek.creditTitle', {
-      recharge: (credit.recharge ?? credit.remaining ?? 0).toFixed(2),
-      bonus: (credit.bonus ?? 0).toFixed(2),
-      extra: credit.extra ?? '',
-    })
-    : isWorkbuddy
-      ? workBuddyCreditTitle(credit, t, tier)
-      : spec.provider === 'claude'
-        ? t('quota.claude.creditTitle', { used: String(credit.used ?? 0), limit: String(credit.limit ?? '') })
-        : t(keys.title, { remaining: String(credit.remaining ?? '') })
-  return createElement('span', {
-    key: 'credit',
-    title,
-    style: {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '6px',
-      padding: '1px 8px',
-      borderRadius: '999px',
-      fontVariantNumeric: 'tabular-nums',
-      whiteSpace: 'nowrap',
-    },
-  },
-    createElement(IconGaugeOutlineRegular),
-    createElement('span', null, t(keys.credit), ' ', createElement('span', null, detail)))
-}
-
-/**
- * WorkBuddy 的悬停明细：套餐名、每一类积分的构成、总积分。
- *
- * 构成是站点给的四类（套餐基础／套餐赠送／购买／平台奖励），少的那几类在站点
- * 里是 0——照实列出来，让人看得见积分是怎么来的。
- */
-function workBuddyCreditTitle(credit: {
-  readonly remaining?: number
-  readonly used?: number
-  readonly limit?: number
-  readonly groups?: readonly {
-    readonly name: string
-    readonly total: number
-    readonly remain: number
-    readonly used: number
-  }[]
-}, t: RuntimeT, tier?: string): string {
-  const lines: string[] = []
-  if (tier !== undefined && tier !== '') lines.push(t('quota.workbuddy.creditTitle.plan', { tier }))
-  for (const group of credit.groups ?? []) {
-    lines.push(t('quota.workbuddy.creditTitle.group', {
-      name: group.name,
-      remain: String(group.remain),
-      total: String(group.total),
-      used: String(group.used),
-    }))
-  }
-  lines.push(t('quota.workbuddy.creditTitle.total', {
-    remaining: String(credit.remaining ?? 0),
-    limit: String(credit.limit ?? 0),
-  }))
-  return lines.join('\n')
-}
-
-/** The dock slot face this registration needs; structural, like every slot host here. */
-type DockSlotHost = {
-  inject(key: string, callback: () => unknown): unknown
-  register(options: {
-    name: string
-    id?: string
-    order?: number
-    locale?: string
-    inject?: (sessionId: string) => unknown
-  }, component: unknown): () => void
-}
-
-/** The two services the visibility and model checks read; both optional host services. */
-export interface QuotaPillServices {
-  readonly modelDirectories?: { directoryFor(sessionId: string): { readonly store: unknown } }
-  readonly sessions?: { subagentAddress(sessionId: string): unknown }
-}
-
-/**
- * 一次会话的目录 store；服务已经没了就当没有目录。
- *
- * @param service - the model directory service, if the host still has one.
- * @param sessionId - the session whose directory is wanted.
- * @returns the directory's store, or undefined when there is none to read.
- */
-function directoryStoreOf(
-  service: QuotaPillServices['modelDirectories'],
-  sessionId: string,
-): unknown {
-  if (service === undefined) return undefined
-  try {
-    return service.directoryFor(sessionId)?.store
-  } catch (error) {
-    // 宿主日志在浏览器里看不见；这一档的线索只能留在这里（模型列表同时空着，
-    // 胶囊是唯一会说「连接已经断了」的地方）。
-    console.warn(`[acp-agent] zcode quota: the model directory service is gone (${error instanceof Error ? error.message : String(error)}) — the pills are hidden`)
-    return undefined
-  }
-}
-
-/**
- * Register the quota pills into the composer dock (a list slot, session scope),
- * next to the official stats pills. The inject face hands the renderer two bare
- * observables (quota poller, model directory) plus the subagent visibility
- * flag — the renderer binds `useZcodeQuota` / `useZcodeDirectory` from them.
- *
- * @param slots - the slot host (`ctx.slots`).
- * @param poller - the shared quota poller (created once in apply).
- * @param services - the host services, when present.
- * @param spec - 取值口径；缺省 GLM。MiniMax 传 MINIMAX_QUOTA_PILL_SPEC。
- * @returns the disposer of the registration.
- */
-export function registerQuotaDockPills(
-  slots: DockSlotHost,
-  poller: QuotaPoller,
-  services: Partial<QuotaPillServices>,
-  spec: QuotaPillSpec = GLM_QUOTA_PILL_SPEC,
-): () => void {
-  return slots.inject('conversation.composer.dock', () => slots.register(
-    {
-      name: 'conversation.composer.dock',
-      id: spec.dockId,
-      order: spec.dockOrder,
-      locale: NAMESPACE,
-      inject: (sessionId: string) => {
-        // 服务可能已经没了（连接重建后旧实例被处置）：一调就抛「inactive
-        // context」，而这里抛出去，崩的是**座位条目**——2026-10-20 桌面版：
-        // 输入框下面的 dock 崩了，连带座位一起带走。取不到就当没有目录：
-        // 胶囊不画，其它照常。
-        const directory = directoryStoreOf(services.modelDirectories, sessionId)
-        const visible = services.sessions?.subagentAddress(sessionId) === undefined
-        return {
-          visible,
-          hooks: {
-            zcodeQuota: poller,
-            // 同一只轮询器的另一半快照：登录过期时的「去授权」信息。
-            zcodeLogin: { subscribe: poller.subscribe, getSnapshot: () => poller.getLogin() },
-            ...(directory === undefined ? {} : { zcodeDirectory: directory }),
-          },
-        }
-      },
-    },
-    (props: {
-      readonly useZcodeQuota?: SnapshotHook<QuotaWindows>
-      readonly useZcodeLogin?: SnapshotHook<QuotaLoginOffer>
-      readonly useZcodeDirectory?: SnapshotHook<QuotaDirectorySnapshot>
-      readonly visible?: boolean
-      readonly t?: RuntimeT
-    }) => createElement(QuotaPillRow, {
-      ...(props.useZcodeQuota === undefined ? {} : { useQuota: props.useZcodeQuota }),
-      ...(props.useZcodeLogin === undefined ? {} : { useLogin: props.useZcodeLogin }),
-      ...(props.useZcodeDirectory === undefined ? {} : { useModelDirectory: props.useZcodeDirectory }),
-      ...(props.visible === undefined ? {} : { visible: props.visible }),
-      ...(props.t === undefined ? {} : { t: props.t }),
-      spec,
-    }),
-  )) as () => void
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
