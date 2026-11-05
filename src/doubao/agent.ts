@@ -38,6 +38,14 @@ export type DoubaoBrowserLike = {
   close(): Promise<void>
 }
 
+/** A JSON-RPC error the agent answers with, code included. */
+export class DoubaoRpcError extends Error {
+  constructor(readonly code: number, message: string) {
+    super(message)
+    this.name = 'DoubaoRpcError'
+  }
+}
+
 export type DoubaoTurnEvent =
   | { kind: 'text'; text: string }
   | { kind: 'tool'; action: string }
@@ -219,11 +227,23 @@ export class DoubaoAcpAgent {
         if (session) session.cancelled = true
         return {}
       }
+      case 'session/set_mode':
+        // The host asks for a mode after the session opens. 豆包 has none:
+        // its depth switch lives in the page, and this agent drives that page
+        // as it is. So the request is accepted and ignored.
+        return {}
+      case 'session/set_model':
+        // 豆包 picks its own model; the picker's choice has nothing to set.
+        return {}
       case 'session/set_config_option':
-        // 豆包 picks its own model; there is nothing for a client to set.
+        // Same: there is no per-session configuration on this side.
         return {}
       default:
-        throw new Error(`unsupported method: ${method}`)
+        // An optional method the agent does not implement is answered the
+        // standard way (-32601), not as a failure of the turn: the host
+        // probes for things like session/load, and a failure here would abort
+        // the session it is trying to open.
+        throw new DoubaoRpcError(-32601, `unsupported method: ${method}`)
     }
   }
 
@@ -345,10 +365,11 @@ async function handleLine(agent: DoubaoAcpAgent, line: string): Promise<void> {
     process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n')
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    const code = error instanceof DoubaoRpcError ? error.code : -32000
     process.stdout.write(JSON.stringify({
       jsonrpc: '2.0',
       id,
-      error: { code: -32000, message },
+      error: { code, message },
     }) + '\n')
   }
 }
