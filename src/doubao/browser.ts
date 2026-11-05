@@ -21,7 +21,7 @@
  *   - click the send control.
  */
 
-import { spawn } from 'node:child_process'
+import { spawn, execFileSync } from 'node:child_process'
 import { attachPage, connectCdp, evaluate, type CdpConnection, type CdpSession } from './cdp.ts'
 import { SNAPSHOT_SCRIPT, type DomSnapshot } from './dom.ts'
 
@@ -119,6 +119,12 @@ export class DoubaoBrowser {
 
     let connection = await DoubaoBrowser.tryConnect(port)
     if (!connection) {
+      if (DoubaoBrowser.isAppRunning()) {
+        throw new Error(
+          '豆包桌面端已经在运行，但它不是带调试端口启动的——再启动一个会把请求转给它自己，端口不会开。'
+          + '请先退出豆包再重试。之后由我们启动的豆包会带着调试端口，那个窗口你照常用即可。',
+        )
+      }
       report(`doubao: no devtools on port ${port}, starting the app`)
       DoubaoBrowser.startApp(appPath, port)
       connection = await DoubaoBrowser.waitForConnection(port, timeoutMs, report)
@@ -132,6 +138,25 @@ export class DoubaoBrowser {
       return await connectCdp(port, { timeoutMs: 3000 })
     } catch {
       return undefined
+    }
+  }
+
+  /**
+   * Whether a 豆包 is already running.
+   *
+   * A running instance answers a second launch by handing the request over to
+   * itself, so a new one never gets the debugging port (measured 2026-11-05:
+   * the second launch produced no listener at all). That makes "豆包 already
+   * running" a case the user has to resolve — we say so instead of waiting
+   * for a port that will never open.
+   */
+  private static isAppRunning(): boolean {
+    try {
+      const output = execFileSync('/usr/bin/pgrep', ['-f', 'Doubao Browser'], { encoding: 'utf8' })
+      return output.trim().length > 0
+    } catch {
+      // pgrep exits non-zero when nothing matches.
+      return false
     }
   }
 
