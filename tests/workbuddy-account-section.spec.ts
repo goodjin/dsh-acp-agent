@@ -67,13 +67,9 @@ describe('视图', () => {
     expect(textOf(view)).toContain('登录')
   })
 
-  it('登了就说清是谁，登录按钮变成「重新登录」（不藏——两个按钮是一组）', () => {
+  it('登上了显示是谁，不摆登录按钮（杵在那儿看着像在催你登录）', () => {
     const view = workBuddyAccountView({ state: LOGGED_IN })
-    const login = find(view, props => props['data-workbuddy-login'] === true)
-    expect(login?.props?.disabled).toBe(false)
-    expect(textOf(login)).toContain('重新登录')
-    expect(textOf(view)).toContain('某人')
-    expect(textOf(view)).toContain('uid-1')
+    expect(find(view, props => props['data-workbuddy-login'] === true)).toBeUndefined()
   })
 
   it('视图里没有令牌可显示', () => {

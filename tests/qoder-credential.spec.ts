@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { credentialFilePath, readCredential, resolveCredential, writeCredential } from '../src/qoder/credential.ts'
+import { attachAccount, credentialFilePath, readCredential, resolveCredential, writeCredential } from '../src/qoder/credential.ts'
 
 const roots: string[] = []
 
@@ -75,5 +75,21 @@ describe('Qoder 国际版的凭据存放', () => {
     await writeFile(file, '{ 这不是 JSON', { mode: 0o600 })
     expect(await readCredential(file)).toBeUndefined()
     await expect(resolveCredential({ file })).rejects.toThrow('登录')
+  })
+})
+
+describe('补账号信息', () => {
+  it('把昵称补进存着的凭据并写回', async () => {
+    const root = await scratch()
+    const file = join(root, 'credentials.json')
+    await writeCredential({ accessToken: 'tok', machineId: 'mid' }, file)
+    const updated = await attachAccount({ uid: 'uid-1', nickname: '金山' }, file)
+    expect(updated?.account).toEqual({ uid: 'uid-1', nickname: '金山' })
+    expect((await readCredential(file))?.account?.nickname).toBe('金山')
+  })
+
+  it('没有存过凭据时是空，不凭空造一份', async () => {
+    const root = await scratch()
+    expect(await attachAccount({ uid: 'uid-1' }, join(root, 'none.json'))).toBeUndefined()
   })
 })

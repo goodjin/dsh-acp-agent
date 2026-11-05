@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import {
   credentialOfPoll,
+  fetchQoderAccount,
   credentialOfRefresh,
   pollForToken,
   refreshCredential,
@@ -91,5 +92,18 @@ describe('Qoder 国际版的设备码登录', () => {
     const mock = vi.fn()
     await expect(pollForToken(startLogin(), { fetchImpl: mock, signal: controller.signal })).rejects.toThrow()
     expect(mock).not.toHaveBeenCalled()
+  })
+})
+
+describe('取账号资料', () => {
+  it('解析出 uid 与昵称', async () => {
+    const fetchImpl = (async () => new Response(JSON.stringify({ id: 'uid-1', name: '金山' }), { status: 200 })) as unknown as typeof fetch
+    const account = await fetchQoderAccount({ accessToken: 'tok', fetchImpl })
+    expect(account).toEqual({ uid: 'uid-1', nickname: '金山' })
+  })
+
+  it('取不到时是空，不是崩掉', async () => {
+    const fetchImpl = (async () => new Response('nope', { status: 401 })) as unknown as typeof fetch
+    expect(await fetchQoderAccount({ accessToken: 'tok', fetchImpl })).toBeUndefined()
   })
 })

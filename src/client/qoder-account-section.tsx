@@ -181,16 +181,20 @@ export function qoderAccountView(props: QoderAccountViewProps): ReactNode {
         {box}
       </div>
       <div data-qoder-account-actions={true} style={ACCOUNT_ACTIONS_STYLE}>
-        <button
-          type="button"
-          data-qoder-login={true}
-          style={ACCOUNT_BUTTON_STYLE}
-          // 已经登上了就把按钮改成「重新登录」——写成「登录」会让人以为又要登录一次。
-          disabled={props.busy === true}
-          onClick={() => { props.onLogin?.() }}
-        >
-          {t(state.authenticated ? 'qoder.account.relogin' : 'qoder.account.login')}
-        </button>
+        {/* 已登录时不摆登录按钮：杵在那儿的「重新登录」看着就是在催你登录。 */}
+        {state.authenticated
+          ? null
+          : (
+            <button
+              type="button"
+              data-qoder-login={true}
+              style={ACCOUNT_BUTTON_STYLE}
+              disabled={props.busy === true}
+              onClick={() => { props.onLogin?.() }}
+            >
+              {t('qoder.account.login')}
+            </button>
+          )}
         <button
           type="button"
           data-qoder-refresh={true}
