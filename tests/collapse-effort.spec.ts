@@ -19,7 +19,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { collapseEffortModels, collapsedToCatalog, effortLabelOf } from '@goodjin2/dsh-model-kit'
+import { collapseEffortModels, collapsedToCatalog, effortLabelOf } from '../src/modelkit/index.ts'
 
 describe('collapseEffortModels', () => {
   it('把同一基础模型的多个 [强度] 归并成一个', () => {

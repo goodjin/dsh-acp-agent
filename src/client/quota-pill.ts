@@ -1,13 +1,13 @@
 /**
  * GLM 套餐配额胶囊：挂在输入框下方的 dock 里，与 token 用量同一排。
  *
- * 「机器」（取值口径、轮询器、取数、画法、dock 注册）已迁到 @goodjin2/dsh-model-kit/client；
+ * 「机器」（取值口径、轮询器、取数、画法、dock 注册）在 ./modelkit/client；
  * 本文件只剩 agent-acp 自己的两样东西：
  * 1. 各家**规格常量**（dock id、路由、模型前缀、目录 provider id）与路由路径；
  * 2. DeepSeek 官方账号余额的取数器（走设置页同一条 remote 通道，是这家的私事）。
  */
 
-import type { QuotaAnswer, QuotaPillSpec } from '@goodjin2/dsh-model-kit/client'
+import type { QuotaAnswer, QuotaPillSpec } from '../modelkit/client/index.ts'
 export {
   createQuotaPoller,
   loginChip,
@@ -19,7 +19,7 @@ export {
   sameLoginOffer,
   loginOfferOfBody,
   QuotaPillRow,
-} from '@goodjin2/dsh-model-kit/client'
+} from '../modelkit/client/index.ts'
 export type {
   QuotaPillServices,
   QuotaWindow,
@@ -29,7 +29,7 @@ export type {
   QuotaLoginOffer,
   QuotaPoller,
   DockSlotHost,
-} from '@goodjin2/dsh-model-kit/client'
+} from '../modelkit/client/index.ts'
 
 /** 与宿主侧 zcode-quota 路由登记的同一路径。 */
 export const QUOTA_ROUTE_PATH = '/acp-agent/zcode/quota'

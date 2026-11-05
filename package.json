@@ -141,7 +141,6 @@
     "@deepseek-ai/dsh-client-ui-renderer": "0.2.0-rc.2",
     "@deepseek-ai/dsh-client-ui-sidebar": "0.2.0-rc.2",
     "@deepseek-ai/dsh-client-ui-slots": "0.2.0-rc.2",
-    "@goodjin2/dsh-model-kit": "link:../dsh-model-kit",
     "@types/node": "^24.0.0",
     "@types/proper-lockfile": "^4.1.4",
     "@types/qrcode": "^1.5.6",

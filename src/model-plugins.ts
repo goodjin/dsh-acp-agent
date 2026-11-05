@@ -8,7 +8,7 @@
  * asked in turn and declines by returning nothing.
  */
 
-import type { ModelTurnRequest } from '@goodjin2/dsh-model-kit'
+import type { ModelTurnRequest } from './modelkit/index.ts'
 import { minimaxiModelStream } from './minimaxi-model.ts'
 import type { PresetConfig } from './registry.ts'
 import { pairToolResults } from './tool-pairing.ts'

@@ -14,10 +14,10 @@ import type { AcpDialect } from './index.ts'
 import { isModelBackedAgent } from './model-plugins.ts'
 import type { AcpPresetConfig, PresetConfig } from './registry.ts'
 
-// 运行时清单账本已迁到 @goodjin2/dsh-model-kit；这里继续用，并把对外的名字再导出一层，
+// 运行时清单账本在 ./modelkit；这里继续用，并把对外的名字再导出一层，
 // 保持本仓既有引用路径（service.ts / entry.ts / plugin.ts / 各 spec）不变。
-export { runtimeModels } from '@goodjin2/dsh-model-kit'
-export type { ReportedModel, RuntimeModels } from '@goodjin2/dsh-model-kit'
+export { runtimeModels } from './modelkit/index.ts'
+export type { ReportedModel, RuntimeModels } from './modelkit/index.ts'
 
 /**
  * The provider routes this configuration adds to the catalog.

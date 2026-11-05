@@ -20,13 +20,13 @@ import type { PresetConfig } from './registry.ts'
 import { baseIdOf } from './selection.ts'
 import { GatewayChunkQueue } from './gateway.ts'
 import type { GatewayChunk, GatewaySink } from './gateway.ts'
-import { collapseEffortModels, collapsedToCatalog, presetOfRoute } from '@goodjin2/dsh-model-kit'
-import type { CatalogModel } from '@goodjin2/dsh-model-kit'
+import { collapseEffortModels, collapsedToCatalog, presetOfRoute } from './modelkit/index.ts'
+import type { CatalogModel } from './modelkit/index.ts'
 
-// 路由命名、档位折叠、目录模型类型已迁到 @goodjin2/dsh-model-kit；这里继续用它们，
+// 路由命名、档位折叠、目录模型类型在 ./modelkit；这里继续用它们，
 // 并把对外的名字再导出一层，保持本仓既有的引用路径（switch.ts / index.ts / 各 spec）不变。
-export { collapseEffortModels, collapsedToCatalog, presetOfRoute, providerRoute } from '@goodjin2/dsh-model-kit'
-export type { CatalogModel } from '@goodjin2/dsh-model-kit'
+export { collapseEffortModels, collapsedToCatalog, presetOfRoute, providerRoute } from './modelkit/index.ts'
+export type { CatalogModel } from './modelkit/index.ts'
 
 /** What the adapter needs from the outside world. */
 export type CatalogDeps = {
