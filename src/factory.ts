@@ -30,6 +30,7 @@ import type {
   PermissionRequest,
 } from './index.ts'
 import { cwdForOpen } from './registry.ts'
+import { isModelBackedAgent } from './model-plugins.ts'
 import type { AcpPresetConfig, AcpSession, AcpSessionFactory, PresetConfig } from './registry.ts'
 import { codexProgressProbe, grokProgressProbe, qoderProgressProbe } from './agent-progress.ts'
 import type { ProgressProbe } from './agent-progress.ts'
@@ -186,14 +187,11 @@ export function makeSessionFactory(config: PresetConfig, deps: FactoryDeps): Acp
     open: async (presetId, options): Promise<AcpSession> => {
       const preset = config.presets[presetId]
       if (preset === undefined) throw new Error(`acp dispatch: no preset named ${presetId}`)
-      if (preset.agent === 'zcode') {
-        throw new Error('zcode answers as a model inside the native loop; it is not opened as an ACP session')
-      }
-      if (preset.agent === 'minimaxi') {
-        throw new Error('minimaxi answers as a model inside the native loop; it is not opened as an ACP session')
-      }
-      if (preset.agent === 'workbuddy') {
-        throw new Error('workbuddy answers as a model inside the native loop; it is not opened as an ACP session')
+      // 模型行在 DSH 自己的循环里回答，不是要被拉起的进程。名单只有一处
+      // （model-plugins 的那张表）——在第二个地方列一遍，就会有一行漏掉，
+      // 漏掉的那行会真的去 spawn 一个空命令，报错还看不懂。
+      if (isModelBackedAgent(preset.agent)) {
+        throw new Error(`${String(preset.agent)} answers as a model inside the native loop; it is not opened as an ACP session`)
       }
       // Refuse before any child starts. An omitted directory would otherwise
       // inherit this process's directory, which is not the session's workspace.
@@ -337,14 +335,11 @@ export function makeSessionFactory(config: PresetConfig, deps: FactoryDeps): Acp
     openShared: async (presetId: string): Promise<SharedAgent> => {
       const preset = config.presets[presetId]
       if (preset === undefined) throw new Error(`acp dispatch: no preset named ${presetId}`)
-      if (preset.agent === 'zcode') {
-        throw new Error('zcode answers as a model inside the native loop; it is not opened as an ACP session')
-      }
-      if (preset.agent === 'minimaxi') {
-        throw new Error('minimaxi answers as a model inside the native loop; it is not opened as an ACP session')
-      }
-      if (preset.agent === 'workbuddy') {
-        throw new Error('workbuddy answers as a model inside the native loop; it is not opened as an ACP session')
+      // 模型行在 DSH 自己的循环里回答，不是要被拉起的进程。名单只有一处
+      // （model-plugins 的那张表）——在第二个地方列一遍，就会有一行漏掉，
+      // 漏掉的那行会真的去 spawn 一个空命令，报错还看不懂。
+      if (isModelBackedAgent(preset.agent)) {
+        throw new Error(`${String(preset.agent)} answers as a model inside the native loop; it is not opened as an ACP session`)
       }
 
       // Spawn transport using a neutral cwd (session-specific cwd is set per session/new)

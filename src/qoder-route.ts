@@ -1,8 +1,7 @@
 /** Host-only login flow; the browser receives status and the PKCE challenge, never credentials. */
 import type { ServerResponse } from 'node:http'
 import type { WorkBuddyRouteContext } from './workbuddy-route.ts'
-import { startLogin, pollForToken } from './qoder/auth.ts'
-import { readCredential, writeCredential } from './qoder/credential.ts'
+import { pollForToken, readCredential, startLogin, writeCredential } from './qoder/index.ts'
 
 export const name = 'acp-agent-qoder-login'
 export const inject = ['webServer', 'connection']

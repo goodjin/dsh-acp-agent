@@ -1,49 +1,143 @@
-# Qoder 国际版模型适配器
+# Qoder 国际版的模型行
 
-核对：2026-11-05。本机 Qoder.app 0.5.3（global），worker 1.1.79-hotfix.11，SDK 1.0.59-alpha.9。
+> 核对时间：2026-11-05
+> 来源：本机 `/Applications/Qoder.app`（0.5.3，com.qoder.app）内置的
+> `@qoder-ai/qoder-agent-sdk` worker（`dist/_worker/qoder-worker-runtime.obf.mjs`，
+> 34 MB 单行混淆），以及 `~/.qoder/logs/runs/…/qodercli.log` 里真实发生的请求。
+> 状态：**协议已核对，单元测试与全量门禁通过；真机登录与回合待人验证。**
 
-## 范围与使用
+## 一句话结论
 
-新增 `acp-qoder-global` / `agent: qoder-global`，走 DSH 原生工具循环；国内版 `acp-qoder` 仍走 `qoderclicn --acp`。
-设置 → Qoder 国际版账号 → 登录 → 浏览器授权。模型选择器选 Qoder 国际版 / Auto。
-浏览器未自动弹出时，可点设置里的「打开授权页面」。轮询五分钟到期后允许重试。
+Qoder 国际版**没有随桌面版安装 CLI**（本机只有 CN 版的 `qoderclicn`），它的能力只
+存在于桌面 App 内置的 worker 里。所以接入方式不是「再起一个 ACP 进程」，而是
+**把它的模型接口接成 DSH 的一行模型**：插件自己登录、自己发模型请求，工具仍由
+DSH 执行。
 
-凭据单独保存在 `$DSH_HOME/qoder-global/credentials.json`（默认 `~/.dsh`），目录 0700、文件 0600。
-不读取、不改写桌面 App 的 `auth.v1.dat` 或 CLI 的 `.auth/user`；凭据写入与刷新共用跨进程锁，临时文件原子替换。
-只支持本次核对的官方国际版端点，不支持借用国内版令牌、企业 VPC 或任意自定义 baseUrl。
+这与仓库里已有的 CN 版 `acp-qoder` 行并存、互不干扰：CN 走官方 ACP 协议，国际版
+走直连模型接口。
 
-## 从安装包定位请求
+## 怎么找到「它怎么请求模型」
 
-`app.asar` 为 183 MB。直接读取 ASAR header 的文件表，按偏移提取 SDK 和 main 模块，避免整包解压的缺失资源问题。
-真正的请求实现已经在 `app.asar.unpacked/node_modules/@qoder-ai/qoder-agent-sdk/dist/_worker/qoder-worker-runtime.obf.mjs`，约 33 MB。
-开头的字符串解码器为 base64 + 循环 XOR。只解码字符串并按上下文查看，不执行抽取出的代码，不将厂商 bundle 放进本仓库。
+worker 是单行混淆的 34 MB 文件，直接 grep 定位不到关键处。两条做法：
 
-关键路径：
+1. **解混淆**：worker 里的字符串用 `_$d1("…")` 包着，是 base64 之后按固定 12 字节
+   密钥 `2nipF7Qi2SoZ` 逐字节 XOR。把这一层解开（全文件 17324 处），文件才变得
+   可 grep。
+2. **按字符串抽上下文**：解混淆后仍是一行超长文件，用一个只按字面串取前后上下文的
+   小脚本定位（`grep` 的 `{n,m}` 上限 255，单行文件用不了）。
 
-- `Mot` / `oWi`：HTTP 模型地址默认 `https://api2-v2.qoder.sh/model/v1/chat/completions`。
-- `Wat.openResponse`：Bearer，`X-Request-ID` / `X-Session-ID`，JSON 请求，SSE 响应；401 刷新一次。
-- `OFn`：OpenAI 消息/工具结构，另加 `stream_options.include_usage`、`metadata.context`，可选 `metadata.business`。
-- `Wat.payloadsFromResponse`：处理 SSE error、JSON error、OpenAI choices 和终止标记。
-- `Rpl`：PKCE S256，浏览器 `/device/selectAccounts`；宿主向 `openapi.qoder.sh/api/v1/deviceToken/poll` 提交 nonce/verifier。
-- 登录待完成是 HTTP 404；成功响应令牌在顶层 `token`，不是 `data.data`。
-- 续期 `POST /api/v1/deviceToken/refresh`，body 为 refresh_token + machine_id；新令牌字段是 `device_token`。
-- CLI `.auth/user` 由 WASM 加密，带跨进程锁；桌面账号另存 Electron 数据目录，不能假定两者共享明文 token。
+定位到的关键函数：`Mot`/`oWi`（模型地址）、`Wat.openResponse`（请求头与流式）、
+`OFn`（请求体）、`Rpl`（设备码流程）、`buildUserInfoFromDeviceToken`（令牌怎么用）。
 
-worker 同时存在 legacy、HTTP、gRPC 三条模型传输。此实现仅使用 HTTP 路径，不把 gRPC/legacy 的封装当 OpenAI SSE。
-模型目录 `/api/v2/model/list?Encode=1` 仍走旧签名/编码链路，本版未复制这套签名；只声明 worker 默认的 auto，不套用国内版模型目录、倍率或权限。
-官方 ACP 是另一条已存在的完整 agent 接入方式：https://docs.qoder.com/cli/acp 。
+## 端点（国际版 prod 一组）
 
-## 实测与限制
+| 用途 | 地址 |
+|---|---|
+| 浏览器授权页 | `https://qoder.com/device/selectAccounts` |
+| 设备令牌轮询/续期 | `https://openapi.qoder.sh/api/v1/deviceToken/{poll,refresh}` |
+| 账号信息 | `https://center.qoder.sh/api/v1/userinfo` |
+| 模型清单 | `https://api3.qoder.sh/api/v2/model/list?Encode=1` |
+| 模型请求 | `https://api2-v2.qoder.sh/model/v1/chat/completions` |
 
-已验证：
+同一组常量里还有 CN 与 daily/test 的对应值——说明它是**按品牌与环境成套的**，
+不是一个统一站点。因此这里的「端点同源」是：**登录签发的令牌与模型请求必须出自
+同一套环境**，不是「同一个域名」。默认四个地址成组给出；换地址用
+`QODER_LOGIN_BASE` / `QODER_OPENAPI_BASE` / `QODER_CENTER_BASE` /
+`QODER_CATALOG_BASE` / `QODER_MODEL_BASE` 逐项覆盖。
 
-- 官方未授权 poll：HTTP 404，`errorCode: NotFound`（2026-11-05）。
-- 官方模型端点无 Bearer：HTTP 401，`{"error":"unauthorized"}`。
-- 测试覆盖 PKCE、404 等待、成功外壳、取消、并发旋转、已存在目录收紧、401 单次重试、工具参数分帧、usage、错误/截断流、路由准入、重复登录与卸载取消。
-- 仓库类型检查、全量测试与客户端构建通过（最终 1169 通过、3 跳过）。
-- 独立 DSH 宿主装载日志实测 18/18，国际版预置确认为 transport=model。
-- 受保护路由的真实 HTTP 验证未执行：自动审批拒绝从临时宿主启动日志读取访问令牌；路由准入与响应由单测覆盖。
+## 登录：设备码 + PKCE
 
-待账号授权实测：成功登录和 refresh 响应、auto 的实际模型回合、真实 SSE 工具往返及模型权限。
-成功响应夹具来自本机 worker 的字段，不冒充服务端抓包。实现拒绝错误/空流/没有 finish_reason 的截断流，不会把它们显示为成功。
-HTTP 429/503 和排队响应会明确失败，暂不实现 worker 的私有排队轮询；流开始后不自动重发，避免重复生成或工具调用。
+1. 生成 verifier / challenge / nonce / machine_id，浏览器打开
+   `{loginBase}/device/selectAccounts?challenge&challenge_method=S256&nonce&machine_id&client_id`；
+   国际版 prod 的 client_id 是 `e883ade2-e6e3-4d6d-adf7-f92ceff5fdcb`。
+2. 轮询 `{openapiBase}/api/v1/deviceToken/poll?nonce&verifier&challenge_method=S256`。
+3. **HTTP 404 表示「用户还没在浏览器里授权」**，是等待态，不是错误；其它非 2xx 才是失败。
+4. 轮询成功：应答是**顶层** `{token, refresh_token, expires_at | expires_in,
+   refresh_token_expires_at | refresh_token_expires_in, user_id, user_name}`，
+   **没有 `data` 外壳**。
+
+续期：`POST {openapiBase}/api/v1/deviceToken/refresh`，体 `{refresh_token, machine_id}`，
+应答 `{device_token, refresh_token, expires_at, refresh_token_expires_at}`
+——**续期的令牌字段叫 `device_token`，轮询那次叫 `token`**。
+
+轮询拿到的 `token` 同时充当 `security_oauth_token` 与 `access_token`，
+**直接作模型请求的 Bearer，中间不换票**。
+
+## 模型清单
+
+`GET {catalogBase}/api/v2/model/list?Encode=1`（带 Bearer 与 `Cosy-*` 身份头）。
+
+**应答是按场景分组的对象**：`{"assistant": [ … ], "其他场景": [ … ] }`，取 `assistant`
+那一组。每条模型：
+
+| 字段 | 含义 |
+|---|---|
+| `key` | 模型 id，请求体里就发它 |
+| `display_name` | 给人看的名字 |
+| `is_reasoning` / `efforts` / `default_effort` | 推理档位（**每个模型自己声明**） |
+| `max_input_tokens` | 输入长度上限 |
+| `is_vl` | 支不支持图片 |
+| `maxTokensField` | 请求体里「最大 token」用哪个字段名 |
+
+worker 内置的默认模型是 **`qwen3.8-max`**（`Qwen 3.8 Max`），它的
+`maxTokensField` 是 **`max_completion_tokens`**——发成 `max_tokens` 服务端不认。
+清单没到手时（没登录、拉不到），预置行里声明的就是这一项。
+
+## 模型请求
+
+`POST {modelBase}/model/v1/chat/completions`，SSE。
+
+**头**：`Authorization: Bearer <设备令牌>`、`Accept: text/event-stream`、
+`Content-Type: application/json`、`X-Request-ID`、`X-Session-ID`、
+`Cosy-Version`（`1.1.79-hotfix.11`）、`Cosy-ClientType`（`5`）、
+`Cosy-MachineOS`（`aarch64_darwin`）。
+
+**体**：OpenAI 形状（`model`、`messages`、`stream: true`、
+`stream_options: {include_usage: true}`、`tools`、`reasoning_effort`、
+最大 token 用模型声明的字段名）**外加** `metadata.context`：
+`{request_id, request_set_id, session_id, client_type}`。
+
+**失败分三类**：
+
+- HTTP 401 → 续期一次再重试，仍失败就说「请重新登录」；
+- SSE 里有错误帧 → 直接报错，错误信息里**不反射令牌**；
+- SSE 断流（没有结束帧）→ 报错，**不能当成一次成功的空回答**。
+
+## 接进本项目
+
+| 位置 | 做什么 |
+|---|---|
+| `src/qoder/endpoints.ts` | 一组端点 + `Cosy-*` 身份头；逐项可覆盖 |
+| `src/qoder/auth.ts` | 设备码流程、轮询（404 = 等待）、续期（`device_token`） |
+| `src/qoder/credential.ts` | 独立凭据文件（目录 0700 / 文件 0600，**已存在也收紧**）、跨进程续期 |
+| `src/qoder/models.ts` | 清单的解析（按场景分组）与拉取；worker 内置模型表 |
+| `src/qoder/chat.ts` | 请求体、请求头、SSE、失败分类 |
+| `src/qoder-model.ts` | 认下 `agent: qoder-global` 那一行；发布运行时清单；按模型过滤档位与字段名 |
+| `src/qoder-route.ts` | 宿主登录路由（浏览器只拿得到地址与「登了没」） |
+| `src/client/qoder-account-section.tsx` | 设置里的账号段 |
+
+预置行 `acp-qoder-global`（显示名「Qoder 国际版」），健康自报行
+`acp-qoder-global` 与 `acp-agent-qoder-login`。
+
+## 边界
+
+- **不读、不写 Qoder 桌面版自己的凭据**——它在应用自己的加密存储里；插件走自己的
+  设备码登录，令牌只留在宿主进程与 `~/.dsh/qoder-global/credentials.json`。
+- 只支持本次核对的官方国际版端点；不借用国内版令牌，不支持企业 VPC。
+- worker 里还有 legacy / gRPC 两条模型传输，本实现只用 HTTP 那条。
+
+## 实测与未实测
+
+**已核对（对着 worker 与本机日志）**：端点一组、设备码四步、404 当等待、顶层令牌、
+续期字段名、清单按场景分组、请求体与请求头、内置模型 `qwen3.8-max` 及其
+`max_completion_tokens`。
+
+**已实测（无凭据的公开探测）**：模型端点无 Bearer 回 `HTTP 401`；轮询未授权回
+`HTTP 404`。
+
+**未实测（需要一次真机登录）**：登录成功后的凭据形状、清单里真实的模型 id 与档位、
+一次真实回合的 SSE 帧、模型权限、配额口径。
+
+**单元测试覆盖**：端点常量、PKCE 生成、404 当等待、续期字段、目录权限收紧、
+并发续期只续一次、清单解析、请求体与头、401 重试、断流与错误帧、档位过滤、
+最大 token 字段名、路由准入与不泄密、设置页视图。

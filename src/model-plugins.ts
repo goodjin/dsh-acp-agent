@@ -30,7 +30,7 @@ export function modelPluginStream(
     readonly onRuntimeModels?: ((presetId: string, models: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[]) => void) | undefined
   },
 ): (presetId: string, request: CatalogTurnRequest) => AsyncIterable<GlmStreamChunk | MiniMaxStreamChunk | WorkBuddyStreamChunk> | undefined {
-  const plugins = [zcodeModelStream(config), minimaxiModelStream(config), workBuddyModelStream(config, deps), qoderModelStream(config)]
+  const plugins = [zcodeModelStream(config), minimaxiModelStream(config), workBuddyModelStream(config, deps), qoderModelStream(config, deps)]
   return (presetId, request) => {
     const paired = withPairedResults(request)
     for (const plugin of plugins) {
