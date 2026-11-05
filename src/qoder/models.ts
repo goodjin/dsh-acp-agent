@@ -13,7 +13,7 @@
 import { resolveEndpoints } from './endpoints.ts'
 import type { QoderEndpoints } from './endpoints.ts'
 import type { QoderCredential } from './auth.ts'
-import { fetchCatalogViaSdk } from './catalog.ts'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
 /** 一条模型。 */
 export type QoderModel = {
@@ -101,10 +101,15 @@ export async function fetchModels(options: {
   readonly endpoints?: QoderEndpoints | undefined
   readonly fetchImpl?: typeof fetch | undefined
   /** 换掉「起 SDK 进程」这一步（测试用）。 */
-  readonly spawnSdk?: Parameters<typeof fetchCatalogViaSdk>[0]['spawnSdk']
+  readonly spawnSdk?: (sdkPath: string, authFile: string) => ChildProcessWithoutNullStreams | undefined
   /** 换一个 SDK 路径（测试用）。 */
   readonly sdkPath?: string | undefined
 }): Promise<QoderModel[]> {
+  // **懒加载**：SDK 那份要 `node:child_process`（起 Qoder 的进程）。静态 import 的话，
+  // 宿主那边一行都挂不上（整行 404）；动态 import 只在真要用时才发生，失败就退回
+  // 预置清单。
+  const { fetchCatalogViaSdk } = await import('./catalog.ts').catch(() => ({ fetchCatalogViaSdk: undefined }))
+  if (fetchCatalogViaSdk === undefined) return []
   const catalog = await fetchCatalogViaSdk({
     accessToken: options.credential.accessToken,
     ...(options.credential.account?.uid === undefined ? {} : { uid: options.credential.account.uid }),
