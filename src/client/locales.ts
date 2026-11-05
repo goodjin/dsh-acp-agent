@@ -23,6 +23,8 @@ export type ClientLocaleKey =
   | 'quota.claude.fiveHour.title' | 'quota.claude.weekly.title'
   | 'quota.claude.credit' | 'quota.claude.creditTitle'
   | 'quota.deepseek.credit' | 'quota.deepseek.creditTitle'
+  | 'quota.workbuddy.credit' | 'quota.workbuddy.creditTitle'
+  | 'quota.workbuddy.creditTitle.plan' | 'quota.workbuddy.creditTitle.group' | 'quota.workbuddy.creditTitle.total'
   | 'quota.grok.weekly.title' | 'quota.grok.weekly.title.tier'
   | 'quota.login.cta' | 'quota.login.code' | 'quota.login.title'
   | 'recovery.interrupted.note' | 'recovery.interrupted.expand'
@@ -83,6 +85,11 @@ export const zh: Record<ClientLocaleKey, string> = {
   'quota.grok.weekly.title': 'Grok 周窗口：已用 {percent}%',
   'quota.grok.weekly.title.tier': 'Grok（{tier}）周窗口：已用 {percent}%',
   'quota.deepseek.creditTitle': 'DeepSeek 账户余额 ¥{recharge}；赠送 ¥{bonus}{extra}',
+  'quota.workbuddy.credit': '积分',
+  'quota.workbuddy.creditTitle': 'WorkBuddy 积分：可用 {remaining} / 额度 {limit}',
+  'quota.workbuddy.creditTitle.plan': '套餐：{tier}',
+  'quota.workbuddy.creditTitle.group': '{name}：剩 {remain} / 共 {total}（已用 {used}）',
+  'quota.workbuddy.creditTitle.total': '总积分：{remaining} / {limit}',
   'quota.login.cta': '去授权',
   'quota.login.code': '授权码 {code}',
   'quota.login.title': '登录过期或没有登录：点开授权链接重新登录，授权完成后这一行会自动恢复',
@@ -172,6 +179,11 @@ export const en: Record<ClientLocaleKey, string> = {
   'quota.grok.weekly.title': 'Grok weekly window: {percent}% used',
   'quota.grok.weekly.title.tier': 'Grok ({tier}) weekly window: {percent}% used',
   'quota.deepseek.creditTitle': 'DeepSeek account balance ¥{recharge}; bonus ¥{bonus}{extra}',
+  'quota.workbuddy.credit': 'credits',
+  'quota.workbuddy.creditTitle': 'WorkBuddy credits: {remaining} available / {limit} limit',
+  'quota.workbuddy.creditTitle.plan': 'Plan: {tier}',
+  'quota.workbuddy.creditTitle.group': '{name}: {remain} left / {total} total ({used} used)',
+  'quota.workbuddy.creditTitle.total': 'Total credits: {remaining} / {limit}',
   'quota.login.cta': 'Authorize',
   'quota.login.code': 'code {code}',
   'quota.login.title': 'Login expired or missing: open the authorization link to sign in again; this row comes back on its own once you have',
