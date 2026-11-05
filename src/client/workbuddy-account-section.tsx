@@ -1,8 +1,12 @@
 /**
- * 设置里的「WorkBuddy 账号」段。
+ * 设置里的「WorkBuddy 账号」段——账号与模型列表都在这一段里。
  *
- * 这一段只做两件事：问宿主「登了没」，以及在没登录时给一个能点开的授权地址。
+ * 这一段做三件事：问宿主「登了没」、在没登录时给一个能点开的授权地址、把整份模型
+ * 清单列出来让人勾（勾上的才进模型选择器）。
  * 令牌不出宿主，所以浏览器这一侧从头到尾没有令牌——视图不读、应答里也不该有。
+ *
+ * 排版：账号信息自己一个框、独占一行；下面一行放两个按钮（同样大小、留出间距）；
+ * 再往下是模型列表（搜索框 + 勾选清单）。
  *
  * 视图是纯函数（可以直接断言形状），组件只负责取数与重画。
  */
@@ -10,6 +14,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { NAMESPACE, fallbackT } from './locales.ts'
+import {
+  readWorkBuddyModels,
+  saveWorkBuddySelection,
+  workBuddyModelsView,
+} from './workbuddy-models-section.tsx'
+import type { WorkBuddyModelList } from './workbuddy-models-section.tsx'
 
 /** 设置里的行 id。 */
 export const WORKBUDDY_ACCOUNT_SECTION_ID = 'acp-agent-workbuddy-account'
@@ -31,6 +41,20 @@ export type WorkBuddyAccountState = {
 /** 文案座位。 */
 export type WorkBuddyAccountT = (key: string, params?: Record<string, string | number>) => string
 
+/** 两个按钮共用的样式：一样大、一样高，对齐着排。 */
+const BUTTON_STYLE = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '6px',
+  minHeight: '28px',
+  padding: '3px 12px',
+  borderRadius: '6px',
+  fontSize: 'var(--dsh-content-font-size-secondary, 13px)',
+  lineHeight: '1.4',
+  whiteSpace: 'nowrap',
+} as const
+
 /** 视图要什么。 */
 export type WorkBuddyAccountViewProps = {
   readonly state: WorkBuddyAccountState
@@ -38,6 +62,15 @@ export type WorkBuddyAccountViewProps = {
   readonly onLogin?: (() => void) | undefined
   readonly onRefresh?: (() => void) | undefined
   readonly t?: WorkBuddyAccountT | undefined
+}
+
+/** 整段的视图要什么：账号那部分 + 模型列表那部分。 */
+export type WorkBuddySettingsViewProps = WorkBuddyAccountViewProps & {
+  readonly models?: WorkBuddyModelList | undefined
+  readonly query?: string | undefined
+  readonly onQueryChange?: ((value: string) => void) | undefined
+  readonly onToggle?: ((id: string, checked: boolean) => void) | undefined
+  readonly onRestoreDefault?: (() => void) | undefined
 }
 
 /**
@@ -127,46 +160,64 @@ export function workBuddyAccountView(props: WorkBuddyAccountViewProps): ReactNod
   const state = props.state
   const children: ReactNode[] = []
 
-  if (state.authenticated) {
-    const nickname = state.account?.nickname
-    const uid = state.account?.uid ?? ''
-    children.push(
-      <div key="who" data-workbuddy-account="signed-in">
-        <span>{t('workbuddy.account.signedIn')}</span>
-        {nickname !== undefined && nickname !== '' ? <strong>{nickname}</strong> : null}
-        {uid !== '' ? <code>{uid}</code> : null}
-      </div>,
-    )
-  } else {
-    children.push(
-      <div key="ask" data-workbuddy-account="signed-out">
-        <span>{t('workbuddy.account.signedOut')}</span>
-        {state.reason !== undefined && state.reason !== ''
-          ? <span data-workbuddy-reason="true">{state.reason}</span>
-          : null}
-      </div>,
-    )
-  }
-
+  // 账号信息：自己一个框，独占一行。
   children.push(
-    <div key="actions">
+    <div
+      key="box"
+      data-workbuddy-account-box={true}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+        padding: '10px 12px',
+        border: '1px solid var(--dsw-alias-border-default, rgba(0,0,0,0.12))',
+        borderRadius: '8px',
+      }}
+    >
       {state.authenticated
-        ? null
+        ? (
+          <>
+            <span data-workbuddy-account-state="signed-in">{t('workbuddy.account.signedIn')}</span>
+            {state.account?.nickname !== undefined && state.account.nickname !== ''
+              ? <strong data-workbuddy-account-name="true">{state.account.nickname}</strong>
+              : null}
+            {state.account?.uid !== undefined && state.account.uid !== ''
+              ? <code data-workbuddy-account-uid="true">{state.account.uid}</code>
+              : null}
+          </>
+        )
         : (
-          <button
-            key="login"
-            type="button"
-            data-workbuddy-login={true}
-            disabled={props.busy === true}
-            onClick={() => { props.onLogin?.() }}
-          >
-            {t('workbuddy.account.login')}
-          </button>
+          <>
+            <span data-workbuddy-account-state="signed-out">{t('workbuddy.account.signedOut')}</span>
+            {state.reason !== undefined && state.reason !== ''
+              ? <span data-workbuddy-account-reason="true">{state.reason}</span>
+              : null}
+          </>
         )}
+    </div>,
+  )
+
+  // 按钮：登录与检查授权，一样大、留出间距、齐平。
+  children.push(
+    <div
+      key="actions"
+      data-workbuddy-account-actions={true}
+      style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}
+    >
       <button
-        key="refresh"
+        type="button"
+        data-workbuddy-login={true}
+        style={BUTTON_STYLE}
+        // 已经登上了就把登录按钮灰掉——两个按钮并排才看得出是一组。
+        disabled={props.busy === true || state.authenticated}
+        onClick={() => { props.onLogin?.() }}
+      >
+        {t('workbuddy.account.login')}
+      </button>
+      <button
         type="button"
         data-workbuddy-refresh={true}
+        style={BUTTON_STYLE}
         disabled={props.busy === true}
         onClick={() => { props.onRefresh?.() }}
       >
@@ -178,9 +229,35 @@ export function workBuddyAccountView(props: WorkBuddyAccountViewProps): ReactNod
   return <div data-workbuddy-account="root">{children}</div>
 }
 
+/**
+ * 整段的视图：账号那部分在上，模型列表在下。
+ * @param props - 账号状态、模型清单与各个动作。
+ * @returns 元素树。
+ */
+export function workBuddySettingsView(props: WorkBuddySettingsViewProps): ReactNode {
+  return (
+    <div data-workbuddy-settings="root">
+      {workBuddyAccountView(props)}
+      {props.models === undefined
+        ? null
+        : workBuddyModelsView({
+          list: props.models,
+          ...(props.busy === undefined ? {} : { busy: props.busy }),
+          ...(props.query === undefined ? {} : { query: props.query }),
+          ...(props.onQueryChange === undefined ? {} : { onQueryChange: props.onQueryChange }),
+          ...(props.onToggle === undefined ? {} : { onToggle: props.onToggle }),
+          ...(props.onRestoreDefault === undefined ? {} : { onRestoreDefault: props.onRestoreDefault }),
+          ...(props.t === undefined ? {} : { t: props.t }),
+        })}
+    </div>
+  )
+}
+
 /** 组件：取一次状态，之后由两个动作驱动。 */
 export function WorkBuddyAccountSection(props: { readonly t?: WorkBuddyAccountT }): ReactNode {
   const [state, setState] = useState<WorkBuddyAccountState>({ authenticated: false })
+  const [models, setModels] = useState<WorkBuddyModelList | undefined>(undefined)
+  const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
 
   const refresh = useCallback(async () => {
@@ -194,7 +271,16 @@ export function WorkBuddyAccountSection(props: { readonly t?: WorkBuddyAccountT 
     }
   }, [])
 
-  useEffect(() => { void refresh() }, [refresh])
+  const reloadModels = useCallback(async () => {
+    try {
+      setModels(await readWorkBuddyModels({}))
+    } catch {
+      // 清单拿不到就只留账号那部分（模型列表空着，不挡着别的设置）。
+      setModels(undefined)
+    }
+  }, [])
+
+  useEffect(() => { void refresh(); void reloadModels() }, [refresh, reloadModels])
 
   const login = useCallback(async () => {
     setBusy(true)
@@ -214,9 +300,28 @@ export function WorkBuddyAccountSection(props: { readonly t?: WorkBuddyAccountT 
     }
   }, [refresh])
 
-  return workBuddyAccountView({
+  const toggle = useCallback((id: string, checked: boolean) => {
+    const current = models?.selected ?? []
+    const next = checked
+      ? [...current.filter(item => item !== id), id]
+      : current.filter(item => item !== id)
+    setModels(models === undefined ? undefined : { ...models, selected: next, custom: true })
+    void saveWorkBuddySelection(next).catch(() => undefined)
+  }, [models])
+
+  const restoreDefault = useCallback(() => {
+    const defaults = models?.default ?? []
+    void saveWorkBuddySelection(defaults).catch(() => undefined)
+  }, [models])
+
+  return workBuddySettingsView({
     state,
     busy,
+    ...(models === undefined ? {} : { models }),
+    query,
+    onQueryChange: (value: string) => { setQuery(value) },
+    onToggle: (id, checked) => { toggle(id, checked) },
+    onRestoreDefault: () => { restoreDefault() },
     onLogin: () => { void login() },
     onRefresh: () => { void refresh() },
     ...(props.t === undefined ? {} : { t: props.t }),

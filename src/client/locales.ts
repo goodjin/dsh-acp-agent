@@ -41,7 +41,7 @@ export type ClientLocaleKey =
   | 'workbuddy.models.section.label' | 'workbuddy.models.summary'
   | 'workbuddy.models.custom' | 'workbuddy.models.defaultHint'
   | 'workbuddy.models.noTool' | 'workbuddy.models.restore'
-  | 'workbuddy.models.search' | 'workbuddy.models.empty'
+  | 'workbuddy.models.search' | 'workbuddy.models.empty' | 'workbuddy.models.title'
   | 'qoder.section.label'
   | 'qoder.account.signedIn' | 'qoder.account.signedOut'
   | 'qoder.account.login' | 'qoder.account.refresh'
@@ -110,14 +110,15 @@ export const zh: Record<ClientLocaleKey, string> = {
   'workbuddy.section.label': 'WorkBuddy 账号',
   'workbuddy.account.signedIn': '已登录 WorkBuddy：',
   'workbuddy.account.signedOut': '未登录 WorkBuddy：这一组模型发消息会被拒绝。',
-  'workbuddy.account.login': '去登录',
-  'workbuddy.account.refresh': '刷新状态',
+  'workbuddy.account.login': '登录 WorkBuddy',
+  'workbuddy.account.refresh': '检查授权',
   'workbuddy.models.section.label': 'WorkBuddy 模型',
   'workbuddy.models.summary': '站点共 {total} 个模型，勾上的 {selected} 个会出现在模型选择器里。',
   'workbuddy.models.custom': '当前用的是你自己勾的。',
   'workbuddy.models.defaultHint': '当前用的是默认那一份（还没自己勾过）。',
   'workbuddy.models.noTool': '不能带工具（只能聊天）',
   'workbuddy.models.restore': '恢复默认那一份',
+  'workbuddy.models.title': '模型',
   'workbuddy.models.search': '搜模型名、id 或倍率',
   'workbuddy.models.empty': '没有匹配上的模型。',
   'qoder.section.label': 'Qoder 国际版账号',
@@ -192,14 +193,15 @@ export const en: Record<ClientLocaleKey, string> = {
   'workbuddy.section.label': 'WorkBuddy account',
   'workbuddy.account.signedIn': 'Signed in to WorkBuddy:',
   'workbuddy.account.signedOut': 'Not signed in to WorkBuddy: messages in this group will be refused.',
-  'workbuddy.account.login': 'Sign in',
-  'workbuddy.account.refresh': 'Refresh status',
+  'workbuddy.account.login': 'Sign in to WorkBuddy',
+  'workbuddy.account.refresh': 'Check authorisation',
   'workbuddy.models.section.label': 'WorkBuddy models',
   'workbuddy.models.summary': 'The site lists {total} models; the {selected} you tick show up in the model picker.',
   'workbuddy.models.custom': 'Using your own selection.',
   'workbuddy.models.defaultHint': 'Using the default selection (nothing ticked by hand yet).',
   'workbuddy.models.noTool': 'no tools (chat only)',
   'workbuddy.models.restore': 'Restore the default set',
+  'workbuddy.models.title': 'Models',
   'workbuddy.models.search': 'Search by name, id or multiplier',
   'workbuddy.models.empty': 'No model matches.',
   'qoder.section.label': 'Qoder international account',

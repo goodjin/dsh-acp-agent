@@ -16,6 +16,7 @@ import {
   readWorkBuddySession,
   WORKBUDDY_ACCOUNT_SECTION_ID,
   workBuddyAccountView,
+  workBuddySettingsView,
 } from '../src/client/workbuddy-account-section.tsx'
 import type { WorkBuddyAccountState } from '../src/client/workbuddy-account-section.tsx'
 
@@ -65,9 +66,10 @@ describe('视图', () => {
     expect(textOf(view)).toContain('登录')
   })
 
-  it('登了就说清是谁，不再给登录按钮', () => {
+  it('登了就说清是谁，登录按钮灰着（不藏——两个按钮是一组）', () => {
     const view = workBuddyAccountView({ state: LOGGED_IN })
-    expect(find(view, props => props['data-workbuddy-login'] === true)).toBeUndefined()
+    const login = find(view, props => props['data-workbuddy-login'] === true)
+    expect(login?.props?.disabled).toBe(true)
     expect(textOf(view)).toContain('某人')
     expect(textOf(view)).toContain('uid-1')
   })
@@ -137,6 +139,43 @@ describe('授权之后', () => {
     const fetchImpl = (async () => new Response(JSON.stringify({ ok: true, authenticated: false }), { status: 200 })) as unknown as typeof fetch
     const state = await pollUntilSignedIn({ fetchImpl, attempts: 3, sleepImpl: async () => {} })
     expect(state.authenticated).toBe(false)
+  })
+})
+
+describe('排版', () => {
+  const MODELS = {
+    models: [{ id: 'glm-5.3', name: 'GLM-5.3', credits: 'x0.69', supportsToolCall: true }],
+    selected: ['glm-5.3'],
+    custom: false,
+    default: ['glm-5.3'],
+  }
+
+  it('账号信息在一个框里，独占一行', () => {
+    const view = workBuddyAccountView({ state: LOGGED_IN })
+    const box = find(view, props => props['data-workbuddy-account-box'] === true)
+    expect(box).toBeDefined()
+    const style = box?.props?.style as Record<string, unknown> | undefined
+    expect(String(style?.['border'])).toContain('1px solid')
+  })
+
+  it('两个按钮一样大、留出间距、齐平', () => {
+    const view = workBuddyAccountView({ state: LOGGED_OUT })
+    const row = find(view, props => props['data-workbuddy-account-actions'] === true)
+    const rowStyle = row?.props?.style as Record<string, unknown> | undefined
+    expect(rowStyle?.['gap']).toBe('8px')
+    expect(rowStyle?.['alignItems']).toBe('center')
+    const login = find(view, props => props['data-workbuddy-login'] === true)
+    const check = find(view, props => props['data-workbuddy-refresh'] === true)
+    expect(login?.props?.style).toEqual(check?.props?.style)
+    expect((login?.props?.style as Record<string, unknown> | undefined)?.['padding']).toBeDefined()
+  })
+
+  it('模型列表在账号那部分下面', () => {
+    const view = workBuddySettingsView({ state: LOGGED_IN, models: MODELS })
+    const children = (view as ReactElement & { props?: { children?: unknown } }).props?.children
+    const list = Array.isArray(children) ? children : [children]
+    expect((list[0] as ReactElement & { props?: Record<string, unknown> })?.props?.['data-workbuddy-account']).toBe('root')
+    expect((list[1] as ReactElement & { props?: Record<string, unknown> })?.props?.['data-workbuddy-models']).toBe('root')
   })
 })
 

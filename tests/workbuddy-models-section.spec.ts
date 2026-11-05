@@ -11,7 +11,6 @@ import {
   filterModels,
   readWorkBuddyModels,
   saveWorkBuddySelection,
-  WORKBUDDY_MODELS_SECTION_ID,
   workBuddyModelsView,
 } from '../src/client/workbuddy-models-section.tsx'
 import type { WorkBuddyModelList } from '../src/client/workbuddy-models-section.tsx'
@@ -156,9 +155,5 @@ describe('勾选界面', () => {
     expect(style?.['borderRadius']).toBe('999px')
     expect(style?.['fontVariantNumeric']).toBe('tabular-nums')
     expect(style?.['display']).toBe('inline-flex')
-  })
-
-  it('行 id 是约定的那个', () => {
-    expect(WORKBUDDY_MODELS_SECTION_ID).toBe('acp-agent-workbuddy-models')
   })
 })
