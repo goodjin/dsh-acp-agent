@@ -85,7 +85,8 @@
     "lib/client.js",
     "lib/client.js.map",
     "src/**/*.ts",
-    "tsdown.config.ts"
+    "tsdown.config.ts",
+    "lib/src/doubao/**/*.js"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -165,5 +166,8 @@
     "@deepseek-ai/dsh-client-ui-conversation": ">=0.2.0-rc.2 <0.3",
     "@deepseek-ai/dsh-client-ui-chat": ">=0.2.0-rc.2 <0.3",
     "@deepseek-ai/dsh-client-ui-model-selection": ">=0.2.0-rc.2 <0.3"
+  },
+  "bin": {
+    "doubao-acp": "./lib/src/doubao/main.js"
   }
 }
