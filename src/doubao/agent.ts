@@ -195,7 +195,12 @@ export class DoubaoAcpAgent {
           authMethods: [],
         }
       case 'session/new': {
-        await this.ensureBrowser()
+        // The browser is NOT opened here. The host asks a fresh agent for its
+        // model list while it builds the picker, and opening 豆包 at that
+        // moment would (a) start the desktop app behind the user's back and
+        // (b) collide with the instance they may already be running, which
+        // makes this provider drop out of the picker instead of showing up.
+        // The app is opened when a prompt actually arrives.
         const id = `doubao-${randomUUID()}`
         this.sessions.set(id, { id, cancelled: false })
         return {

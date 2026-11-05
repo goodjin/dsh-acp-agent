@@ -301,6 +301,7 @@ const DISPLAY: Readonly<Record<string, string>> = {
   zcode: 'ZCode',
   minimaxi: 'MiniMax',
   workbuddy: 'WorkBuddy',
+  doubao: '豆包',
 }
 
 /**

@@ -18,7 +18,7 @@ import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import lockfile from 'proper-lockfile'
 import { refreshCredential } from './auth.ts'
-import type { QoderAccount, QoderCredential } from './auth.ts'
+import type { QoderCredential } from './auth.ts'
 
 /** 令牌快到期的这一刻之前就换（留一分钟余量）。 */
 const EXPIRY_MARGIN_MS = 60_000
@@ -68,25 +68,6 @@ export async function readCredential(file: string = credentialFilePath()): Promi
       account: { uid, ...(typeof nickname === 'string' && nickname !== '' ? { nickname } : {}) },
     } : {}),
   }
-}
-
-/**
- * 把账号信息补进存着的凭据。
- *
- * 登录之后令牌里未必有昵称；补一次，界面上就能显示「金山」而不是一串 uid。
- * @param account - 账号信息。
- * @param file - 凭据文件；缺省用默认位置。
- * @returns 补好之后的凭据；没有存过凭据时是 `undefined`。
- */
-export async function attachAccount(
-  account: QoderAccount,
-  file: string = credentialFilePath(),
-): Promise<QoderCredential | undefined> {
-  const stored = await readCredential(file)
-  if (stored === undefined) return undefined
-  const credential: QoderCredential = { ...stored, account }
-  await writeCredential(credential, file)
-  return credential
 }
 
 /** 目录建好并收紧到 0700（已存在也要收紧）。 */

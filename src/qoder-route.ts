@@ -1,8 +1,7 @@
 /** Host-only login flow; the browser receives status and the PKCE challenge, never credentials. */
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { WorkBuddyRouteContext } from './workbuddy-route.ts'
-import { attachAccount, fetchModels, pollForToken, readCredential, startLogin, writeCredential } from './qoder/index.ts'
-import { fetchQoderAccount } from './qoder/auth.ts'
+import { fetchModels, pollForToken, readCredential, startLogin, writeCredential } from './qoder/index.ts'
 import { readSelection, writeSelection } from './model-selection.ts'
 import { invalidateQoderCatalog, qoderDeclaredModelIds, qoderDeclaredModels, refreshQoderModels } from './qoder-model.ts'
 
@@ -54,12 +53,8 @@ export function registerQoderRoutes(ctx: WorkBuddyRouteContext, deps: QoderRoute
         if (req.method !== method) { res.writeHead(405, { Allow: method }); res.end('method not allowed'); return }
         try {
           if (path === SESSION_PATH) {
-            let c = await deps.readCredential()
+            const c = await deps.readCredential()
             const authenticated = !!c && (c.expiresAt === undefined || c.expiresAt > Date.now())
-            if (c !== undefined && c.account?.nickname === undefined) {
-              const who = await fetchQoderAccount({ accessToken: c.accessToken }).catch(() => undefined)
-              if (who !== undefined) c = (await attachAccount(who).catch(() => undefined)) ?? c
-            }
             send(res, { ok: true, authenticated, pending: !!pending, reason: failure,
               ...(authenticated ? { account: c?.account } : {}) })
             return
@@ -69,11 +64,7 @@ export function registerQoderRoutes(ctx: WorkBuddyRouteContext, deps: QoderRoute
             const active = { url: login.url, controller }
             pending = active; failure = undefined
             void deps.pollForToken(login, { signal: controller.signal }).then(async c => {
-              if (controller.signal.aborted) return
-              await deps.writeCredential(c)
-              // 令牌里未必有昵称，补一次——界面上显示昵称比显示一串 uid 像样。
-              const who = await fetchQoderAccount({ accessToken: c.accessToken }).catch(() => undefined)
-              if (who !== undefined && !controller.signal.aborted) await attachAccount(who).catch(() => undefined)
+              if (!controller.signal.aborted) await deps.writeCredential(c)
             }).catch(() => { if (!controller.signal.aborted) failure = 'Qoder 登录未完成或失败，请重试' })
               .finally(() => { if (pending === active) pending = undefined })
           }
