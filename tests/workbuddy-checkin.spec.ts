@@ -11,7 +11,15 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { claimDailyCheckin, fetchCheckinStatus } from '../src/workbuddy/checkin.ts'
+import {
+  claimDailyCheckin,
+  DAILY_CHECKIN_HOUR,
+  DAILY_CHECKIN_MINUTE,
+  fetchCheckinStatus,
+  nextRunDelay,
+  shouldCatchUp,
+  startDailyCheckin,
+} from '../src/workbuddy/checkin.ts'
 import type { WorkBuddyCredential } from '../src/workbuddy/credential.ts'
 
 const credential: WorkBuddyCredential = {
@@ -143,5 +151,191 @@ describe('领当天积分', () => {
     expect(message).toContain('500')
     expect(message).not.toContain('TOKEN-1')
     expect(message).toContain('[redacted]')
+  })
+})
+
+describe('每天 10:00 的定时', () => {
+  it('默认是上午 10 点整', () => {
+    expect(DAILY_CHECKIN_HOUR).toBe(10)
+    expect(DAILY_CHECKIN_MINUTE).toBe(0)
+  })
+
+  it('今天还没到点：等到今天的那个点', () => {
+    const now = new Date(2026, 10, 5, 9, 30, 0, 0)
+    expect(nextRunDelay(now, 10, 0)).toBe(30 * 60_000)
+  })
+
+  it('今天已经过点：等到明天', () => {
+    const now = new Date(2026, 10, 5, 10, 0, 1, 0)
+    expect(nextRunDelay(now, 10, 0)).toBe(24 * 60 * 60_000 - 1000)
+  })
+
+  it('跨月跨年也对得上', () => {
+    const newYearEve = new Date(2026, 11, 31, 23, 0, 0, 0)
+    // 12 月 31 日 23:00 → 次年 1 月 1 日 10:00
+    expect(nextRunDelay(newYearEve, 10, 0)).toBe(11 * 60 * 60_000)
+  })
+
+  it('过没到点决定要不要补签', () => {
+    expect(shouldCatchUp(new Date(2026, 10, 5, 9, 59, 0, 0), 10, 0)).toBe(false)
+    expect(shouldCatchUp(new Date(2026, 10, 5, 10, 0, 0, 0), 10, 0)).toBe(true)
+  })
+})
+
+describe('定时领取', () => {
+  /** 一个能手动触发的定时器立桩。 */
+  function fakeSchedule(): {
+    readonly schedule: { setTimeout: (fn: () => void, ms: number) => { id: number }; clearTimeout: (handle: { id: number }) => void }
+    fire(): void
+    readonly delays: number[]
+  } {
+    const handles = new Map<number, () => void>()
+    const delays: number[] = []
+    let nextId = 1
+    return {
+      delays,
+      schedule: {
+        setTimeout: (fn, ms) => {
+          delays.push(ms)
+          const id = nextId++
+          handles.set(id, fn)
+          return { id }
+        },
+        clearTimeout: (handle) => { handles.delete(handle.id) },
+      },
+      fire: () => {
+        const pending = [...handles.values()]
+        handles.clear()
+        for (const fn of pending) fn()
+      },
+    }
+  }
+
+  it('装载时排下一次；到点触发后领一次，再排下一次', async () => {
+    const timers = fakeSchedule()
+    const calls: string[] = []
+    const fetchImpl: typeof fetch = async (url) => {
+      calls.push(String(url))
+      if (String(url).includes('checkin-activity-status')) {
+        return jsonResponse({ code: 0, data: { today_checked_in: false } })
+      }
+      return jsonResponse({ code: 0, data: { credit: 100, streak_days: 14 } })
+    }
+
+    const stop = startDailyCheckin({
+      credential: async () => credential,
+      fetchImpl,
+      now: () => new Date(2026, 10, 5, 9, 0, 0, 0),
+      schedule: timers.schedule,
+    })
+
+    expect(timers.delays).toEqual([60 * 60_000])
+    timers.fire()
+    await new Promise(resolve => { setTimeout(resolve, 0) })
+    expect(calls.some(url => url.includes('daily-checkin'))).toBe(true)
+    // 领完又排了一次下一次。
+    expect(timers.delays.length).toBe(2)
+    stop()
+  })
+
+  it('今天已经领过：不发领取请求', async () => {
+    const timers = fakeSchedule()
+    const calls: string[] = []
+    const fetchImpl: typeof fetch = async (url) => {
+      calls.push(String(url))
+      return jsonResponse({ code: 0, data: { today_checked_in: true } })
+    }
+
+    startDailyCheckin({
+      credential: async () => credential,
+      fetchImpl,
+      now: () => new Date(2026, 10, 5, 9, 0, 0, 0),
+      schedule: timers.schedule,
+    })
+    timers.fire()
+    await new Promise(resolve => { setTimeout(resolve, 0) })
+
+    expect(calls.some(url => url.includes('daily-checkin'))).toBe(false)
+  })
+
+  it('装载时已过 10:00 且今天没签：当场补签一次', async () => {
+    const timers = fakeSchedule()
+    const calls: string[] = []
+    const fetchImpl: typeof fetch = async (url) => {
+      calls.push(String(url))
+      if (String(url).includes('checkin-activity-status')) {
+        return jsonResponse({ code: 0, data: { today_checked_in: false } })
+      }
+      return jsonResponse({ code: 0, data: { credit: 100, streak_days: 14 } })
+    }
+
+    startDailyCheckin({
+      credential: async () => credential,
+      fetchImpl,
+      now: () => new Date(2026, 10, 5, 11, 0, 0, 0),
+      schedule: timers.schedule,
+    })
+    await new Promise(resolve => { setTimeout(resolve, 0) })
+
+    expect(calls.some(url => url.includes('daily-checkin'))).toBe(true)
+  })
+
+  it('装载时还没到 10:00：不提前领', async () => {
+    const timers = fakeSchedule()
+    const calls: string[] = []
+    const fetchImpl: typeof fetch = async (url) => {
+      calls.push(String(url))
+      return jsonResponse({ code: 0, data: { today_checked_in: false } })
+    }
+
+    startDailyCheckin({
+      credential: async () => credential,
+      fetchImpl,
+      now: () => new Date(2026, 10, 5, 9, 0, 0, 0),
+      schedule: timers.schedule,
+    })
+    await new Promise(resolve => { setTimeout(resolve, 0) })
+
+    expect(calls).toEqual([])
+  })
+
+  it('没登录就安静跳过：一个请求都不发', async () => {
+    const timers = fakeSchedule()
+    let called = false
+    const fetchImpl: typeof fetch = async () => {
+      called = true
+      return jsonResponse({ code: 0, data: {} })
+    }
+
+    startDailyCheckin({
+      credential: async () => undefined,
+      fetchImpl,
+      now: () => new Date(2026, 10, 5, 11, 0, 0, 0),
+      schedule: timers.schedule,
+    })
+    await new Promise(resolve => { setTimeout(resolve, 0) })
+
+    expect(called).toBe(false)
+  })
+
+  it('停掉之后不再触发', async () => {
+    const timers = fakeSchedule()
+    let called = false
+    const fetchImpl: typeof fetch = async () => {
+      called = true
+      return jsonResponse({ code: 0, data: {} })
+    }
+
+    const stop = startDailyCheckin({
+      credential: async () => credential,
+      fetchImpl,
+      now: () => new Date(2026, 10, 5, 9, 0, 0, 0),
+      schedule: timers.schedule,
+    })
+    stop()
+    timers.fire()
+    await new Promise(resolve => { setTimeout(resolve, 0) })
+
+    expect(called).toBe(false)
   })
 })

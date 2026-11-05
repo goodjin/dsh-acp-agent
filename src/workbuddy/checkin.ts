@@ -25,6 +25,10 @@ import type { WorkBuddyCredential } from './credential.ts'
 /** 今天已经领过了：站点回的这个码（官方客户端那套映射是 1001）。 */
 export const ALREADY_CLAIMED_CODES = [10001, 1001]
 
+/** 每天几点领（本地时间）。 */
+export const DAILY_CHECKIN_HOUR = 10
+export const DAILY_CHECKIN_MINUTE = 0
+
 /** 签到状态（我们要的那几件事）。 */
 export type WorkBuddyCheckinStatus = {
   /** 签到活动是否在进行。 */
@@ -119,6 +123,146 @@ export async function claimDailyCheckin(options: WorkBuddyCheckinOptions): Promi
     alreadyClaimed: false,
     credit: numberOf(data['credit']),
     streakDays: numberOf(data['streak_days']),
+  }
+}
+
+/** 定时器立桩：测试注入假的 `setTimeout`，不真等。 */
+export type WorkBuddyCheckinSchedule = {
+  /** 排一次延迟调用。 */
+  setTimeout(fn: () => void, ms: number): unknown
+  /** 撤掉一次延迟调用。 */
+  clearTimeout(handle: unknown): void
+}
+
+/** 定时领取要的东西。 */
+export type WorkBuddyCheckinSchedulerOptions = {
+  /**
+   * 取凭据。返回 `undefined` 表示没登录——那时什么都不做。
+   *
+   * 用函数而不是一份凭据：定时触发时才取一次，中途登录了也能领上。
+   */
+  readonly credential: () => Promise<WorkBuddyCredential | undefined>
+  /** 端点；缺省从基址派生。 */
+  readonly endpoints?: WorkBuddyEndpoints | undefined
+  /** fetch 实现；测试注入假件。 */
+  readonly fetchImpl?: typeof fetch | undefined
+  /** 现在几点；缺省取系统时间。 */
+  readonly now?: (() => Date) | undefined
+  /** 定时器立桩。 */
+  readonly schedule?: WorkBuddyCheckinSchedule | undefined
+  /** 每天几点（本地时间）。 */
+  readonly hour?: number | undefined
+  readonly minute?: number | undefined
+  /** 领完之后的回调（宿主用它记一条日志）。 */
+  readonly onClaimed?: ((result: WorkBuddyCheckinResult) => void) | undefined
+  /** 出错时的回调。 */
+  readonly onError?: ((error: unknown) => void) | undefined
+}
+
+/**
+ * 距离下一个「每天几点」还有多少毫秒。
+ *
+ * 今天还没到就等今天；今天已经过了就等明天。用本地时间算，跨月跨年也对得上。
+ * @param now - 现在。
+ * @param hour - 小时（本地时间）。
+ * @param minute - 分钟。
+ * @returns 毫秒数。
+ */
+export function nextRunDelay(now: Date, hour: number, minute: number): number {
+  const target = new Date(now.getTime())
+  target.setHours(hour, minute, 0, 0)
+  if (target.getTime() <= now.getTime()) {
+    target.setDate(target.getDate() + 1)
+    target.setHours(hour, minute, 0, 0)
+  }
+  return target.getTime() - now.getTime()
+}
+
+/**
+ * 现在该不该补签（今天的那个点已经过了）。
+ * @param now - 现在。
+ * @param hour - 小时（本地时间）。
+ * @param minute - 分钟。
+ * @returns 该补签时为 true。
+ */
+export function shouldCatchUp(now: Date, hour: number, minute: number): boolean {
+  const target = new Date(now.getTime())
+  target.setHours(hour, minute, 0, 0)
+  return target.getTime() <= now.getTime()
+}
+
+/**
+ * 起一个每天定点领取的定时器。
+ *
+ * 行为：
+ * - 装载时若已经过了今天的那个点、且今天还没签 → 当场补签一次；
+ * - 每天到点触发一次：先查状态，已签就跳过；
+ * - 没登录就安静跳过（一个请求都不发）。
+ *
+ * 返回一个停掉它的函数。
+ * @param options - 凭据取法、端点、定时器立桩与回调。
+ * @returns 停掉定时器的函数。
+ */
+export function startDailyCheckin(options: WorkBuddyCheckinSchedulerOptions): () => void {
+  const now = options.now ?? (() => new Date())
+  const hour = options.hour ?? DAILY_CHECKIN_HOUR
+  const minute = options.minute ?? DAILY_CHECKIN_MINUTE
+  const schedule = options.schedule ?? defaultSchedule()
+  let stopped = false
+  let handle: unknown
+
+  const run = async (): Promise<void> => {
+    if (stopped) return
+    try {
+      const credential = await options.credential()
+      // 没登录：什么都不做，也不吵。
+      if (credential === undefined) return
+      const status = await fetchCheckinStatus({
+        credential,
+        ...(options.endpoints === undefined ? {} : { endpoints: options.endpoints }),
+        ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl }),
+      })
+      // 今天已经领过了：这是「办完了」，不是错误。
+      if (status.todayCheckedIn) return
+      const result = await claimDailyCheckin({
+        credential,
+        ...(options.endpoints === undefined ? {} : { endpoints: options.endpoints }),
+        ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl }),
+      })
+      options.onClaimed?.(result)
+    } catch (error) {
+      options.onError?.(error)
+    }
+  }
+
+  const arm = (): void => {
+    if (stopped) return
+    handle = schedule.setTimeout(() => {
+      void run().finally(() => { arm() })
+    }, nextRunDelay(now(), hour, minute))
+  }
+
+  // 装载时的补签：过了点才补，没到点就老实等到点。
+  if (shouldCatchUp(now(), hour, minute)) void run()
+  arm()
+
+  return () => {
+    stopped = true
+    if (handle !== undefined) schedule.clearTimeout(handle)
+  }
+}
+
+/** 真的定时器；句柄 unref，免得它把宿主进程钉住。 */
+function defaultSchedule(): WorkBuddyCheckinSchedule {
+  return {
+    setTimeout: (fn, ms) => {
+      const handle = setTimeout(fn, ms)
+      if (typeof (handle as { unref?: () => void }).unref === 'function') {
+        (handle as { unref: () => void }).unref()
+      }
+      return handle
+    },
+    clearTimeout: (handle) => { clearTimeout(handle as ReturnType<typeof setTimeout>) },
   }
 }
 
