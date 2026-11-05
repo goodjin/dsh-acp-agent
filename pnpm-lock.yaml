@@ -48,6 +48,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: 0.2.0-rc.2
         version: 0.2.0-rc.2(@deepseek-ai/cordis@4.0.5)
+      '@goodjin2/dsh-model-kit':
+        specifier: link:../dsh-model-kit
+        version: link:../dsh-model-kit
       '@types/node':
         specifier: ^24.0.0
         version: 24.19.2

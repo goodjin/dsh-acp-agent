@@ -150,7 +150,7 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
       const models = modelsFor(presetId)
       // 声明的强度只取 wire 值：各家预设的 effort 名都等于 effortLabelOf(值)，
       // 交给 kit 的 collapsedToCatalog 现算标签，结果与本仓旧实现一字不差。
-      const declaredEfforts = config.presets[presetId]?.efforts?.map(effort => effort.id)
+      const declaredEfforts = config.presets[presetId]?.efforts
       // Collapse same-base entries (one model published as base[low]…base[ultra])
       // into a single row carrying its efforts, so the picker shows the model
       // once and reasoning effort becomes a separate axis rather than N rows.
@@ -194,7 +194,7 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
         ? undefined
         : collapseEffortModels(modelsFor(presetId)).find(entry => entry.baseId === model)
       if (collapsed === undefined) return { provider, id: model, name: model }
-      return collapsedToCatalog(provider, collapsed, config.presets[presetId ?? '']?.efforts?.map(effort => effort.id))
+      return collapsedToCatalog(provider, collapsed, config.presets[presetId ?? '']?.efforts)
     },
 
     // An async generator rather than a synchronous throw: the switch hook is
