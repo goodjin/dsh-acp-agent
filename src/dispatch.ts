@@ -370,11 +370,17 @@ function readHeader(agent: AgentLike): string | undefined {
  * 被 ACP 行接管等于把刚起好的孩子再交回外部 agent 驱动，工具又变回外部
  * agent 的，委派就白做了。所以接管路径在 install 之前先问这里。
  *
- * 判据只用 delegationDepth，不用 origin：`origin === 'subagent'` 是粗粒度的
- * 来源标记，本行自己造的影子子会话（`entry.ts` 的 openChild）也带它；
- * delegationDepth 才是「这是受委派产生的」的记账，与深度上限用的是同一个
- * 事实。读取按结构逐层守卫，任何一层缺失、字段缺失或非数都读作「不是」——
- * 守卫只负责排除，不抛错：形状不认识的 agent 仍走原有接管判定。
+ * 判据用 delegationDepth，不用 origin。**注意这两条对影子子会话是等价的**：
+ * 本行自己造的影子子会话（`entry.ts` 的 openChild）既写 `origin:'subagent'`，也写
+ * `delegationDepth = 父+1`，所以「origin 会误伤影子会话」并不是选 delegationDepth 的
+ * 理由。影子会话真正被豁免的地方在更早一步：它的会话头没有 agentPreset，
+ * `presetIdOf` 直接返回 undefined，本行匹配不上它，根本走不到这里。
+ *
+ * 选 delegationDepth 是因为它点的正是要排除的那个事实——「这是某个会话的孩子」，
+ * 与宿主自己的深度记账（含深度上限）用同一个字段；origin 是粗粒度的来源标签，
+ * 回答的是「谁造的」而不是「在血缘的哪一层」。读取按结构逐层守卫，任何一层缺失、
+ * 字段缺失或非数都读作「不是」——守卫只负责排除，不抛错：形状不认识的 agent 仍
+ * 走原有接管判定。
  */
 export function isDelegatedChild(agent: unknown): boolean {
   if (typeof agent !== 'object' || agent === null) return false

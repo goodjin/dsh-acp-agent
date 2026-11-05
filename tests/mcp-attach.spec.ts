@@ -190,9 +190,11 @@ describe('factory — 委派在场时把桥接进程挂进 mcpServers', () => {
     expect(server.args).toHaveLength(1)
     expect(server.args[0]!.endsWith('/bridge/dsh-acp-mcp-bridge.mjs')).toBe(true)
     expect(statSync(server.args[0]!).isFile()).toBe(true)
-    // env 是有序键值数组：URL 指向回调路由，SESSION 定位父会话，TOKEN 与路由行同一份。
+    // env 是有序键值数组：URL 指向回调路由，SESSION 定位父会话，TOKEN 与路由行同一份，
+    // ELECTRON_RUN_AS_NODE 让桌面宿主的 Electron 二进制按 node 跑桥接（纯 node 宿主会忽略它）。
     const env = Object.fromEntries((server.env ?? []).map(entry => [entry.name, entry.value]))
     expect(env).toEqual({
+      ELECTRON_RUN_AS_NODE: '1',
       DSH_DELEGATION_URL: `http://127.0.0.1:52526${DELEGATION_ROUTE_PATH}`,
       DSH_DELEGATION_SESSION: 'dsh-9',
       DSH_DELEGATION_TOKEN: 'spec-delegation-token-6f2a',
@@ -300,7 +302,11 @@ describe('delegationMountSurface — 从宿主面读三样事实', () => {
     const sent = await openAndCollect({ delegation: healthySurface(), dshSessionId: 'dsh-9' })
     const opened = sent.find(frame => frame.method === 'session/new')!
     const server = (opened.params!.mcpServers as StdioMcpServer[])[0]!
-    const written = new Set((server.env ?? []).map(entry => entry.name))
+    // 只比 DSH_DELEGATION_* 这一族：env 里还搭着 ELECTRON_RUN_AS_NODE 这种
+    // 给启动器看的变量，桥接不读它，把它算进来这道钉子比的就不是同一件事了。
+    const written = new Set(
+      (server.env ?? []).map(entry => entry.name).filter(name => name.startsWith('DSH_DELEGATION_')),
+    )
 
     const bridgeSource = readFileSync(
       fileURLToPath(new URL('../bridge/dsh-acp-mcp-bridge.mjs', import.meta.url)),

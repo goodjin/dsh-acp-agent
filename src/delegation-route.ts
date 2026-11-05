@@ -11,13 +11,18 @@
  * 与路由行配置 `config.token` 逐字比。令牌只有这一份来源——会话侧把同一个值
  * 放进桥接进程的 env；两处各配各的会让回调永远 401。
  *
- * 另有一份按 `(sessionId, task)` 记的已完成结果缓存：委派可能跑得比 MCP 工具
- * 调用的超时还久（桥接进程 10 分钟就断），agent 超时后再问同一标识时，子代理
+ * 另有一份按 `(sessionId, task, brief)` 记的已完成结果缓存：委派可能跑得比 MCP
+ * 工具调用的超时还久（桥接进程 10 分钟就断），agent 超时后再问同一标识时，子代理
  * 多半早已跑完——直接把已完成的结果交回去，不必重跑。缓存挂在本次注册的
  * 闭包里：进程内存、不落盘、随行卸载一起消失。失败的委派不写缓存，否则一次
  * 失败会被缓存成永久失败。
+ *
+ * brief 必须进键：同一个短标签（「修一下」）在同一会话里配不同任务书是常见写法
+ * （改写重试、同名追问），只按 (sessionId, task) 记会让第二次静默拿到上一次的
+ * 结果——宁可多起一次子代理，也不能把别人的答案当这次的答案。
  */
 
+import { createHash, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { DELEGATION_SERVICE, isDelegationResult } from './delegation-contract.ts'
 import type { DelegationResult } from './delegation-contract.ts'
@@ -102,13 +107,20 @@ async function handleCallback(
   // 令牌先行：配置里没有可用令牌时（没配或空串）没有任何值能对上，天然 fail closed。
   const expected = typeof config.token === 'string' && config.token !== '' ? config.token : undefined
   const presented = headerOf(request, TOKEN_HEADER)
-  if (expected === undefined || presented !== expected) {
+  if (expected === undefined || !tokenMatches(presented, expected)) {
     respondText(response, 401, 'unauthorized')
     return
   }
   if (request.method !== 'POST') {
-    response.writeHead(405, { 'content-type': 'text/plain; charset=utf-8', allow: 'POST' })
-    response.end('method not allowed')
+    // 与另外两条应答同形：no-store 不让人替我们缓存，长度显式给出。
+    const body = 'method not allowed'
+    response.writeHead(405, {
+      'content-type': 'text/plain; charset=utf-8',
+      allow: 'POST',
+      'cache-control': 'no-store',
+      'content-length': Buffer.byteLength(body),
+    })
+    response.end(body)
     return
   }
   const parsed = parseDelegationRequest(await readBody(request))
@@ -143,7 +155,7 @@ async function handleCallback(
     respondText(response, 500, redactToken('委派服务出错：返回的载荷不是 DelegationResult', expected))
     return
   }
-  cache.set(key, result)
+  remember(cache, key, result)
   respondJson(response, 200, JSON.stringify(result))
 }
 
@@ -160,6 +172,20 @@ function headerOf(request: IncomingMessage, name: string): string | undefined {
   const value = request.headers[name]
   if (value === undefined) return undefined
   return Array.isArray(value) ? value[0] : value
+}
+
+/**
+ * 定长比较令牌：不等长直接否，等长走 `timingSafeEqual`。
+ *
+ * 本路由只可能被本机回环打到、令牌是 32 字节随机串，按字节比较的时序差异在
+ * 这里没有可利用的余地；但比较一行就能写成不泄露前缀长度的形式，那就别留一句
+ * 「反正是回环」的解释给下一个人。
+ */
+function tokenMatches(presented: string | undefined, expected: string): boolean {
+  if (presented === undefined) return false
+  const a = Buffer.from(presented, 'utf8')
+  const b = Buffer.from(expected, 'utf8')
+  return a.length === b.length && timingSafeEqual(a, b)
 }
 
 /** 累积请求体到读完，按 UTF-8 解码。 */
@@ -208,9 +234,31 @@ function parseDelegationRequest(raw: string): ParsedRequest {
   }
 }
 
-/** 缓存键：`(sessionId, task)` 序列化成数组——分隔符不可撞，两个维度都参与。 */
+/**
+ * 缓存键：`(sessionId, task)` 序列化成数组，brief 取摘要。
+ *
+ * 数组序列化让分隔符撞不上；brief 进键但只取 sha256——任务书可能很长，键里再
+ * 留一份全文等于把同一段文字存两遍。
+ */
 function cacheKeyOf(request: DelegationRequestBody): string {
-  return JSON.stringify([request.sessionId, request.task])
+  const brief = createHash('sha256').update(request.brief, 'utf8').digest('hex')
+  return JSON.stringify([request.sessionId, request.task, brief])
+}
+
+/**
+ * 缓存条数上限。只服务「超时后补领」这一个用途，条目没有留下来复用的价值：
+ * 超限先丢最老的（Map 保持插入序），丢掉的后果是多起一次子代理，不是错答案。
+ */
+const CACHE_LIMIT = 256
+
+/** 记一条已完成结果，超限按插入序淘汰最老的。 */
+function remember(cache: Map<string, DelegationResult>, key: string, result: DelegationResult): void {
+  cache.set(key, result)
+  while (cache.size > CACHE_LIMIT) {
+    const oldest = cache.keys().next()
+    if (oldest.done === true) return
+    cache.delete(oldest.value)
+  }
 }
 
 /** 按结构读委派服务：取不到、不是对象、没有可调用的 `delegate`，都算缺席。 */

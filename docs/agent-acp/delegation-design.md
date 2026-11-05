@@ -1,7 +1,7 @@
 # 外部 agent 的委派落到 DSH 侧
 
 > 核对时间：2026-11-05
-> 状态：设计已定，尚未实现
+> 状态：已实现（通路、委派服务、真机探针均完成；装法见 §装法）
 > 涉及仓库：`@goodjin2/dsh-acp-agent`（通路）、`@goodjin2/dsh-superpowers`（委派实现）
 
 ## 一句话
@@ -74,10 +74,13 @@ MCP 的关系里，agent 是 MCP 客户端，DSH 是服务端。stdio 传输由�
 又被外部 agent 接管去驱动，工具又变回外部 agent 的。
 
 **必须在接管判定上加一道排除：委派来源的会话不接管。**
-判据用会话头的 `origin === 'subagent'`（宿主给受委派子会话打���标记，
-见 `src/entry.ts:550` 造影子子会话时用的同一个字段），或 `delegationDepth > 0`。
-两道判定都要加：`ctx.on('agent/created')` 那条（`src/plugin.ts:404` 附近）与
-预设改选那条。
+判据用会话头的 `delegationDepth > 0`（宿主给受委派子会话记的深度，与深度上限用同一个
+字段，见 `src/entry.ts` 造影子子会话时的写法）。**不用 `origin === 'subagent'`**：它是
+粗粒度的来源标签，回答「谁造的」而不是「在血缘的哪一层」。
+注意这两条对本行自己造的影子子会话是等价的（影子会话两个都带），影子会话真正的豁免
+在更早一步——它的会话头没有预设名，接管判定在 `presetIdOf` 就早退了，走不到这道守卫
+（详见 `src/dispatch.ts` 里 `isDelegatedChild` 的注释）。
+两道判定都要加：`ctx.on('agent/created')` 那条与预设改选那条。
 
 **其三：路由表的语义要分清。**
 superpowers 的钉表里多数技能指向 `acp:` 前缀路由。按「一张表，原语义不变」的决定，
@@ -155,14 +158,19 @@ result: {
 
 桥接进程由 **agent 拉起**（stdio 传输的必然结果），所以它要回调 DSH 宿主另找通道。
 
-选**本机 HTTP 路由 + 每次会话一枚随机令牌**：
+选**本机 HTTP 路由 + 一枚长期令牌**：
 
 - 插件在宿主 web 服务器上注册一条 exact 路由，校验令牌（不是浏览器凭据——
-  来回调的是本机子进程，不是浏览器）。
-- 令牌由 DSH 在建会话时生成，随 `mcpServers` 的 `env` 交给 agent，agent 拉起
-  桥接进程时带上它。
+  来回调的是本机子进程，不是浏览器）。令牌比对是定长的（`timingSafeEqual`）。
+- **令牌只有一个来源**：宿主行 `acp-agent-delegation-route` 的 `config.token`，
+  在 profile 里配一次、长期不变（32 字节 hex）。会话侧从同一行现读同一个值，
+  放进 `mcpServers` 的 `env` 交给 agent，agent 拉起桥接进程时带上它。
+  **不按会话现生成**：两处各配各的会让回调永远 401，而现生成的令牌在一次重连后
+  就对不上了。该行留空 = 回调一律拒绝（fail closed），那是默认形态。
 - 桥接进程是最小 MCP 服务端：处理 `initialize` / `tools/list` / `tools/call`，
   收到 `tools/call` 就把参数 POST 给宿主路由，把结果当工具结果回去。
+- 结果按 `(sessionId, task, brief)` 缓存已完成的那一份，供「工具调用超时后 agent 再问
+  同一件事」时补领；brief 进键，否则同名标签配不同任务书会静默拿到上一次的答案。
 
 宿主路由调 superpowers 的委派服务；服务不存在 → 路由返回明确错误 →
 桥接进程把它变成工具错误 → agent 知道这条路不通。
@@ -221,10 +229,10 @@ result: {
 
 | 风险 | 应对 |
 |---|---|
-| 某家不认客户端提供的 MCP 服务器 | 阶段 0 探针先量；不认则该家只能走别的通道（见开放问题） |
-| agent 不理我们的工具，仍用原生委派 | 阶段 2 用 prompt 引导；阶段 3 硬接管 |
-| 子代理跑得比 MCP 工具超时久 | 见 §失败与降级最后一行 |
-| 桥接进程的 `env` 没被 agent 传给子进程 | 阶段 0 探针第 4 项先量 |
+| 某家不认客户端提供的 MCP 服务器 | **已量（2026-11-05）**：五家全认、全列工具；四家会调，cursor 不调。见 `docs/agent-acp/mcp-probe.md` |
+| agent 不理我们的工具，仍用原生委派 | 阶段 2 用 prompt 引导（`delegationHint`，默认关）；阶段 3 硬接管。cursor 明确指示下也不调，引导语对它无效 |
+| 子代理跑得比 MCP 工具超时久 | 见 §失败与降级最后一行（桥接 10 分钟超时 + 路由的结果缓存供补领） |
+| 桥接进程的 `env` 没被 agent 传给子进程 | **已量**：五家都把 `env` 传给了 MCP 子进程（探针实收三个变量）。桌面宿主另有一坑：`command` 是 Electron 二进制，已补 `ELECTRON_RUN_AS_NODE=1` |
 
 **开放问题**
 
@@ -237,6 +245,29 @@ result: {
 3. 一次性子代理与 superpowers 现有的可续聊子代理（`delegate_skill` 走的是
    `startContinuable`）语义不同：一次性拿完结果即弃，不可续聊。
    本设计取一次性（因为要阻塞等结果）；若日后要可续聊，委派服务再加一个方法即可。
+
+## 装法
+
+两行都是**主机侧行**（不能进任何预设的插件清单，否则会被宿主的服务泄漏审计整块回滚）：
+
+1. `superpowers-delegation-service` —— 随 `@goodjin2/dsh-superpowers` 这个 bundle 的 patch
+   自动挂上，装插件就有，profile 不用写。
+2. `acp-agent-delegation-route` —— 同样随 `@goodjin2/dsh-acp-agent` 的 patch 挂上，但
+   默认 `config.token` 是空串（fail closed）。要在桌面版真的用起来，profile 的
+   `cordis.patch.yml` 里加一条**覆盖项**（patch 按 id 覆盖，`config` 是整体替换、不是深合并）：
+
+   ```yaml
+   - id: acp-agent-delegation-route
+     config:
+       token: "<openssl rand -hex 32>"
+   ```
+
+   令牌只写进本机 profile，**不进任何仓库**。它是唯一来源：会话侧从同一行现读。
+
+其余就是常规的「重装插件 / 重启 App」：两个包都是 `link:` 到本机 checkout，宿主直接
+读源码（`src/*.ts` 与 `lib/*.js` 都是源码形态），所以改完**只需重启**，没有构建产物要对齐。
+`delegationHint`（引导语）是预设级开关、默认关：实测四家不靠它也会调，而它唯一想影响的
+cursor 明确指示下也不调，所以默认不开。
 
 ## 实施落点
 

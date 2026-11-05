@@ -158,6 +158,10 @@ function delegationMcpServers(
     command: process.execPath,
     args: [BRIDGE_SCRIPT_PATH],
     env: [
+      // 桌面宿主下 process.execPath 是 Electron 二进制，不带这个变量时它会当成
+      // 「再起一个 App 实例」而不是当 node 跑，桥接进程起不来、委派整条静默消失。
+      // 纯 node 宿主会忽略这个变量，所以一处写法两种宿主都对。
+      { name: 'ELECTRON_RUN_AS_NODE', value: '1' },
       { name: 'DSH_DELEGATION_URL', value: `${origin}${DELEGATION_ROUTE_PATH}` },
       // 桥接进程拿宿主会话 id 去回调路由定位父会话（委派服务据此取父 agent）。
       { name: 'DSH_DELEGATION_SESSION', value: dshSessionId },

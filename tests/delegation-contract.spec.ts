@@ -26,6 +26,15 @@ const MIRROR_CONTRACT = fileURLToPath(
   ),
 )
 
+// 跳过要说一声：形状唯一的活体守卫就是这条对照用例，它无声消失时门禁照样全绿，
+// 而那时恰恰是两边开始各写各的时候。单仓克隆的人应该在输出里看到过这一行。
+if (!existsSync(MIRROR_CONTRACT)) {
+  process.stderr.write(
+    `[delegation-contract] 对面仓的契约副本不在（${MIRROR_CONTRACT}），跨仓对照用例跳过：`
+    + '委派契约的形状暂时只有两边各自的测试守着\n',
+  )
+}
+
 describe('委派契约', () => {
   it('服务名常量是 superpowers.delegation', () => {
     expect(DELEGATION_SERVICE).toBe('superpowers.delegation')

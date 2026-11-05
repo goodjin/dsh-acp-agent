@@ -242,7 +242,7 @@ superpowers `lib/delegation-contract.js`：同一常量、同一两个类型的�
 
 在 acp-agent 的 `tests/delegation-contract.spec.ts` 里加一个用例：读 superpowers 仓的契约文件，断言它的 `DELEGATION_SERVICE` 与 `isDelegationResult` 行为与本仓一致。
 
-**路径不能用 `../../dsh-superpowers/...`**——那个相对路径从 worktree 里解析会落到 `dsh-acp-agent/dsh-superpowers/...`（不存在）。正确做法：从本仓位置向上找到容器目录再拼路径，即 `new URL('../../../dsh-superpowers/.worktrees/feat-delegation-service/lib/delegation-contract.js', import.meta.url)`——从 `dsh-acp-agent/.worktrees/feat-acp-delegation/tests/` 往上三层是 `dsh-plugins/`。若该文件不存在（superpowers 仓不在场），**跳过**（`it.skipIf`），不得因此失败。
+**路径不能用 `../../dsh-superpowers/...`**——那个相对路径从 worktree 里解析会落到 `dsh-acp-agent/dsh-superpowers/...`（不存在）。正确做法：从本仓位置向上找到容器目录再拼路径，即 `new URL('../../../../dsh-superpowers/.worktrees/feat-delegation-service/lib/delegation-contract.js', import.meta.url)`——从 `dsh-acp-agent/.worktrees/feat-acp-delegation/tests/` 往上**四层**才是 `dsh-plugins/`（tests → feat-acp-delegation → .worktrees → dsh-acp-agent → dsh-plugins）。若该文件不存在（superpowers 仓不在场），**跳过**（`it.skipIf`）并在 stderr 说明跳过原因，不得因此失败，也不得无声跳过。
 
 - [ ] **Step 6: 跑两侧测试确认通过**
 

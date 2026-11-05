@@ -16,8 +16,10 @@ describe('受委派子会话的接管排除', () => {
   })
 
   it('origin=subagent 但没有 delegationDepth 的会话不算受委派子会话', () => {
-    // origin 是粗粒度的来源标记；ACP 行自己造的影子子会话也带它。
-    // 判据用 delegationDepth —— 宿主对「这是受委派产生的」的记账。
+    // 判据是 delegationDepth，不是 origin——这条钉的是「判据只有一个字段」。
+    // 别把它读成「影子子会话因为带 origin 才被排除」：本行自己造的影子子会话
+    // 两个字段都带（entry.ts 的 openChild），它们被豁免是因为会话头没有
+    // agentPreset，接管判定在 presetIdOf 就早退了，走不到这道守卫。
     expect(isDelegatedChild({ session: { header: { origin: 'subagent' } } })).toBe(false)
   })
 })

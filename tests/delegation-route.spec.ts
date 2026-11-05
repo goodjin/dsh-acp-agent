@@ -212,7 +212,7 @@ describe('委派回调（行为层）', () => {
     expect(fake.calls).toHaveLength(1)
   })
 
-  it('缓存按 (sessionId, task) 区分：换 task 或换 sessionId 都会再调服务；没给 skill 就不透传 skill', async () => {
+  it('缓存按 (sessionId, task, brief) 区分：换 task 或换 sessionId 都会再调服务；没给 skill 就不透传 skill', async () => {
     const fake = fakeService()
     const { routes } = rig({ service: fake.service })
     await callRoute(routes[0], { body: JSON.stringify({ sessionId: SESSION_ID, task: '任务甲', brief: 'brief 甲' }) })
@@ -220,6 +220,18 @@ describe('委派回调（行为层）', () => {
     await callRoute(routes[0], { body: JSON.stringify({ sessionId: 'session-parent-2', task: '任务甲', brief: 'brief 甲' }) })
     expect(fake.calls).toHaveLength(3)
     expect('skill' in (fake.calls[0] as object)).toBe(false)
+  })
+
+  it('同一 (sessionId, task) 换了 brief 就是另一次委派：不吃缓存', async () => {
+    // 同一个短标签配不同任务书是常见写法（改写重试、同名追问）。缓存若只按
+    // (sessionId, task) 记，第二次会静默拿到上一次的答案——错得还不报错。
+    const fake = fakeService()
+    const { routes } = rig({ service: fake.service })
+    await callRoute(routes[0], { body: JSON.stringify({ sessionId: SESSION_ID, task: '修一下', brief: '改 A 文件' }) })
+    const second = await callRoute(routes[0], { body: JSON.stringify({ sessionId: SESSION_ID, task: '修一下', brief: '改 B 文件' }) })
+    expect(second.status).toBe(200)
+    expect(fake.calls).toHaveLength(2)
+    expect((fake.calls[1] as { brief?: unknown }).brief).toBe('改 B 文件')
   })
 
   it('失败的委派不写缓存：第一次抛错后，第二次请求会再调服务并拿到结果', async () => {

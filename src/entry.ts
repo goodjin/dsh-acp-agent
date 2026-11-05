@@ -639,6 +639,12 @@ function appendOf(agent: { readonly session?: unknown }): ((type: string, payloa
  * 只展示、不执行：子会话是真实 DSH 会话（带父会话血缘、登记进后代目录），
  * 内容来自 ACP 帧；实时帧用最小代理形状（`{session}`）发进流通道。
  * 宿主缺会话创建能力或子代理能力包时 `available:false`，泵内一切子会话动作归零。
+ *
+ * 影子会话写 `origin:'subagent'` 与 `delegationDepth = 父+1`，**但不写 agentPreset**。
+ * 最后这一点是本行不被自己接管的原因：接管判定先问「哪个预设」，影子会话头里
+ * 没有预设名，`presetIdOf` 就返回 undefined，`isDelegatedChild` 那道守卫根本轮不到
+ * 它。所以这里两种「子会话」的区分靠的是预设名，不是 delegationDepth——改这三样
+ * 字段中的任何一个之前，先回头看 dispatch.ts 里 isDelegatedChild 的注释。
  */
 function makeSubagentSessionHost(host: {
   get?(key: string): unknown
