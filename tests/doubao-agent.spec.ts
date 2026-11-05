@@ -99,3 +99,18 @@ describe('the doubao ACP agent', () => {
     expect(DoubaoAcpAgent.promptText([{ type: 'image', data: 'x' }])).toBe('')
   })
 })
+
+describe('the doubao ACP agent, method coverage', () => {
+  it('accepts the mode and model the host sets after opening', async () => {
+    const agent = new DoubaoAcpAgent({ openBrowser: async () => new FakeBrowser([]) })
+    const session = await agent.handle('session/new', {}) as { sessionId: string }
+    expect(await agent.handle('session/set_mode', { sessionId: session.sessionId, modeId: 'default' })).toEqual({})
+    expect(await agent.handle('session/set_model', { sessionId: session.sessionId, modelId: 'doubao-default' })).toEqual({})
+    expect(await agent.handle('session/set_config_option', { sessionId: session.sessionId, configOptionId: 'x', value: 'y' })).toEqual({})
+  })
+
+  it('answers an optional method it does not implement the standard way', async () => {
+    const agent = new DoubaoAcpAgent({ openBrowser: async () => new FakeBrowser([]) })
+    await expect(agent.handle('session/load', { sessionId: 'x' })).rejects.toMatchObject({ code: -32601 })
+  })
+})
