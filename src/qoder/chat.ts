@@ -48,7 +48,12 @@ export type QoderBodyInput = {
  * 模型 id 上的 `[档位]` 后缀会被摘掉，档位改走 `reasoning_effort`——Qoder 的
  * 模型 id 里没有后缀，带过去服务端会当成「没有这个模型」。
  */
-export function buildQoderBody(request: QoderBodyInput, requestId: string, sessionId: string): Record<string, unknown> {
+export function buildQoderBody(
+  request: QoderBodyInput,
+  requestId: string,
+  sessionId: string,
+  options: { readonly maxTokensField?: 'max_tokens' | 'max_completion_tokens' | undefined } = {},
+): Record<string, unknown> {
   const model = baseIdOf(request.model)
   const effort = request.reasoningEffort ?? effortOf(request.model)
   const body = buildChatBody({
@@ -60,8 +65,11 @@ export function buildQoderBody(request: QoderBodyInput, requestId: string, sessi
     ...(effort === undefined ? {} : { reasoningEffort: effort }),
     supportsImages: true,
   })
+  const field = options.maxTokensField ?? 'max_tokens'
+  const { max_tokens: maxTokens, ...rest } = body
   return {
-    ...body,
+    ...rest,
+    ...(maxTokens === undefined ? {} : (field === 'max_completion_tokens' ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens })),
     stream_options: { include_usage: true },
     metadata: {
       context: {
@@ -93,6 +101,8 @@ export async function* streamQoder(
     readonly credential: (rejectedToken?: string) => Promise<QoderCredential>
     readonly fetchImpl?: typeof fetch | undefined
     readonly endpoints?: QoderEndpoints | undefined
+    /** 这个模型声明的最大 token 字段名。 */
+    readonly maxTokensField?: 'max_tokens' | 'max_completion_tokens' | undefined
   },
 ): AsyncGenerator<WorkBuddyStreamChunk> {
   const endpoints = deps.endpoints ?? resolveEndpoints()
@@ -107,7 +117,7 @@ export async function* streamQoder(
     ...(typeof request.reasoningEffort === 'string' && request.reasoningEffort !== ''
       ? { reasoningEffort: request.reasoningEffort }
       : {}),
-  }, requestId, sessionId))
+  }, requestId, sessionId, { maxTokensField: deps.maxTokensField }))
   const signal = AbortSignal.any([
     AbortSignal.timeout(300_000),
     ...(request.signal instanceof AbortSignal ? [request.signal] : []),

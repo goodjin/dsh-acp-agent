@@ -16,6 +16,7 @@ interface Captured {
   model?: string
   reasoningEffort?: string
   messages?: readonly unknown[]
+  maxTokensField?: string
 }
 
 const captured: Captured = {}
@@ -39,10 +40,11 @@ vi.mock('../src/qoder/index.ts', async (importOriginal) => {
       if (modelListFails) throw new Error('no model list')
       return [{ id: 'qwen3.8-max', name: 'Qwen 3.8 Max', efforts: ['low', 'high'] }]
     },
-    streamQoder: (request: Captured) => {
+    streamQoder: (request: Captured, deps: { maxTokensField?: string }) => {
       captured.model = request.model
       captured.reasoningEffort = typeof request.reasoningEffort === 'string' ? request.reasoningEffort : undefined
       captured.messages = request.messages
+      captured.maxTokensField = deps.maxTokensField
       return (async function* noChunks(): AsyncGenerator<never> { /* 请求的形状才是这里的主体 */ })()
     },
   }
@@ -104,6 +106,14 @@ describe('Qoder 国际版的模型行', () => {
     await drain(stream('global3', request))
     await drain(stream('global3', request))
     expect(fetches - before).toBe(1)
+    modelListFails = false
+  })
+
+  it('清单还没拉到时，内置模型也用对最大 token 字段名', async () => {
+    modelListFails = true
+    const stream = qoderModelStream(config)
+    await drain(stream('global3', { ...request, model: 'qwen3.8-max' } as never))
+    expect(captured.maxTokensField).toBe('max_completion_tokens')
     modelListFails = false
   })
 

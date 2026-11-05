@@ -26,6 +26,15 @@ describe('Qoder 国际版的模型清单', () => {
     expect(models[0]?.efforts).toEqual(['low', 'high'])
   })
 
+  it('条目上的最大 token 字段名要认下来', () => {
+    const models = parseModels({ assistant: [
+      { key: 'qwen3.8-max', display_name: 'Qwen 3.8 Max', maxTokensField: 'max_completion_tokens' },
+      { key: 'plain', display_name: 'Plain' },
+    ] })
+    expect(models[0]?.maxTokensField).toBe('max_completion_tokens')
+    expect(models[1]?.maxTokensField).toBe('max_tokens')
+  })
+
   it('模型 id 就是条目的 key，没有 key 的条目跳过', () => {
     expect(parseModels({ assistant: [{ display_name: '无名' }, { key: '', display_name: '空' }] })).toEqual([])
   })

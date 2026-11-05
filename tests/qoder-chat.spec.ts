@@ -29,6 +29,14 @@ describe('Qoder 国际版的模型请求', () => {
     expect((body['messages'] as { role: string }[])[0]).toEqual({ role: 'system', content: 'system' })
   })
 
+  it('最大 token 用模型自己声明的字段名', () => {
+    const body = buildQoderBody({ ...request, maxTokens: 256 }, 'rid', 'sid', { maxTokensField: 'max_completion_tokens' })
+    expect(body['max_completion_tokens']).toBe(256)
+    expect(body['max_tokens']).toBeUndefined()
+    const plain = buildQoderBody({ ...request, maxTokens: 256 }, 'rid', 'sid')
+    expect(plain['max_tokens']).toBe(256)
+  })
+
   it('模型 id 上的档位后缀会被摘掉，档位改走 reasoning_effort', () => {
     const body = buildQoderBody({ model: 'qwen3.8-max[high]', messages: [] }, 'rid', 'sid')
     expect(body['model']).toBe('qwen3.8-max')

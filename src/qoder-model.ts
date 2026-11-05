@@ -15,7 +15,7 @@
 
 import type { CatalogTurnRequest } from './catalog.ts'
 import type { PresetConfig } from './registry.ts'
-import { fetchModels, resolveCredential, streamQoder } from './qoder/index.ts'
+import { BUILTIN_MODELS, fetchModels, resolveCredential, streamQoder } from './qoder/index.ts'
 import type { QoderCredential, QoderModel } from './qoder/index.ts'
 import type { WorkBuddyStreamChunk } from './workbuddy/sse.ts'
 
@@ -37,6 +37,12 @@ const modelListAt = new Map<string, { at: number; ok: boolean }>()
 
 /** 每个模型支持哪些档位（按模型 id 记，跨 preset 共用）。 */
 const modelEfforts = new Map<string, readonly string[]>()
+
+/** 每个模型的最大 token 字段名（按模型 id 记，跨 preset 共用）。 */
+const modelMaxTokensField = new Map<string, 'max_tokens' | 'max_completion_tokens'>()
+
+// 清单没到手时，内置模型的字段名也得是对的。
+for (const [id, model] of Object.entries(BUILTIN_MODELS)) modelMaxTokensField.set(id, model.maxTokensField)
 
 /**
  * 认下 Qoder 国际版那一行，并把它变成模型插件。
@@ -68,6 +74,7 @@ async function* answer(
   await publishModels(presetId, credential, deps)
   yield* streamQoder(requestWithKnownEffort(request), {
     credential: (rejectedToken?: string) => resolveCredential({ rejectedToken }),
+    maxTokensField: modelMaxTokensField.get(request.model),
   })
 }
 
@@ -121,5 +128,6 @@ async function publishModels(
 function rememberEfforts(models: readonly QoderModel[]): void {
   for (const model of models) {
     if (model.efforts !== undefined) modelEfforts.set(model.id, model.efforts)
+    if (model.maxTokensField !== undefined) modelMaxTokensField.set(model.id, model.maxTokensField)
   }
 }

@@ -28,10 +28,30 @@ export type QoderModel = {
   readonly efforts?: readonly string[] | undefined
   /** 支不支持图片。 */
   readonly supportsImages?: boolean | undefined
+  /**
+   * 请求体里「最大 token」用哪个字段名。
+   *
+   * Qoder 自己的模型用 `max_completion_tokens`，别的走 OpenAI 那一套
+   * `max_tokens`——发错字段名，服务端要么忽略要么拒。
+   */
+  readonly maxTokensField?: 'max_tokens' | 'max_completion_tokens' | undefined
 }
 
 /** 清单按场景分组，CLI 用的那一组叫 `assistant`。 */
 const SCENE = 'assistant'
+
+/**
+ * worker 内置的模型（国际版）。
+ *
+ * 清单要登录才有；清单没到手时，这些是 worker 自己会用的模型。它们声明的最大
+ * token 字段名是 `max_completion_tokens`——发成 `max_tokens` 服务端不认。
+ */
+export const BUILTIN_MODELS: Readonly<Record<string, {
+  readonly displayName: string
+  readonly maxTokensField: 'max_tokens' | 'max_completion_tokens'
+}>> = {
+  'qwen3.8-max': { displayName: 'Qwen 3.8 Max', maxTokensField: 'max_completion_tokens' },
+}
 
 /**
  * 从应答里取模型清单。
@@ -52,6 +72,7 @@ export function parseModels(payload: unknown): QoderModel[] {
     const contextWindow = typeof model['max_input_tokens'] === 'number' ? model['max_input_tokens'] : undefined
     const efforts = effortsOf(model)
     const supportsImages = typeof model['is_vl'] === 'boolean' ? model['is_vl'] : undefined
+    const maxTokensField = model['maxTokensField'] === 'max_completion_tokens' ? 'max_completion_tokens' : 'max_tokens'
     models.push({
       id,
       name,
@@ -59,6 +80,7 @@ export function parseModels(payload: unknown): QoderModel[] {
       ...(contextWindow === undefined ? {} : { contextWindow }),
       ...(efforts === undefined ? {} : { efforts }),
       ...(supportsImages === undefined ? {} : { supportsImages }),
+      maxTokensField,
     })
   }
   return models
