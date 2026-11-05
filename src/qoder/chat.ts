@@ -1,46 +1,134 @@
+/**
+ * Qoder 国际版的一次模型请求。
+ *
+ * 核对时间：2026-11-05。请求的形状来自本机 worker 里的 `OFn()`（请求体）与
+ * `Wat.openResponse()`（请求头）：
+ *
+ *   POST {modelBase}/model/v1/chat/completions
+ *   Authorization: Bearer <设备令牌>
+ *   Accept: text/event-stream
+ *   Content-Type: application/json
+ *   X-Request-ID / X-Session-ID
+ *   Cosy-Version / Cosy-ClientType / Cosy-MachineOS
+ *
+ * 体是 OpenAI 形状（`model`、`messages`、`stream`、`stream_options`、`tools`…）
+ * **外加** `metadata.context`——Qoder 靠它认这次请求属于哪次会话。
+ *
+ * 三种失败要分清：上游报错、令牌过期、连接中断。**中断不能当成一次成功的空
+ * 回答**——那会让用户看到「模型什么都没说」而不是一句错误。
+ */
+
 import { randomUUID } from 'node:crypto'
+import { baseIdOf } from '../selection.ts'
 import { buildChatBody } from '../workbuddy/openai.ts'
-import { chunksFromOpenAiEvents } from '../workbuddy/sse.ts'
+import { chunksFromOpenAiEvents, readSseEvents } from '../workbuddy/sse.ts'
 import type { WorkBuddyStreamChunk } from '../workbuddy/sse.ts'
 import type { CatalogTurnRequest } from '../catalog.ts'
-import { MODEL_URL, record } from './auth.ts'
-import type { Credential } from './auth.ts'
+import { qoderIdentityHeaders, resolveEndpoints } from './endpoints.ts'
+import type { QoderEndpoints } from './endpoints.ts'
+import type { QoderCredential } from './auth.ts'
 
-/** Qoder's OFn builder adds metadata to an otherwise OpenAI-shaped request. */
-export function buildQoderBody(request: CatalogTurnRequest, requestId: string, sessionId: string) {
+/** 请求体里带的请求标识。 */
+export type QoderBodyInput = {
+  readonly model: string
+  readonly messages?: readonly unknown[] | undefined
+  readonly system?: string | undefined
+  readonly tools?: {
+    readonly name: string
+    readonly description?: string | undefined
+    readonly parameters?: Record<string, unknown> | undefined
+  }[] | undefined
+  readonly maxTokens?: number | undefined
+  readonly reasoningEffort?: string | undefined
+}
+
+/**
+ * 投影成一次模型请求的体。
+ *
+ * 模型 id 上的 `[档位]` 后缀会被摘掉，档位改走 `reasoning_effort`——Qoder 的
+ * 模型 id 里没有后缀，带过去服务端会当成「没有这个模型」。
+ */
+export function buildQoderBody(request: QoderBodyInput, requestId: string, sessionId: string): Record<string, unknown> {
+  const model = baseIdOf(request.model)
+  const effort = request.reasoningEffort ?? effortOf(request.model)
+  const body = buildChatBody({
+    model,
+    messages: request.messages ?? [],
+    ...(typeof request.system === 'string' ? { system: request.system } : {}),
+    ...(request.tools === undefined ? {} : { tools: request.tools }),
+    ...(typeof request.maxTokens === 'number' ? { maxTokens: request.maxTokens } : {}),
+    ...(effort === undefined ? {} : { reasoningEffort: effort }),
+    supportsImages: true,
+  })
   return {
-    ...buildChatBody({ model: request.model, messages: request.messages ?? [], system: typeof request.system === 'string' ? request.system : undefined,
-      tools: request.tools, maxTokens: typeof request.maxTokens === 'number' ? request.maxTokens : undefined, reasoningEffort: typeof request.reasoningEffort === 'string' ? request.reasoningEffort : undefined, supportsImages: true }),
-    ...(request.reasoningEffort === 'none' ? { reasoning_effort: 'none' } : {}),
+    ...body,
     stream_options: { include_usage: true },
-    metadata: { context: { request_id: requestId, request_set_id: requestId, session_id: sessionId, client_type: '5' } },
+    metadata: {
+      context: {
+        request_id: requestId,
+        request_set_id: requestId,
+        session_id: sessionId,
+        client_type: '5',
+      },
+    },
   }
 }
-/** Never turn an upstream error or truncated stream into a successful empty answer. */
-export async function* checkedEvents(events: AsyncIterable<unknown>): AsyncGenerator<unknown> {
-  let finished = false
-  for await (const event of events) {
-    const data = record(event)
-    if (data.error || data.error_code) throw new Error('Qoder 返回模型错误，请检查账号与模型权限')
-    const choices = Array.isArray(data.choices) ? data.choices : []
-    if (choices.some(c => typeof record(c).finish_reason === 'string' && record(c).finish_reason !== '')) finished = true
-    yield event
-  }
-  if (!finished) throw new Error('Qoder 响应中断：没有收到结束帧')
+
+/** 模型 id 上 `[high]` 这种后缀里的档位。 */
+function effortOf(model: string): string | undefined {
+  const open = model.lastIndexOf('[')
+  if (open === -1 || !model.endsWith(']')) return undefined
+  const effort = model.slice(open + 1, -1)
+  return effort === '' ? undefined : effort
 }
-export async function* streamQoder(request: CatalogTurnRequest, deps: {
-  credential: (rejectedToken?: string) => Promise<Credential>; fetchImpl?: typeof fetch
-}): AsyncGenerator<WorkBuddyStreamChunk> {
-  const requestId = randomUUID(), sessionId = typeof request.sessionId === 'string' && request.sessionId ? request.sessionId : randomUUID()
-  const body = JSON.stringify(buildQoderBody(request, requestId, sessionId))
-  const signal = AbortSignal.any([AbortSignal.timeout(300_000), ...(request.signal instanceof AbortSignal ? [request.signal] : [])])
+
+/**
+ * 发一次模型请求，读它的流。
+ *
+ * 令牌被上游拒绝时换一次再试；再被拒绝就结束这一轮（让人重新登录）。
+ */
+export async function* streamQoder(
+  request: CatalogTurnRequest,
+  deps: {
+    readonly credential: (rejectedToken?: string) => Promise<QoderCredential>
+    readonly fetchImpl?: typeof fetch | undefined
+    readonly endpoints?: QoderEndpoints | undefined
+  },
+): AsyncGenerator<WorkBuddyStreamChunk> {
+  const endpoints = deps.endpoints ?? resolveEndpoints()
+  const requestId = randomUUID()
+  const sessionId = typeof request.sessionId === 'string' && request.sessionId !== '' ? request.sessionId : randomUUID()
+  const body = JSON.stringify(buildQoderBody({
+    model: request.model,
+    messages: Array.isArray(request.messages) ? request.messages : [],
+    ...(typeof request.system === 'string' ? { system: request.system } : {}),
+    ...(request.tools === undefined ? {} : { tools: request.tools }),
+    ...(typeof request.maxTokens === 'number' ? { maxTokens: request.maxTokens } : {}),
+    ...(typeof request.reasoningEffort === 'string' && request.reasoningEffort !== ''
+      ? { reasoningEffort: request.reasoningEffort }
+      : {}),
+  }, requestId, sessionId))
+  const signal = AbortSignal.any([
+    AbortSignal.timeout(300_000),
+    ...(request.signal instanceof AbortSignal ? [request.signal] : []),
+  ])
   signal.throwIfAborted()
+  const fetchImpl = deps.fetchImpl ?? fetch
   let credential = await deps.credential()
   for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await (deps.fetchImpl ?? fetch)(MODEL_URL, {
-      method: 'POST', body, signal, redirect: 'error',
-      headers: { Authorization: `Bearer ${credential.accessToken}`, 'Content-Type': 'application/json',
-        Accept: 'text/event-stream', 'X-Request-ID': requestId, 'X-Session-ID': sessionId },
+    const response = await fetchImpl(endpoints.chatUrl, {
+      method: 'POST',
+      body,
+      signal,
+      redirect: 'error',
+      headers: {
+        Authorization: `Bearer ${credential.accessToken}`,
+        Accept: 'text/event-stream',
+        'Content-Type': 'application/json',
+        'X-Request-ID': requestId,
+        'X-Session-ID': sessionId,
+        ...qoderIdentityHeaders(),
+      },
     })
     if (response.status === 401 && attempt === 0) {
       await response.body?.cancel()
@@ -55,40 +143,41 @@ export async function* streamQoder(request: CatalogTurnRequest, deps: {
       await response.body?.cancel()
       throw new Error('Qoder 模型响应不是 SSE 事件流')
     }
-    // Sanitize transport/parser errors as well as HTTP errors; never reflect a token-bearing response.
-    try { yield* chunksFromOpenAiEvents(checkedEvents(readQoderEvents(response.body))) }
-    catch (error) {
+    try {
+      yield* chunksFromOpenAiEvents(checkedEvents(readSseEvents(response.body)))
+    } catch (error) {
       if (signal.aborted) throw signal.reason
+      // 传输/解析错误也要收拾干净：不能把带令牌的原文反射出去。
       throw new Error(error instanceof Error && error.message.startsWith('Qoder ') ? error.message : 'Qoder 事件流读取失败')
     }
     return
   }
 }
 
-/** Preserve SSE event:error and reject malformed JSON instead of losing a frame silently. */
-export async function* readQoderEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<unknown> {
-  const reader = body.getReader(), decoder = new TextDecoder()
-  let buffer = ''
-  function parse(frame: string): unknown {
-    const lines = frame.split('\n')
-    if (lines.some(line => /^event:\s*error\s*$/.test(line))) throw new Error('Qoder 返回流式错误')
-    const data = lines.filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n').trim()
-    if (!data || data === '[DONE]') return undefined
-    try { return JSON.parse(data) as unknown } catch { throw new Error('Qoder 返回无效的事件数据') }
-  }
-  try {
-    while (true) {
-      const next = await reader.read()
-      buffer += next.done ? decoder.decode() : decoder.decode(next.value, { stream: true })
-      // Normalize complete CRLFs only; an isolated CR may be half of a split delimiter.
-      buffer = buffer.replace(/\r\n/g, '\n')
-      let end: number
-      while ((end = buffer.indexOf('\n\n')) >= 0) {
-        const event = parse(buffer.slice(0, end)); buffer = buffer.slice(end + 2)
-        if (event !== undefined) yield event
-      }
-      if (buffer.length > 4 * 1024 * 1024) throw new Error('Qoder 事件超过大小限制')
-      if (next.done) { if (buffer.trim()) { const event = parse(buffer); if (event !== undefined) yield event }; return }
+/**
+ * 盯着事件流：上游报错就抛错；流结束时没有结束帧就是中断。
+ *
+ * 「没有结束帧」不是一次成功的空回答——那会让用户以为模型不想说话。
+ */
+async function* checkedEvents(events: AsyncIterable<unknown>): AsyncGenerator<unknown> {
+  let finished = false
+  for await (const event of events) {
+    const data = record(event)
+    if (data['error'] !== undefined || data['error_code'] !== undefined) {
+      throw new Error('Qoder 返回模型错误，请检查账号与模型权限')
     }
-  } finally { await reader.cancel().catch(() => {}); reader.releaseLock() }
+    const choices = Array.isArray(data['choices']) ? data['choices'] : []
+    for (const choice of choices) {
+      const reason = record(choice)['finish_reason']
+      if (typeof reason === 'string' && reason !== '') finished = true
+    }
+    yield event
+  }
+  if (!finished) throw new Error('Qoder 响应中断：没有收到结束帧')
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
 }
