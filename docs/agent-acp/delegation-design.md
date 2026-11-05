@@ -91,13 +91,23 @@ superpowers 的钉表里多数技能指向 `acp:` 前缀路由。按「一张表
 
 ### 一个必须先解决的事实：孩子的工具从哪来
 
-孩子继承**父会话的预设组合**。ACP 预设（`acp-codex` 等）的插件清单目前**只有绑定行**
+孩子继承**父会话的预设组合**。ACP 预置（`acp-codex` 等）的插件清单只有绑定行
 （`cordis.patch.yml` 里 `acp-codex` / `acp-claude` / … 各自的 `plugins:` 只有一项），
-所以这样起出来的孩子会拿到一张空工具表。
+所以**只做继承**的话，这样起出来的孩子会拿到一张空工具表。
 
-修法：在 ACP 预设里补上 DSH 的常用工具行（bash、fs、fs-search、todo）。
-这是 acp-agent 自己补丁文件里的事，不跨插件。对 ACP 驱动的**父**会话本身无害：
-它的回合由外部 agent 驱动，DSH 的工具不会被它用到；工具表只在 DSH 侧跑模型时才有意义。
+**曾经尝试过、并且已经推翻的修法**：在 ACP 预置里补上 DSH 的常用工具行（bash、fs、
+fs-search、todo）。看起来无害——父会话的回合由外部 agent 驱动，DSH 的工具本来就用不上——
+但实测（2026-11-05）代价是致命的：预置的 `plugins` 一旦多挂插件，宿主就不再把这家的模型
+列进模型目录，codex/claude/grok/cursor/qoder/豆包**整组从模型选择器里消失**
+（`/api/session/modelCatalog` 的 `routableProviders` 从 9 个掉到 4 个），宿主侧不报错、
+也没有 failure 条目。所以这四行已经全部撤回，`tests/acp-preset-tools.spec.ts` 反过来
+钉住「预置里只许有绑定行」。
+
+**真正的修法（按这个做）**：从委派那一侧指定孩子挂哪个预置。宿主的子代理请求支持
+`agentPreset`（`dsh-subagent`：`startActivation` 的 `request.agentPreset`，缺席时
+同步沿用父会话的预置）——委派服务起孩子时显式挂一个**带工具**的预置（如 `standard`
+或 `superpowers`），provider/model 仍按钉表给。这样父会话的预置保持只读形态，
+孩子拿到的是完整工具组合。
 
 ## 方案总览
 
@@ -205,7 +215,7 @@ result: {
 跑一轮要几分钟墙钟时间。原始帧存 `tests/fixtures/captured-frames.<agent>.json`。
 
 **阶段 1：通路与委派实现。**
-桥接进程、宿主路由、委派服务、接管排除守卫、ACP 预设补工具行。
+桥接进程、宿主路由、委派服务、接管排除守卫。
 五家统一的一轮基建，先不追求 agent 会不会用。
 
 **阶段 2：软接管。**
@@ -278,7 +288,7 @@ cursor 明确指示下也不调，所以默认不开。
 | `src/runner.ts:2216`、`:2243` | `session/new` 与 `session/load`/`resume` 的 `mcpServers` 带上我们的服务器 |
 | `src/dispatch.ts` / `src/plugin.ts` | 接管判定排除委派来源的会话 |
 | 新增（宿主行） | 注册回调路由；提供桥接进程 |
-| `cordis.patch.yml` | ACP 预设补 DSH 工具行 |
+| 委派服务侧 | 起孩子时显式指定 `agentPreset`（见「孩子的工具从哪来」）；**不要**往 ACP 预置里加插件行 |
 
 **dsh-superpowers**
 

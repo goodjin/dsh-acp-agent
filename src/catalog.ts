@@ -357,7 +357,6 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
       // 先让模型插件把清单备好（它自己登录、自己问上游），再回答。
       await deps.ensureModels?.(presetId)
       const models = modelsFor(presetId)
-      process.stderr.write(`[acp-debug] listModels(${provider}) presetId=${presetId} models=${models.length}\n`)
       // Collapse same-base entries (one model published as base[low]…base[ultra])
       // into a single row carrying its efforts, so the picker shows the model
       // once and reasoning effort becomes a separate axis rather than N rows.
