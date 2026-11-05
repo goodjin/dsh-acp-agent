@@ -33,7 +33,7 @@ export type QoderBodyInput = {
   readonly model: string
   readonly messages?: readonly unknown[] | undefined
   readonly system?: string | undefined
-  readonly tools?: {
+  readonly tools?: readonly {
     readonly name: string
     readonly description?: string | undefined
     readonly parameters?: Record<string, unknown> | undefined

@@ -3,7 +3,7 @@ import { buildQoderBody, streamQoder } from '../src/qoder/chat.ts'
 import type { QoderCredential } from '../src/qoder/auth.ts'
 
 const credential: QoderCredential = { accessToken: 'tok', refreshToken: 'r1', machineId: 'mid' }
-const request = { model: 'qwen3.8-max', messages: [{ role: 'user', content: 'hello' }] }
+const request = { provider: 'acp:acp-qoder-global', model: 'qwen3.8-max', messages: [{ role: 'user', content: 'hello' }] }
 
 function sse(events: unknown[]): Response {
   return new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n', {

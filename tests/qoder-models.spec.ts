@@ -23,7 +23,7 @@ describe('Qoder 国际版的模型清单', () => {
       contextWindow: 1000000,
       supportsImages: true,
     })
-    expect(models[0].efforts).toEqual(['low', 'high'])
+    expect(models[0]?.efforts).toEqual(['low', 'high'])
   })
 
   it('模型 id 就是条目的 key，没有 key 的条目跳过', () => {

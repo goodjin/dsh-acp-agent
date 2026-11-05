@@ -38,6 +38,9 @@ export type ClientLocaleKey =
   | 'workbuddy.section.label'
   | 'workbuddy.account.signedIn' | 'workbuddy.account.signedOut'
   | 'workbuddy.account.login' | 'workbuddy.account.refresh'
+  | 'qoder.section.label'
+  | 'qoder.account.signedIn' | 'qoder.account.signedOut'
+  | 'qoder.account.login' | 'qoder.account.refresh'
 
 export const zh: Record<ClientLocaleKey, string> = {
   'handover.title': '已切换到 {target}，对话已移到新会话',
@@ -105,6 +108,11 @@ export const zh: Record<ClientLocaleKey, string> = {
   'workbuddy.account.signedOut': '未登录 WorkBuddy：这一组模型发消息会被拒绝。',
   'workbuddy.account.login': '去登录',
   'workbuddy.account.refresh': '刷新状态',
+  'qoder.section.label': 'Qoder 国际版账号',
+  'qoder.account.signedIn': '已登录 Qoder 国际版：',
+  'qoder.account.signedOut': '未登录 Qoder 国际版：这一组模型发消息会被拒绝。',
+  'qoder.account.login': '去登录',
+  'qoder.account.refresh': '刷新状态',
   'storagePosture.local': '设置保存在本机',
 }
 
@@ -174,6 +182,11 @@ export const en: Record<ClientLocaleKey, string> = {
   'workbuddy.account.signedOut': 'Not signed in to WorkBuddy: messages in this group will be refused.',
   'workbuddy.account.login': 'Sign in',
   'workbuddy.account.refresh': 'Refresh status',
+  'qoder.section.label': 'Qoder international account',
+  'qoder.account.signedIn': 'Signed in to Qoder international:',
+  'qoder.account.signedOut': 'Not signed in to Qoder international: messages in this group will be refused.',
+  'qoder.account.login': 'Sign in',
+  'qoder.account.refresh': 'Refresh status',
   'storagePosture.local': 'Settings are stored on this machine',
 }
 
