@@ -29,6 +29,14 @@ export function registerQoderRoutes(ctx: WorkBuddyRouteContext, deps: QoderRoute
   const selectedIds = deps.readSelection ?? (() => readSelection('qoder'))
   const saveSelection = deps.writeSelection ?? ((ids: readonly string[]) => writeSelection('qoder', ids))
   const listModels = deps.fetchModels ?? fetchModels
+  // 清单缓存：拉一次要起 Qoder 的进程（几秒），别每开一次设置就起一遍。
+  let cachedModels: { at: number; models: Awaited<ReturnType<typeof listModels>> } | undefined
+  const modelsWithin = async (credential: Parameters<typeof listModels>[0]['credential']) => {
+    if (cachedModels !== undefined && Date.now() - cachedModels.at < 5 * 60_000) return cachedModels.models
+    const models = await listModels({ credential }).catch(() => [])
+    if (models.length > 0) cachedModels = { at: Date.now(), models }
+    return models
+  }
   ctx.effect(() => {
     let pending: { url: string; controller: AbortController } | undefined
     let failure: string | undefined
@@ -72,7 +80,7 @@ export function registerQoderRoutes(ctx: WorkBuddyRouteContext, deps: QoderRoute
         try {
           if (req.method === 'GET') {
             const credential = await deps.readCredential()
-            const fetched = credential === undefined ? [] : await listModels({ credential }).catch(() => [])
+            const fetched = credential === undefined ? [] : await modelsWithin(credential)
             // 站点的整份清单要 Qoder 自己的签名才拿得到；拿不到就用声明的那份，
             // 空着对用户没用。
             const models = fetched.length > 0 ? fetched : qoderDeclaredModels()
