@@ -118,11 +118,12 @@ export async function fetchModels(options: {
   })
   return catalog.map(model => ({
     id: model.id,
-    name: model.name,
+    // 倍率进**名字**：选择器里显示的就是名字，倍率塞在描述里看不见。
+    name: model.credits === undefined ? model.name : `${model.name}（x${model.credits}）`,
     ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
     ...(model.efforts === undefined ? {} : { efforts: model.efforts }),
     ...(model.supportsImages === undefined ? {} : { supportsImages: model.supportsImages }),
-    ...(model.credits === undefined ? {} : { description: `积分 ${model.credits}`, credits: model.credits }),
+    ...(model.credits === undefined ? {} : { credits: model.credits }),
   }))
 }
 
