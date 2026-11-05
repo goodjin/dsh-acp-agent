@@ -12,10 +12,13 @@ import { describe, expect, it } from 'vitest'
 import type { ReactElement } from 'react'
 import {
   beginWorkBuddyLogin,
+  claimWorkBuddyCheckin,
   pollUntilSignedIn,
+  readWorkBuddyCheckin,
   readWorkBuddySession,
   WORKBUDDY_ACCOUNT_SECTION_ID,
   workBuddyAccountView,
+  workBuddyCheckinView,
   workBuddySettingsView,
 } from '../src/client/workbuddy-account-section.tsx'
 import { modelChecklistView } from '../src/client/model-checklist.tsx'
@@ -198,12 +201,78 @@ describe('排版', () => {
     const children = (view as ReactElement & { props?: { children?: unknown } }).props?.children
     const list = Array.isArray(children) ? children : [children]
     expect((list[0] as ReactElement & { props?: Record<string, unknown> })?.props?.['data-workbuddy-account']).toBe('root')
-    expect((list[1] as ReactElement & { props?: Record<string, unknown> })?.props?.['data-model-checklist']).toBe('root')
+    // 签到那一段夹在中间（没状态时是空的），模型列表仍在账号下面。
+    const checklistAt = list.findIndex(child =>
+      (child as ReactElement & { props?: Record<string, unknown> })?.props?.['data-model-checklist'] === 'root')
+    expect(checklistAt).toBeGreaterThan(0)
   })
 })
 
 describe('设置里的行', () => {
   it('行 id 是约定的那个', () => {
     expect(WORKBUDDY_ACCOUNT_SECTION_ID).toBe('acp-agent-workbuddy-account')
+  })
+})
+
+describe('每日签到', () => {
+  it('问宿主要签到状态时打的是签到那条路由', async () => {
+    const calls: string[] = []
+    const fetchImpl = fakeFetch({
+      ok: true,
+      status: { todayCheckedIn: true, streakDays: 13, dailyCredit: 100, todayCredit: 100, active: true, isStreakDay: false },
+    }, calls)
+    const state = await readWorkBuddyCheckin({ fetchImpl })
+    expect(calls).toEqual(['/acp-agent/workbuddy/checkin'])
+    expect(state.status?.todayCheckedIn).toBe(true)
+    expect(state.status?.streakDays).toBe(13)
+    expect(state.status?.dailyCredit).toBe(100)
+  })
+
+  it('没登录时状态里没有签到信息', async () => {
+    const fetchImpl = fakeFetch({ ok: false, reason: '未登录' })
+    const state = await readWorkBuddyCheckin({ fetchImpl })
+    expect(state.status).toBeUndefined()
+    expect(state.reason).toBe('未登录')
+  })
+
+  it('手动签到时打的是 POST', async () => {
+    const calls: string[] = []
+    const fetchImpl = fakeFetch({ ok: true, claimed: true, credit: 100, streakDays: 14 }, calls)
+    const result = await claimWorkBuddyCheckin({ fetchImpl })
+    expect(calls).toEqual(['/acp-agent/workbuddy/checkin'])
+    expect(result.claimed).toBe(true)
+    expect(result.credit).toBe(100)
+  })
+
+  it('视图：今天已签就说清已签、连续几天、每天多少积分', () => {
+    const view = workBuddyCheckinView({
+      status: { active: true, todayCheckedIn: true, streakDays: 13, dailyCredit: 100, todayCredit: 100, isStreakDay: false },
+    })
+    const text = textOf(view)
+    expect(text).toContain('今日已签')
+    expect(text).toContain('13')
+    expect(text).toContain('100')
+  })
+
+  it('视图：今天没签就说「今日未签」，并给一个「立即签到」按钮', () => {
+    const view = workBuddyCheckinView({
+      status: { active: true, todayCheckedIn: false, streakDays: 0, dailyCredit: 100, todayCredit: 0, isStreakDay: false },
+    })
+    expect(textOf(view)).toContain('今日未签')
+    const button = find(view, props => props['data-workbuddy-checkin-claim'] === true)
+    expect(button).toBeDefined()
+  })
+
+  it('视图：没登录就不显示这一段', () => {
+    const view = workBuddyCheckinView({ status: undefined })
+    expect(view).toBeNull()
+  })
+
+  it('视图：今天已签时按钮不再给点', () => {
+    const view = workBuddyCheckinView({
+      status: { active: true, todayCheckedIn: true, streakDays: 13, dailyCredit: 100, todayCredit: 100, isStreakDay: false },
+    })
+    const button = find(view, props => props['data-workbuddy-checkin-claim'] === true)
+    expect(button?.props['disabled']).toBe(true)
   })
 })
