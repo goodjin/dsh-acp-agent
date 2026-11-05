@@ -55,8 +55,19 @@ export function invalidateWorkBuddyCatalog(): void {
   modelListAt.clear()
 }
 
+/**
+ * 每一行的清单发布口。
+ *
+ * `declared` 是那一行**声明要提供哪些模型**（挂载行里的 `models`）——它就是白名单：
+ * 站点给的清单可能有几十个，我们只提供声明过的那些。
+ */
+type WorkBuddyPublisher = {
+  readonly declared: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[]
+  readonly publish: (models: readonly WorkBuddyReportedModel[]) => void
+}
+
 /** 每个 preset 的清单发布口（写进目录的运行时账本）。 */
-const publishers = new Map<string, (models: readonly WorkBuddyReportedModel[]) => void>()
+const publishers = new Map<string, WorkBuddyPublisher>()
 
 /**
  * 登记某一行的清单发布口。
@@ -68,9 +79,43 @@ const publishers = new Map<string, (models: readonly WorkBuddyReportedModel[]) =
  */
 export function registerWorkBuddyModelPublisher(
   presetId: string,
+  declared: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[],
   publish: (models: readonly WorkBuddyReportedModel[]) => void,
 ): void {
-  publishers.set(presetId, publish)
+  publishers.set(presetId, { declared, publish })
+}
+
+/**
+ * 声明的清单与站点给的清单合起来。
+ *
+ * **声明的清单说了算**：这一行提供哪些模型由挂载行决定（白名单），站点给的清单只
+ * 用来补名字、积分倍率与上下文——站点没提到的那个模型，仍然按声明里写的显示。
+ * @param declared - 那一行声明的模型。
+ * @param runtime - 站点给的清单（可能几十个，也可能没有）。
+ * @returns 这一行真正提供的模型。
+ */
+export function mergeDeclaredModels(
+  declared: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[],
+  runtime: readonly WorkBuddyReportedModel[],
+): WorkBuddyReportedModel[] {
+  const byId = new Map(runtime.map(model => [model.id, model]))
+  // 同名的（站点的 hy4free 与 hy4std 都叫「Hy4」）在选择器里会长得一模一样，
+  // 分不出谁是谁——补上 id 让人认得出。
+  const nameCount = new Map<string, number>()
+  for (const entry of declared) {
+    nameCount.set(entry.name, (nameCount.get(entry.name) ?? 0) + 1)
+  }
+  return declared.map(entry => {
+    const found = byId.get(entry.id)
+    const source = found ?? entry
+    const name = (nameCount.get(entry.name) ?? 0) > 1 ? `${entry.name}（${entry.id}）` : source.name
+    const description = source.description ?? entry.description
+    return {
+      id: entry.id,
+      name,
+      ...(description === undefined ? {} : { description }),
+    }
+  })
 }
 
 /**
@@ -96,9 +141,9 @@ export async function ensureWorkBuddyModels(
   const catalog = await loadWorkBuddyCatalog(credential, endpoints, options?.fetchImpl)
   if (catalog === undefined || catalog.models.length === 0) return
   for (const target of targets) {
-    const publish = publishers.get(target)
-    if (publish === undefined) continue
-    publish(catalog.models)
+    const publisher = publishers.get(target)
+    if (publisher === undefined) continue
+    publisher.publish(mergeDeclaredModels(publisher.declared, catalog.models))
   }
 }
 
@@ -155,7 +200,11 @@ export function workBuddyModelStream(
   for (const [presetId, preset] of Object.entries(config.presets)) {
     if (preset.agent !== 'workbuddy') continue
     if (deps?.onRuntimeModels !== undefined) {
-      registerWorkBuddyModelPublisher(presetId, models => { deps.onRuntimeModels?.(presetId, models) })
+      registerWorkBuddyModelPublisher(
+        presetId,
+        preset.models ?? [],
+        models => { deps.onRuntimeModels?.(presetId, models) },
+      )
     }
   }
   return (presetId, request) => {
@@ -163,7 +212,7 @@ export function workBuddyModelStream(
     if (preset?.agent !== 'workbuddy') return undefined
     // 端点一处说了算：登录、清单、模型请求都从它派生，不会出现两处不同源。
     const endpoints = resolveEndpoints(preset.baseUrl)
-    return answer(presetId, request, deps, endpoints, preset.baseUrl === undefined)
+    return answer(presetId, request, deps, endpoints, preset.baseUrl === undefined, preset.models ?? [])
   }
 }
 
@@ -176,11 +225,13 @@ async function* answer(
   endpoints: WorkBuddyEndpoints,
   /** 端点是不是由站点给的（配置里显式写了端点时，以配置为准）。 */
   followCatalogEndpoint: boolean,
+  /** 这一行声明要提供哪些模型（白名单）。 */
+  declared: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[],
 ): AsyncGenerator<WorkBuddyStreamChunk> {
   const resolve = credentialResolver({ endpoints })
   const credential = await resolveWithAccount(resolve, endpoints)
   const catalog = await loadWorkBuddyCatalog(credential, endpoints)
-  publishModels(presetId, catalog?.models, deps)
+  publishModels(presetId, catalog?.models, deps, declared)
   // 站点说模型在哪儿就打哪儿；配置里显式写了端点就听配置的（那是部署方的意思）。
   const modelEndpoints = followCatalogEndpoint && catalog?.endpoint !== undefined
     ? resolveEndpoints(catalog.endpoint)
@@ -219,10 +270,11 @@ function publishModels(
   deps: {
     readonly onRuntimeModels?: ((presetId: string, models: readonly WorkBuddyReportedModel[]) => void) | undefined
   } | undefined,
+  declared: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[],
 ): void {
   if (deps?.onRuntimeModels === undefined || models === undefined || models.length === 0) return
   modelListAt.set(presetId, { at: Date.now(), ok: true })
-  deps.onRuntimeModels(presetId, models)
+  deps.onRuntimeModels(presetId, mergeDeclaredModels(declared, models))
 }
 
 /**

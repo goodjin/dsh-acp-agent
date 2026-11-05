@@ -57,7 +57,7 @@ vi.mock('../src/workbuddy/index.ts', async (importOriginal) => {
   }
 })
 
-const { invalidateWorkBuddyCatalog, workBuddyModelStream } = await import('../src/workbuddy-model.ts')
+const { invalidateWorkBuddyCatalog, mergeDeclaredModels, workBuddyModelStream } = await import('../src/workbuddy-model.ts')
 const { modelPluginStream } = await import('../src/model-plugins.ts')
 
 const config = {
@@ -132,6 +132,49 @@ describe('历史里的工具调用', () => {
   })
 })
 
+describe('白名单', () => {
+  it('这一行只提供声明过的模型，站点给的那份只用来补名字与倍率', async () => {
+    invalidateWorkBuddyCatalog()
+    state.recorded = undefined
+    const stream = modelPluginStream({
+      presets: {
+        'acp-workbuddy': {
+          agent: 'workbuddy',
+          models: [{ id: 'hy4free', name: 'Hy4' }, { id: 'glm-5.3', name: 'GLM-5.3' }],
+        },
+      },
+    } as unknown as PresetConfig, {
+      onRuntimeModels: (presetId, models) => { state.recorded = { presetId, models } },
+    })
+    await drain(stream('acp-workbuddy', request))
+    expect(recordedNow()?.models.map(model => model.id)).toEqual(['hy4free', 'glm-5.3'])
+  })
+
+  it('声明里有的、站点清单里没有的，照样显示（按声明写的那份）', () => {
+    const merged = mergeDeclaredModels(
+      [{ id: 'hy4free', name: 'Hy4', description: '兜底描述' }],
+      [{ id: 'other', name: '别的' }],
+    )
+    expect(merged).toEqual([{ id: 'hy4free', name: 'Hy4', description: '兜底描述' }])
+  })
+
+  it('同名的模型补上 id：选择器里分得出谁是谁', () => {
+    const merged = mergeDeclaredModels(
+      [{ id: 'hy4free', name: 'Hy4' }, { id: 'hy4std', name: 'Hy4' }],
+      [{ id: 'hy4free', name: 'Hy4' }, { id: 'hy4std', name: 'Hy4' }],
+    )
+    expect(merged.map(model => model.name)).toEqual(['Hy4（hy4free）', 'Hy4（hy4std）'])
+  })
+
+  it('站点清单里的名字与倍率优先于声明里的', () => {
+    const merged = mergeDeclaredModels(
+      [{ id: 'hy4free', name: 'Hy4', description: '兜底描述' }],
+      [{ id: 'hy4free', name: 'Hy4', description: '最新旗舰（积分 x0.00）' }],
+    )
+    expect(merged).toEqual([{ id: 'hy4free', name: 'Hy4', description: '最新旗舰（积分 x0.00）' }])
+  })
+})
+
 describe('端点', () => {
   it('预置行里写的端点要真的生效（登录与模型同源，都从它派生）', async () => {
     await drain(workBuddyModelStream(config)('acp-workbuddy-selfhosted', request))
@@ -153,7 +196,8 @@ describe('运行时模型清单', () => {
     })
     await drain(stream('acp-workbuddy', request))
     expect(recordedNow()?.presetId).toBe('acp-workbuddy')
-    expect(recordedNow()?.models.map(model => model.id)).toEqual(['auto', 'fast-model'])
+    // 这一行声明了哪些模型，就只提供哪些；站点清单里没声明的那些不进账本。
+    expect(recordedNow()?.models.map(model => model.id)).toEqual(['auto'])
   })
 
   it('拉不到清单时不要每一轮都去拉一次', async () => {

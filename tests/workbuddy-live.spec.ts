@@ -22,8 +22,8 @@ import type { WorkBuddyStreamChunk } from '../src/workbuddy/sse.ts'
 
 const LIVE = process.env['WORKBUDDY_LIVE'] === '1'
 
-/** 真机上的默认模型：清单里的第一个能用就够。 */
-const MODEL = process.env['WORKBUDDY_LIVE_MODEL'] ?? 'auto'
+/** 真机上的默认模型：这一行白名单里的第一个（hy4free 不扣积分）。 */
+const MODEL = process.env['WORKBUDDY_LIVE_MODEL'] ?? 'hy4free'
 
 describe.skipIf(!LIVE)('真机：WorkBuddy', () => {
   it('清单拿得到，模型请求能回来', async () => {
