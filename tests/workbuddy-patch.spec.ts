@@ -51,15 +51,18 @@ describe('挂载配置', () => {
   it('模型清单是白名单：只列要提供的那几个', () => {
     const row = rowOf('acp-workbuddy')
     for (const model of [
-      'hy4free', 'hy4std', 'hy4-preview-ctrl', 'hy4-preview-exp', 'hy4preview-exp1',
-      'hy4preview-exp2', 'hy4-preview-x', 'glm-5.3', 'glm-5.3-flash', 'deepseek-v4-pro',
+      'hy4free', 'hy4std', 'hy4-preview-x', 'glm-5.3', 'glm-5.3-flash',
       'deepseek-v4.1-flash', 'kimi-k3.1-pro', 'kimi-k3-1', 'minimax-m3.1-flash',
-      'step-5-preview', 'mimo-v2.6-pro', 'default-1.1', 'default-1.2',
+      'step-5-preview', 'mimo-v2.6-pro', 'default-1.2',
     ]) {
       expect(row).toContain(`id: "${model}"`)
     }
-    // 套餐档位与那些不支持工具调用的都不在这一行里。
-    for (const model of ['auto', 'fast-model', 'balanced-model', 'deep-model', 'hy3', 'wb-lite']) {
+    // 套餐档位、那些不支持工具调用的、以及被挑掉的都不在这一行里。
+    for (const model of [
+      'auto', 'fast-model', 'balanced-model', 'deep-model', 'hy3', 'wb-lite',
+      'hy4-preview-ctrl', 'hy4-preview-exp', 'hy4preview-exp1', 'hy4preview-exp2',
+      'deepseek-v4-pro', 'default-1.1',
+    ]) {
       expect(row).not.toContain(`id: "${model}"`)
     }
   })
