@@ -30,6 +30,14 @@ function recordedNow(): { presetId: string; models: readonly { id: string; name:
   return state.recorded
 }
 
+// 测试不该依赖本机真实的勾选文件（~/.dsh/*/selection.json）：钉死成「没勾过」。
+vi.mock('../src/model-selection.ts', () => ({
+  readSelection: async () => undefined,
+  writeSelection: async () => {},
+  clearSelection: async () => {},
+  selectionFilePath: () => '/tmp/workbuddy-test-selection.json',
+}))
+
 vi.mock('../src/qoder/index.ts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/qoder/index.ts')>()
   return {

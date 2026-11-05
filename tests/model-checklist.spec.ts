@@ -40,7 +40,8 @@ function textOf(node: unknown): string {
 
 const LIST: ModelChecklistState = {
   models: [
-    { id: 'glm-5.3', name: 'GLM-5.3', description: '旗舰（积分 x0.69）', credits: 'x0.69', supportsToolCall: true },
+    // 倍率已经在名字上了（目录那边拼好的），清单不再另起一枚胶囊。
+    { id: 'glm-5.3', name: 'GLM-5.3（x0.69）', description: '旗舰模型', credits: 'x0.69', supportsToolCall: true },
     { id: 'hy4free', name: 'Hy4', credits: 'x0.00', supportsToolCall: true },
     { id: 'kling-video-v3', name: 'Kling-Video-V3', supportsToolCall: false },
   ],
@@ -97,10 +98,15 @@ describe('勾选界面', () => {
     expect(unchecked?.props?.checked).toBe(false)
   })
 
-  it('倍率与「不能带工具」都标出来', () => {
+  it('「不能带工具」标出来', () => {
     const view = modelChecklistView({ list: LIST })
-    expect(find(view, props => props['data-model-credits'] === true)).toBeDefined()
     expect(find(view, props => props['data-model-notool'] === true)).toBeDefined()
+  })
+
+  it('倍率在名字上：不再另起一枚胶囊', () => {
+    const view = modelChecklistView({ list: LIST })
+    expect(textOf(view)).toContain('x0.69')
+    expect(find(view, props => props['data-model-credits'] === true)).toBeUndefined()
   })
 
   it('没自己勾过时说明「用的是默认那一份」，勾过就说明已自定义', () => {
@@ -148,12 +154,4 @@ describe('勾选界面', () => {
     expect(find(view, props => props['data-model-check'] === 'glm-5.3')).toBeUndefined()
   })
 
-  it('倍率是胶囊：圆角、小间距、数字等宽', () => {
-    const view = modelChecklistView({ list: LIST })
-    const pill = find(view, props => props['data-model-credits'] === true)
-    const style = pill?.props?.style as Record<string, unknown> | undefined
-    expect(style?.['borderRadius']).toBe('999px')
-    expect(style?.['fontVariantNumeric']).toBe('tabular-nums')
-    expect(style?.['display']).toBe('inline-flex')
-  })
 })

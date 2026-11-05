@@ -66,15 +66,16 @@ export function parseModels(payload: unknown): WorkBuddyModel[] {
     const id = typeof model['id'] === 'string' ? model['id'] : ''
     if (id === '') continue
     const name = typeof model['name'] === 'string' && model['name'] !== '' ? model['name'] : id
+    const credits = typeof model['credits'] === 'string' ? model['credits'] : undefined
     const description = describe(model)
     const contextWindow = typeof model['maxInputTokens'] === 'number' ? model['maxInputTokens'] : undefined
     const efforts = effortsOf(model)
     const supportsToolCall = typeof model['supportsToolCall'] === 'boolean' ? model['supportsToolCall'] : undefined
     const supportsImages = typeof model['supportsImages'] === 'boolean' ? model['supportsImages'] : undefined
-    const credits = typeof model['credits'] === 'string' ? model['credits'] : undefined
     parsed.push({
       id,
-      name,
+      // 倍率进**名字**：选择器里显示的就是名字，倍率塞在描述里看不见。
+      name: credits === undefined ? name : `${name}（${credits}）`,
       ...(description === undefined ? {} : { description }),
       ...(contextWindow === undefined ? {} : { contextWindow }),
       ...(efforts === undefined ? {} : { efforts }),
@@ -259,10 +260,7 @@ function describe(model: Record<string, unknown>): string | undefined {
   const zh = typeof model['descriptionZh'] === 'string' ? model['descriptionZh'] : ''
   const en = typeof model['descriptionEn'] === 'string' ? model['descriptionEn'] : ''
   const base = zh !== '' ? zh : en
-  const credits = typeof model['credits'] === 'string' ? model['credits'] : ''
-  if (base === '' && credits === '') return undefined
-  if (credits === '') return base
-  return base === '' ? `积分 ${credits}` : `${base}（积分 ${credits}）`
+  return base === '' ? undefined : base
 }
 
 /** 推理档位：支持列表优先，没有就用默认档。 */

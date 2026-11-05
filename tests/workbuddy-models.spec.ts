@@ -35,14 +35,17 @@ describe('解析清单', () => {
     ]))
     expect(models).toHaveLength(1)
     expect(models[0]?.id).toBe('auto')
-    expect(models[0]?.name).toBe('Auto')
+    // 倍率进名字：选择器里显示的就是名字，倍率塞在描述里看不见。
+    expect(models[0]?.name).toBe('Auto（x0.15）')
     expect(models[0]?.description).toContain('自动选模')
     expect(models[0]?.contextWindow).toBe(256000)
     expect(models[0]?.efforts).toEqual(['low', 'medium', 'high'])
     expect(models[0]?.supportsToolCall).toBe(true)
     expect(models[0]?.supportsImages).toBe(true)
     // 积分倍率要看得见：用户选模型前要知道这个模型花多少。
-    expect(models[0]?.description).toContain('x0.15')
+    // 倍率在名字上，描述里不再重复一遍。
+    expect(models[0]?.description).not.toContain('x0.15')
+    expect(models[0]?.credits).toBe('x0.15')
   })
 
   it('没有中文描述就用英文的', () => {

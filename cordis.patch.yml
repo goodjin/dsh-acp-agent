@@ -642,38 +642,49 @@
               collapseEfforts: false
               models:
                 - id: "hy4free"
-                  name: "Hy4"
-                  description: "最新旗舰模型，Agent 与多模专长（积分 x0.00）"
+                  name: "Hy4（x0.00）"
+                  description: "最新旗舰模型，Agent 与多模专长"
+
                 - id: "hy4std"
-                  name: "Hy4"
-                  description: "最新旗舰模型，Agent 与多模专长（积分 x0.29）"
+                  name: "Hy4（x0.29）"
+                  description: "最新旗舰模型，Agent 与多模专长"
+
                 - id: "hy4-preview-x"
-                  name: "Hy4 preview"
-                  description: "混元思考模型，具有增强的推理能力（积分 x0.29）"
+                  name: "Hy4 preview（x0.29）"
+                  description: "混元思考模型，具有增强的推理能力"
+
                 - id: "glm-5.3"
-                  name: "GLM-5.3"
-                  description: "旗舰模型，擅长复杂软件工程与长程 Agent 任务（积分 x0.69）"
+                  name: "GLM-5.3（x0.69）"
+                  description: "旗舰模型，擅长复杂软件工程与长程 Agent 任务"
+
                 - id: "glm-5.3-flash"
-                  name: "GLM-5.3-Flash"
-                  description: "原生多模态模型，擅长视觉理解与专业任务（积分 x0.08）"
+                  name: "GLM-5.3-Flash（x0.08）"
+                  description: "原生多模态模型，擅长视觉理解与专业任务"
+
                 - id: "deepseek-v4.1-flash"
-                  name: "DeepSeek-V4.1-Flash"
-                  description: "支持 1M 上下文窗口，原生多模态（积分 x0.11）"
+                  name: "DeepSeek-V4.1-Flash（x0.11）"
+                  description: "支持 1M 上下文窗口，原生多模态"
+
                 - id: "kimi-k3.1-pro"
-                  name: "Kimi-K3.1-Pro"
-                  description: "Kimi 全新旗舰模型，3 万亿级参数，长程 Agent 能力全面升级（积分 x0.97）"
+                  name: "Kimi-K3.1-Pro（x0.97）"
+                  description: "Kimi 全新旗舰模型，3 万亿级参数，长程 Agent 能力全面升级"
+
                 - id: "kimi-k3-1"
-                  name: "Kimi-K3"
-                  description: "擅长复杂的长程自主任务，前端开发能力突出（积分 x1.62）"
+                  name: "Kimi-K3（x1.62）"
+                  description: "擅长复杂的长程自主任务，前端开发能力突出"
+
                 - id: "minimax-m3.1-flash"
-                  name: "MiniMax-M3.1-Flash"
-                  description: "原生多模态，擅长 office、agentic、编程任务，推理速度优异（积分 x0.08）"
+                  name: "MiniMax-M3.1-Flash（x0.08）"
+                  description: "原生多模态，擅长 office、agentic、编程任务，推理速度优异"
+
                 - id: "step-5-preview"
-                  name: "Step-5-Preview"
-                  description: "阶跃 StepFun 面向真实任务的新一代旗舰基模（积分 x0.33）"
+                  name: "Step-5-Preview（x0.33）"
+                  description: "阶跃 StepFun 面向真实任务的新一代旗舰基模"
+
                 - id: "mimo-v2.6-pro"
-                  name: "Xiaomi MiMo-V2.6-Pro"
-                  description: "旗舰推理模型，面向专业、长程、复杂工作流（积分 x0.13）"
+                  name: "Xiaomi MiMo-V2.6-Pro（x0.13）"
+                  description: "旗舰推理模型，面向专业、长程、复杂工作流"
+
                 - id: "default-1.2"
                   name: "Claude-4.0-Sonnet"
                   description: "适合日常使用，在大多数任务上表现良好"
@@ -715,50 +726,65 @@
                   name: xHigh
               models:
                 - id: gmodel
-                  name: "GLM-5.3"
-                  description: "GLM-5.3（积分 x0.8） · 180k 上下文"
+                  name: "GLM-5.3（x0.8）"
+                  description: "GLM-5.3 · 180k 上下文"
+
                 - id: gfmodel
-                  name: "GLM-5.3-Flash"
-                  description: "GLM-5.3-Flash（积分 x0.1） · 1000k 上下文"
+                  name: "GLM-5.3-Flash（x0.1）"
+                  description: "GLM-5.3-Flash · 1000k 上下文"
+
                 - id: dmodel
-                  name: "DeepSeek-V4-Pro"
-                  description: "DeepSeek-V4-Pro（积分 x0.5） · 1000k 上下文"
+                  name: "DeepSeek-V4-Pro（x0.5）"
+                  description: "DeepSeek-V4-Pro · 1000k 上下文"
+
                 - id: dfmodel
-                  name: "DeepSeek-Flash"
-                  description: "DeepSeek-Flash（积分 x0.1） · 1000k 上下文"
+                  name: "DeepSeek-Flash（x0.1）"
+                  description: "DeepSeek-Flash · 1000k 上下文"
+
                 - id: mmodel
-                  name: "MiniMax-M3.1-Flash"
-                  description: "MiniMax-M3.1-Flash（积分 x0.1） · 180k 上下文"
+                  name: "MiniMax-M3.1-Flash（x0.1）"
+                  description: "MiniMax-M3.1-Flash · 180k 上下文"
+
                 - id: kmodel_latest
-                  name: "Kimi-K3.1-Pro"
-                  description: "Kimi-K3.1-Pro（积分 x1） · 180k 上下文"
+                  name: "Kimi-K3.1-Pro（x1）"
+                  description: "Kimi-K3.1-Pro · 180k 上下文"
+
                 - id: kmodel
-                  name: "Kimi-K2.8-Preview"
-                  description: "Kimi-K2.8-Preview（积分 x0.8）"
+                  name: "Kimi-K2.8-Preview（x0.8）"
+                  description: "Kimi-K2.8-Preview"
+
                 - id: qmodel_38max
-                  name: "Qwen3.8-Max"
-                  description: "Qwen3.8-Max（积分 x0.5） · 180k 上下文"
+                  name: "Qwen3.8-Max（x0.5）"
+                  description: "Qwen3.8-Max · 180k 上下文"
+
                 - id: qfmodel
-                  name: "Qwen3.8-Flash"
-                  description: "Qwen3.8-Flash（积分 x0） · 180k 上下文"
+                  name: "Qwen3.8-Flash（x0）"
+                  description: "Qwen3.8-Flash · 180k 上下文"
+
                 - id: ultimate
-                  name: "Ultimate"
-                  description: "Ultimate（积分 x2） · 1000k 上下文"
+                  name: "Ultimate（x2）"
+                  description: "Ultimate · 1000k 上下文"
+
                 - id: smodel
-                  name: "Sonus"
-                  description: "Sonus（积分 x8） · 180k 上下文"
+                  name: "Sonus（x8）"
+                  description: "Sonus · 180k 上下文"
+
                 - id: cmodel
-                  name: "Cantus"
-                  description: "Cantus（积分 x4） · 180k 上下文"
+                  name: "Cantus（x4）"
+                  description: "Cantus · 180k 上下文"
+
                 - id: fast
-                  name: "Fast"
-                  description: "Fast（积分 x0.8） · 200k 上下文"
+                  name: "Fast（x0.8）"
+                  description: "Fast · 200k 上下文"
+
                 - id: efficient
-                  name: "Efficient"
-                  description: "Efficient（积分 x0.3） · 200k 上下文"
+                  name: "Efficient（x0.3）"
+                  description: "Efficient · 200k 上下文"
+
                 - id: auto
-                  name: "Auto"
-                  description: "Auto（积分 x0.5） · 200k 上下文"
+                  name: "Auto（x0.5）"
+                  description: "Auto · 200k 上下文"
+
     - id: acp-doubao
       name: '@deepseek-ai/dsh-agent-preset'
       config:

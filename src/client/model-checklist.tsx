@@ -155,25 +155,6 @@ export function modelChecklistView(props: ModelChecklistViewProps): ReactNode {
         />
         <span data-model-name="true">{model.name}</span>
         <code data-model-id="true">{model.id}</code>
-        {model.credits === undefined
-          ? null
-          : (
-            <span
-              data-model-credits={true}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '1px 8px',
-                borderRadius: '999px',
-                fontVariantNumeric: 'tabular-nums',
-                whiteSpace: 'nowrap',
-                color: 'var(--dsw-alias-label-tertiary)',
-              }}
-            >
-              积分 {model.credits}
-            </span>
-          )}
         {model.supportsToolCall === false
           ? <span data-model-notool={true}>{t('workbuddy.models.noTool')}</span>
           : null}
