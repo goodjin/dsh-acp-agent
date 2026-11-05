@@ -124,8 +124,8 @@ export const zh: Record<ClientLocaleKey, string> = {
   'qoder.section.label': 'Qoder 国际版账号',
   'qoder.account.signedIn': '已登录 Qoder 国际版：',
   'qoder.account.signedOut': '未登录 Qoder 国际版：这一组模型发消息会被拒绝。',
-  'qoder.account.login': '去登录',
-  'qoder.account.refresh': '刷新状态',
+  'qoder.account.login': '登录 Qoder 国际版',
+  'qoder.account.refresh': '检查授权',
   'storagePosture.local': '设置保存在本机',
 }
 
@@ -207,8 +207,8 @@ export const en: Record<ClientLocaleKey, string> = {
   'qoder.section.label': 'Qoder international account',
   'qoder.account.signedIn': 'Signed in to Qoder international:',
   'qoder.account.signedOut': 'Not signed in to Qoder international: messages in this group will be refused.',
-  'qoder.account.login': 'Sign in',
-  'qoder.account.refresh': 'Refresh status',
+  'qoder.account.login': 'Sign in to Qoder international',
+  'qoder.account.refresh': 'Check authorisation',
   'storagePosture.local': 'Settings are stored on this machine',
 }
 

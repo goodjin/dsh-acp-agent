@@ -10,6 +10,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { NAMESPACE, fallbackT } from './locales.ts'
+import {
+  ACCOUNT_ACTIONS_STYLE,
+  ACCOUNT_BOX_STYLE,
+  ACCOUNT_BUTTON_STYLE,
+  ACCOUNT_COLUMN_STYLE,
+} from './account-panel.tsx'
 import type { WorkBuddyAccountSlotHost } from './workbuddy-account-section.tsx'
 
 /** 设置里的行 id。 */
@@ -130,57 +136,57 @@ export async function pollUntilQoderSignedIn(options: {
 export function qoderAccountView(props: QoderAccountViewProps): ReactNode {
   const t = props.t ?? fallbackT
   const state = props.state
-  const children: ReactNode[] = []
 
-  if (state.authenticated) {
-    const nickname = state.account?.nickname
-    const uid = state.account?.uid ?? ''
-    children.push(
-      <div key="who" data-qoder-account="signed-in">
-        <span>{t('qoder.account.signedIn')}</span>
-        {nickname !== undefined && nickname !== '' ? <strong>{nickname}</strong> : null}
-        {uid !== '' ? <code>{uid}</code> : null}
-      </div>,
+  // 账号信息：自己一个框，独占一行。
+  const box = state.authenticated
+    ? (
+      <>
+        <span data-qoder-account="signed-in">{t('qoder.account.signedIn')}</span>
+        {state.account?.nickname !== undefined && state.account.nickname !== ''
+          ? <strong data-qoder-account-name="true">{state.account.nickname}</strong>
+          : null}
+        {state.account?.uid !== undefined && state.account.uid !== ''
+          ? <code data-qoder-account-uid="true">{state.account.uid}</code>
+          : null}
+      </>
     )
-  } else {
-    children.push(
-      <div key="ask" data-qoder-account="signed-out">
-        <span>{t('qoder.account.signedOut')}</span>
+    : (
+      <>
+        <span data-qoder-account="signed-out">{t('qoder.account.signedOut')}</span>
         {state.reason !== undefined && state.reason !== ''
           ? <span data-qoder-reason="true">{state.reason}</span>
           : null}
-      </div>,
+      </>
     )
-  }
 
-  children.push(
-    <div key="actions">
-      {state.authenticated
-        ? null
-        : (
-          <button
-            key="login"
-            type="button"
-            data-qoder-login={true}
-            disabled={props.busy === true}
-            onClick={() => { props.onLogin?.() }}
-          >
-            {t('qoder.account.login')}
-          </button>
-        )}
-      <button
-        key="refresh"
-        type="button"
-        data-qoder-refresh={true}
-        disabled={props.busy === true}
-        onClick={() => { props.onRefresh?.() }}
-      >
-        {t('qoder.account.refresh')}
-      </button>
-    </div>,
+  return (
+    <div data-qoder-account="root" style={ACCOUNT_COLUMN_STYLE}>
+      <div data-qoder-account-box={true} style={ACCOUNT_BOX_STYLE}>
+        {box}
+      </div>
+      <div data-qoder-account-actions={true} style={ACCOUNT_ACTIONS_STYLE}>
+        <button
+          type="button"
+          data-qoder-login={true}
+          style={ACCOUNT_BUTTON_STYLE}
+          // 已经登上了就把登录按钮灰掉——两个按钮并排才看得出是一组。
+          disabled={props.busy === true || state.authenticated}
+          onClick={() => { props.onLogin?.() }}
+        >
+          {t('qoder.account.login')}
+        </button>
+        <button
+          type="button"
+          data-qoder-refresh={true}
+          style={ACCOUNT_BUTTON_STYLE}
+          disabled={props.busy === true}
+          onClick={() => { props.onRefresh?.() }}
+        >
+          {t('qoder.account.refresh')}
+        </button>
+      </div>
+    </div>
   )
-
-  return <div data-qoder-account="root">{children}</div>
 }
 
 /** 组件：取一次状态，之后由两个动作驱动。 */
