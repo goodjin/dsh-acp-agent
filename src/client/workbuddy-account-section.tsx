@@ -38,6 +38,7 @@ export const WORKBUDDY_SESSION_URL = '/acp-agent/workbuddy/session'
 export const WORKBUDDY_LOGIN_URL = '/acp-agent/workbuddy/login'
 export const WORKBUDDY_MODELS_URL = '/acp-agent/workbuddy/models'
 export const WORKBUDDY_CHECKIN_URL = '/acp-agent/workbuddy/checkin'
+export const WORKBUDDY_CREDITS_URL = '/acp-agent/workbuddy/credits'
 
 /** 账号状态：只认「登了没」与「是谁」，没有令牌。 */
 export type WorkBuddyAccountState = {
@@ -64,6 +65,34 @@ export type WorkBuddyCheckinState = {
   readonly reason?: string | undefined
 }
 
+/** 一类积分（套餐基础／套餐赠送／购买／平台奖励）。 */
+export type WorkBuddyCreditGroup = {
+  readonly name: string
+  readonly total: number
+  readonly remain: number
+  readonly used: number
+}
+
+/** 套餐与积分。 */
+export type WorkBuddyCredits = {
+  /** 套餐名（如「体验版」）。 */
+  readonly plan: string
+  /** 当前可用的总积分。 */
+  readonly remaining: number
+  /** 额度上限。 */
+  readonly capacity: number
+  /** 已用掉的积分。 */
+  readonly used: number
+  /** 积分构成。 */
+  readonly groups: readonly WorkBuddyCreditGroup[]
+}
+
+/** 浏览器这一侧看到的套餐与积分。 */
+export type WorkBuddyCreditsState = {
+  readonly credits?: WorkBuddyCredits | undefined
+  readonly reason?: string | undefined
+}
+
 /** 文案座位。 */
 export type WorkBuddyAccountT = (key: string, params?: Record<string, string | number>) => string
 
@@ -86,6 +115,8 @@ export type WorkBuddySettingsViewProps = WorkBuddyAccountViewProps & {
   /** 签到状态与「立即签到」。 */
   readonly checkin?: WorkBuddyCheckinState | undefined
   readonly onCheckinClaim?: (() => void) | undefined
+  /** 套餐与积分。 */
+  readonly credits?: WorkBuddyCredits | undefined
 }
 
 /** 签到那一段的视图要什么。 */
@@ -174,6 +205,54 @@ export async function readWorkBuddyCheckin(options: {
       dailyCredit: typeof record['dailyCredit'] === 'number' ? record['dailyCredit'] : 0,
       todayCredit: typeof record['todayCredit'] === 'number' ? record['todayCredit'] : 0,
       isStreakDay: record['isStreakDay'] === true,
+    },
+  }
+}
+
+/**
+ * 问宿主「套餐与积分」。
+ *
+ * 宿主答的是胶囊那套形状（`quota.credit`），这里折成设置里要显示的几件事。
+ * @param options - fetch 实现（测试注入）。
+ * @returns 套餐与积分；没登录或拿不到时是空的。
+ */
+export async function readWorkBuddyCredits(options: {
+  readonly fetchImpl?: typeof fetch | undefined
+}): Promise<WorkBuddyCreditsState> {
+  const fetchImpl = options.fetchImpl ?? fetch
+  const response = await fetchImpl(WORKBUDDY_CREDITS_URL, { method: 'GET' })
+  const body = await response.json().catch(() => ({})) as Record<string, unknown>
+  if (body['ok'] !== true) {
+    const reason = typeof body['error'] === 'string' ? body['error'] : '问不到宿主'
+    return { reason }
+  }
+  const quota = typeof body['quota'] === 'object' && body['quota'] !== null
+    ? body['quota'] as Record<string, unknown>
+    : {}
+  const credit = typeof quota['credit'] === 'object' && quota['credit'] !== null
+    ? quota['credit'] as Record<string, unknown>
+    : {}
+  const groups = Array.isArray(credit['groups'])
+    ? credit['groups'].flatMap((item): WorkBuddyCreditGroup[] => {
+      if (typeof item !== 'object' || item === null) return []
+      const record = item as Record<string, unknown>
+      const name = typeof record['name'] === 'string' ? record['name'] : ''
+      if (name === '') return []
+      return [{
+        name,
+        total: typeof record['total'] === 'number' ? record['total'] : 0,
+        remain: typeof record['remain'] === 'number' ? record['remain'] : 0,
+        used: typeof record['used'] === 'number' ? record['used'] : 0,
+      }]
+    })
+    : []
+  return {
+    credits: {
+      plan: typeof quota['tier'] === 'string' ? quota['tier'] : '',
+      remaining: typeof credit['remaining'] === 'number' ? credit['remaining'] : 0,
+      capacity: typeof credit['limit'] === 'number' ? credit['limit'] : 0,
+      used: typeof credit['used'] === 'number' ? credit['used'] : 0,
+      groups,
     },
   }
 }
@@ -355,6 +434,45 @@ export function workBuddyCheckinView(props: WorkBuddyCheckinViewProps): ReactNod
 }
 
 /**
+ * 画「套餐与积分」那一块。
+ *
+ * 拿不到积分时不画（`null`）——设置里不该出现一块空的。
+ * @param props - 套餐与积分。
+ * @returns 元素树；没有积分时是 `null`。
+ */
+export function workBuddyCreditsView(props: { readonly credits?: WorkBuddyCredits | undefined; readonly t?: WorkBuddyAccountT | undefined }): ReactNode {
+  const t = props.t ?? fallbackT
+  const credits = props.credits
+  if (credits === undefined) return null
+  return (
+    <div
+      data-workbuddy-credits="root"
+      style={ACCOUNT_BOX_STYLE}
+    >
+      <span data-workbuddy-credits-plan="true">
+        {t('workbuddy.credits.plan', { plan: credits.plan })}
+      </span>
+      {credits.groups.map(group => (
+        <span
+          key={group.name}
+          data-workbuddy-credits-group={group.name}
+        >
+          {t('workbuddy.credits.group', {
+            name: group.name,
+            remain: String(group.remain),
+            total: String(group.total),
+            used: String(group.used),
+          })}
+        </span>
+      ))}
+      <span data-workbuddy-credits-total="true">
+        {t('workbuddy.credits.total', { remaining: String(credits.remaining), limit: String(credits.capacity) })}
+      </span>
+    </div>
+  )
+}
+
+/**
  * 整段的视图：账号那部分在上，模型列表在下。
  * @param props - 账号状态、模型清单与各个动作。
  * @returns 元素树。
@@ -366,6 +484,10 @@ export function workBuddySettingsView(props: WorkBuddySettingsViewProps): ReactN
       style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
     >
       {workBuddyAccountView(props)}
+      {workBuddyCreditsView({
+        ...(props.credits === undefined ? {} : { credits: props.credits }),
+        ...(props.t === undefined ? {} : { t: props.t }),
+      })}
       {workBuddyCheckinView({
         ...(props.checkin?.status === undefined ? {} : { status: props.checkin.status }),
         ...(props.busy === undefined ? {} : { busy: props.busy }),
@@ -392,6 +514,7 @@ export function WorkBuddyAccountSection(props: { readonly t?: WorkBuddyAccountT 
   const [state, setState] = useState<WorkBuddyAccountState>({ authenticated: false })
   const [models, setModels] = useState<ModelChecklistState | undefined>(undefined)
   const [checkin, setCheckin] = useState<WorkBuddyCheckinState>({})
+  const [credits, setCredits] = useState<WorkBuddyCreditsState>({})
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -424,7 +547,16 @@ export function WorkBuddyAccountSection(props: { readonly t?: WorkBuddyAccountT 
     }
   }, [])
 
-  useEffect(() => { void refresh(); void reloadModels(); void reloadCheckin() }, [refresh, reloadModels, reloadCheckin])
+  const reloadCredits = useCallback(async () => {
+    try {
+      setCredits(await readWorkBuddyCredits({}))
+    } catch {
+      // 积分拿不到就不显示这一块（不影响账号、签到与模型列表）。
+      setCredits({})
+    }
+  }, [])
+
+  useEffect(() => { void refresh(); void reloadModels(); void reloadCheckin(); void reloadCredits() }, [refresh, reloadModels, reloadCheckin, reloadCredits])
 
   const login = useCallback(async () => {
     setBusy(true)
@@ -501,6 +633,7 @@ export function WorkBuddyAccountSection(props: { readonly t?: WorkBuddyAccountT 
     busy,
     ...(models === undefined ? {} : { models }),
     checkin,
+    ...(credits.credits === undefined ? {} : { credits: credits.credits }),
     query,
     onQueryChange: (value: string) => { setQuery(value) },
     onToggle: (id, checked) => { toggle(id, checked) },

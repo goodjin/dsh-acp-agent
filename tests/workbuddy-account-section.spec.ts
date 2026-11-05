@@ -13,6 +13,8 @@ import type { ReactElement } from 'react'
 import {
   beginWorkBuddyLogin,
   claimWorkBuddyCheckin,
+  readWorkBuddyCredits,
+  workBuddyCreditsView,
   pollUntilSignedIn,
   readWorkBuddyCheckin,
   readWorkBuddySession,
@@ -274,5 +276,62 @@ describe('每日签到', () => {
     })
     const button = find(view, props => props['data-workbuddy-checkin-claim'] === true)
     expect(button?.props['disabled']).toBe(true)
+  })
+})
+
+
+describe('套餐与积分', () => {
+  const CREDITS = {
+    plan: '体验版',
+    remaining: 1766.43,
+    capacity: 1800,
+    used: 33.57,
+    groups: [
+      { kind: 'plan_base', name: '套餐基础积分', total: 500, remain: 500, used: 0 },
+      { kind: 'plan_bonus', name: '套餐赠送积分', total: 0, remain: 0, used: 0 },
+      { kind: 'benefit', name: '平台奖励积分', total: 1300, remain: 1266.43, used: 33.57 },
+    ],
+  }
+
+  it('问宿主要套餐与积分时打的是那条路由', async () => {
+    const calls: string[] = []
+    const fetchImpl = fakeFetch({
+      ok: true,
+      quota: {
+        tier: '体验版',
+        credit: {
+          remaining: 1766.43,
+          used: 33.57,
+          limit: 1800,
+          groups: CREDITS.groups,
+        },
+      },
+    }, calls)
+    const state = await readWorkBuddyCredits({ fetchImpl })
+    expect(calls).toEqual(['/acp-agent/workbuddy/credits'])
+    expect(state.credits?.plan).toBe('体验版')
+    expect(state.credits?.remaining).toBeCloseTo(1766.43, 2)
+    expect(state.credits?.capacity).toBeCloseTo(1800, 2)
+    expect(state.credits?.groups).toHaveLength(3)
+  })
+
+  it('没登录时没有积分信息', async () => {
+    const fetchImpl = fakeFetch({ ok: false, error: '未登录' })
+    const state = await readWorkBuddyCredits({ fetchImpl })
+    expect(state.credits).toBeUndefined()
+  })
+
+  it('视图：套餐名、每一类积分、总积分都在', () => {
+    const view = workBuddyCreditsView({ credits: CREDITS })
+    const text = textOf(view)
+    expect(text).toContain('体验版')
+    expect(text).toContain('套餐基础积分')
+    expect(text).toContain('平台奖励积分')
+    expect(text).toContain('1766.43')
+    expect(text).toContain('1800')
+  })
+
+  it('视图：拿不到积分时不画这一块', () => {
+    expect(workBuddyCreditsView({ credits: undefined })).toBeNull()
   })
 })

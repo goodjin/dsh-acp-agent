@@ -42,6 +42,7 @@ export type ClientLocaleKey =
   | 'workbuddy.account.login' | 'workbuddy.account.refresh' | 'workbuddy.account.relogin'
   | 'workbuddy.checkin.claimed' | 'workbuddy.checkin.pending'
   | 'workbuddy.checkin.claim' | 'workbuddy.checkin.alreadyClaimed'
+  | 'workbuddy.credits.plan' | 'workbuddy.credits.group' | 'workbuddy.credits.total'
   | 'workbuddy.models.section.label' | 'workbuddy.models.summary'
   | 'workbuddy.models.custom' | 'workbuddy.models.defaultHint'
   | 'workbuddy.models.noTool' | 'workbuddy.models.restore'
@@ -126,6 +127,9 @@ export const zh: Record<ClientLocaleKey, string> = {
   'workbuddy.checkin.pending': '今日未签 · 每天 {dailyCredit} 积分（每天上午 10:00 自动领）',
   'workbuddy.checkin.claim': '立即签到',
   'workbuddy.checkin.alreadyClaimed': '今天已领过了',
+  'workbuddy.credits.plan': '套餐：{plan}',
+  'workbuddy.credits.group': '{name}：剩 {remain} / 共 {total}（已用 {used}）',
+  'workbuddy.credits.total': '总积分：{remaining} / {limit}',
   'workbuddy.models.section.label': 'WorkBuddy 模型',
   'workbuddy.models.summary': '站点共 {total} 个模型，勾上的 {selected} 个会出现在模型选择器里。',
   'workbuddy.models.custom': '当前用的是你自己勾的。',
@@ -220,6 +224,9 @@ export const en: Record<ClientLocaleKey, string> = {
   'workbuddy.checkin.pending': 'Not checked in today · {dailyCredit} credits a day (claimed automatically at 10:00)',
   'workbuddy.checkin.claim': 'Check in now',
   'workbuddy.checkin.alreadyClaimed': 'Already checked in today',
+  'workbuddy.credits.plan': 'Plan: {plan}',
+  'workbuddy.credits.group': '{name}: {remain} left / {total} total ({used} used)',
+  'workbuddy.credits.total': 'Total credits: {remaining} / {limit}',
   'workbuddy.models.section.label': 'WorkBuddy models',
   'workbuddy.models.summary': 'The site lists {total} models; the {selected} you tick show up in the model picker.',
   'workbuddy.models.custom': 'Using your own selection.',
