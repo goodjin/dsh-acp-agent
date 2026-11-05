@@ -23,7 +23,7 @@
 import { randomUUID } from 'node:crypto'
 import { DoubaoBrowser, type DoubaoBrowserOptions } from './browser.ts'
 import type { DomSnapshot } from './dom.ts'
-import { answerDelta, parseTurn } from './parse.ts'
+import { parseTurn } from './parse.ts'
 
 /**
  * What the agent needs from the browser.
@@ -35,6 +35,10 @@ export type DoubaoBrowserLike = {
   snapshot(): Promise<DomSnapshot>
   sendPrompt(text: string): Promise<void>
   stopGeneration(): Promise<void>
+  /** Start a fresh 豆包 conversation (the chat home). */
+  startNewChat(): Promise<boolean>
+  /** Switch the chat to 工作模式, where 豆包 answers like an agent. */
+  enterWorkMode(): Promise<boolean>
   close(): Promise<void>
 }
 
@@ -85,6 +89,8 @@ export class DoubaoConversation {
     turnTimeoutMs?: number
     /** How many polls must show the same answer before the turn counts as done. */
     stablePolls?: number
+    /** Where diagnostics go (stderr). */
+    onDiagnostic?: (line: string) => void
   }
 
   // No constructor parameter properties: DSH erases plugin types with a
@@ -93,6 +99,7 @@ export class DoubaoConversation {
     pollIntervalMs?: number
     turnTimeoutMs?: number
     stablePolls?: number
+    onDiagnostic?: (line: string) => void
   } = {}) {
     this.browser = browser
     this.options = options
@@ -106,17 +113,19 @@ export class DoubaoConversation {
     const pollIntervalMs = this.options.pollIntervalMs ?? 350
     const turnTimeoutMs = this.options.turnTimeoutMs ?? 300_000
     // The page has no control we can read to ask "is it still writing?" (the
-    // desktop build renders none), so completion is judged by the answer
-    // itself: 豆包's text grows chunk by chunk and then stops (measured
-    // 2026-11-05: the answer changed on every poll while writing and then
-    // stayed identical). Waiting for the text to hold still is what keeps a
-    // half-written answer from being read as the whole one.
-    const stablePolls = this.options.stablePolls ?? 5
+    // desktop build renders none), so completion is judged by the page itself:
+    // 豆包 re-renders the message while it works, and once the block sequence
+    // stops changing the turn is over. Waiting for that is what keeps a
+    // half-written message — or one caught mid-restructure — from being read
+    // as the answer.
+    // 350 ms a poll: the fallback waits ~10 s of a completely still page,
+    // which is 豆包 thinking rather than a finished answer.
+    const stablePolls = this.options.stablePolls ?? 30
     const deadline = Date.now() + turnTimeoutMs
 
     await this.browser.sendPrompt(prompt)
 
-    let answered = ''
+    let fingerprint = ''
     let stable = 0
     const reportedTools = new Set<string>()
     for (;;) {
@@ -127,23 +136,40 @@ export class DoubaoConversation {
       }
       const snapshot = await this.browser.snapshot()
       const turn = parseTurn(snapshot, prompt)
-      // The page shows 豆包's tool activity before its answer, so the tool
-      // frames go out first: the transcript then reads in the order the user
-      // watched it happen.
-      for (const action of turn.toolActions) {
-        if (reportedTools.has(action)) continue
-        reportedTools.add(action)
-        onEvent({ kind: 'tool', action })
-      }
-      if (turn.answer.length > 0 && turn.answer !== answered) {
-        const delta = answerDelta(answered, turn.answer)
-        answered = turn.answer
-        stable = 0
-        if (delta.length > 0) onEvent({ kind: 'text', text: delta })
-      } else if (turn.answer.length > 0) {
+      // While 豆包 is still working it RE-RENDERS the message: the same text
+      // moves between a step title, a narration and the answer (measured
+      // 2026-11-05: the answer's own text was briefly classified as trace).
+      // So the turn is read as a whole, and only once the BLOCK SEQUENCE stops
+      // changing is it believed.
+      const current = JSON.stringify(snapshot.messages.slice(-1))
+      this.options.onDiagnostic?.(
+        `doubao: poll rows=${String(snapshot.messages.length)} trace=${String(turn.trace.length)} answer=${String(turn.answer.length)} generating=${String(snapshot.generating)}`,
+      )
+      if (current === fingerprint && turn.answer.length > 0) {
         stable += 1
+      } else {
+        fingerprint = current
+        stable = 0
       }
-      if (turn.started && turn.answer.length > 0 && stable >= stablePolls && !snapshot.generating) {
+      // The answer is only believed once the page says the message is done:
+      // when 豆包 finishes, it RE-RENDERS the whole message — the step titles
+      // disappear and the footer (`免费`) appears (measured 2026-11-05). Until
+      // then the visible text is a fragment of an answer that is still being
+      // rewritten, so it must not be sent.
+      //
+      // The stability window is the fallback for a message that never gets a
+      // footer: it has to be a LONG one, because 豆包 pauses for seconds
+      // between steps without changing the page.
+      const settled = turn.complete || (stable >= stablePolls && turn.answer.length > 0)
+      if (turn.started && turn.answer.length > 0 && settled) {
+        // 豆包's own steps come before its answer, so the tool frames go out
+        // first: the transcript reads in the order the user watched it happen.
+        for (const action of turn.trace) {
+          if (reportedTools.has(action)) continue
+          reportedTools.add(action)
+          onEvent({ kind: 'tool', action })
+        }
+        onEvent({ kind: 'text', text: turn.answer })
         onEvent({ kind: 'done' })
         return { stopReason: 'end_turn' }
       }
@@ -158,6 +184,8 @@ export class DoubaoConversation {
 type Session = {
   readonly id: string
   cancelled: boolean
+  /** Whether the 豆包 conversation for this session has been opened. */
+  started: boolean
 }
 
 /**
@@ -215,7 +243,7 @@ export class DoubaoAcpAgent {
         // makes this provider drop out of the picker instead of showing up.
         // The app is opened when a prompt actually arrives.
         const id = `doubao-${randomUUID()}`
-        this.sessions.set(id, { id, cancelled: false })
+        this.sessions.set(id, { id, cancelled: false, started: false })
         return {
           sessionId: id,
           models: {
@@ -258,10 +286,20 @@ export class DoubaoAcpAgent {
     if (!session) throw new Error(`unknown session: ${String(sessionId)}`)
     const prompt = DoubaoAcpAgent.promptText(params['prompt'])
     const browser = await this.ensureBrowser()
+    // The first prompt of a session starts the 豆包 conversation, and a
+    // conversation keeps the mode it started in — so this is where 工作模式
+    // gets chosen. 对话模式 answers with one flat line; 工作模式 answers like
+    // an agent (step titles, narration, an answer with sources).
+    if (!session.started) {
+      session.started = true
+      await browser.startNewChat()
+      await browser.enterWorkMode()
+    }
     const conversation = new DoubaoConversation(browser, {
       pollIntervalMs: this.options.pollIntervalMs,
       turnTimeoutMs: this.options.turnTimeoutMs,
       stablePolls: this.options.stablePolls,
+      onDiagnostic: this.options.onDiagnostic,
     })
     const outcome = await conversation.run(
       prompt,

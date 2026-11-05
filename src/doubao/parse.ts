@@ -3,84 +3,86 @@
  *
  * The chat page does not mark which rows are the user's and which are the
  * assistant's, so this file decides that from the one thing the caller
- * knows: the prompt it just sent. The rows after the prompt row are this
- * turn's assistant output.
+ * knows: the prompt it just sent. The messages after that one are this
+ * turn's output.
  *
- * The cleaning rules are measured, not guessed (desktop app, 2026-11-05):
- *   - the assistant row ends with `免费` — a footer, not content;
- *   - a turn may carry the banner `AI 生成可能有误 注意核实` — also not content;
- *   - 豆包's own tool activity is a line inside the answer, e.g.
- *     `搜索 1 个关键词，参考 5 篇资料` — reported as a tool action rather than
- *     as prose.
+ * The bigger decision is inside the assistant's message. In 工作模式 it is a
+ * sequence of blocks: the agent's step titles, its narration between the
+ * steps, and finally the answer (measured 2026-11-05):
+ *
+ *     step  查询存储芯片相关资讯
+ *     text  我来搜索今天关于存储芯片的新闻。
+ *     step  整理存储芯片今日资讯
+ *     text  已找到今天（11 月 5 日）关于存储芯片的三条新闻：
+ *     text  1. 存储股较高点接近腰斩！…
+ *     link  腾讯新闻（财联社）
+ *
+ * The answer is what comes after the LAST step title; everything before it
+ * is the trace of how the agent got there, and the trace is worth showing
+ * (it is the closest thing 豆包 has to a tool call) but must not be mistaken
+ * for prose.
  *
  * Everything here is a pure function of the snapshot, so the rules are unit
  * tested instead of being discovered in a live browser.
  */
 
-import type { DomSnapshot } from './dom.ts'
+import type { DomBlock, DomSnapshot } from './dom.ts'
 
 export type TurnParse = {
   /** The assistant's answer for this turn, cleaned of page furniture. */
   answer: string
-  /** 豆包's own tool-activity lines seen in this turn. */
-  toolActions: string[]
-  /** True once the assistant has produced at least one row for this turn. */
+  /** What the agent did on its way to the answer: step titles and narration. */
+  trace: string[]
+  /** Sources the answer cites, with their real targets when the page has them. */
+  links: { text: string; href?: string }[]
+  /** True once the assistant has produced something for this turn. */
   started: boolean
-  /** True once the assistant's answer looks finished. */
-  done: boolean
-}
-
-const NOISE_EXACT = new Set(['免费'])
-const NOISE_PREFIX = ['AI 生成可能有误']
-// 豆包's search shows up as several lines while it runs — the status line
-// (`正在搜索`), the count it found (`找到 6 篇资料`) and the card's own line
-// (`搜索 1 个关键词，参考 5 篇资料`). They are the tool's activity, not prose.
-const TOOL_ACTION = /正在搜索|搜索中|找到\s*\d+\s*篇资料|参考\s*\d+\s*篇资料|搜索\s*\d+\s*个关键词/
-
-function isNoise(line: string): boolean {
-  if (NOISE_EXACT.has(line)) return true
-  return NOISE_PREFIX.some(prefix => line.startsWith(prefix))
+  /**
+   * True once the assistant's message is complete.
+   *
+   * The page marks a finished message with its footer (`免费`, the free-tier
+   * badge under the answer). While the model is still writing, that footer is
+   * absent — measured 2026-11-05 across a whole turn, the footer appeared
+   * only at the end, while the blocks before it kept changing.
+   */
+  complete: boolean
 }
 
 /**
- * Whitespace-free form of a line.
+ * 豆包's own tool activity, in the compact shape (对话模式).
  *
- * 豆包 rewrites the prompt it shows: `2026年11月5日` comes back as
- * `2026 年 11 月 5 日` (measured 2026-11-05, a search prompt). Matching the
- * raw text would miss our own row, so both sides are compared without
- * whitespace.
+ * In 工作模式 the same activity arrives as step titles; this rule catches the
+ * other shape so the line is reported as trace rather than as prose.
  */
+const TOOL_ACTIVITY = /搜索\s*\d+\s*个关键词|参考\s*\d+\s*篇资料|正在搜索|搜索中|找到\s*\d+\s*篇资料/
+
+/**
+ * Lines the page adds around the answer: the disclaimer banner and the
+ * "this answer is AI-generated" line. The in-page script already marks them
+ * as noise, and this is the second line of defence — a banner that arrives as
+ * plain text must not end up in the answer.
+ */
+const NOISE_LINE = /^AI 生成|^本回答由/
+
+/** Whitespace-free form of a line. */
 function normalize(text: string): string {
   return text.replace(/\s+/g, '')
 }
 
 /**
- * The index of the row that holds the prompt we sent.
+ * The index of the message that holds the prompt we sent.
  *
- * The page marks no role on its rows, so the prompt row is found by its text.
- * The order matters: an exact match is the user's own row, while a row that
- * merely starts with the prompt may well be the ANSWER quoting it back
- * (`你好` against an answer that begins `你好呀…`). Only when neither exists
- * do we fall back to a row that contains the prompt somewhere.
- *
- * The LAST match wins: the same prompt may appear earlier in the conversation.
+ * The page marks no role on its rows, so the prompt message is found by its
+ * text. The LAST match wins: the same prompt may appear earlier in the
+ * conversation.
  */
-function promptRowIndex(rows: readonly { text: string }[], prompt: string): number {
-  const needle = normalize(prompt.trim())
+function promptMessageIndex(messages: readonly { blocks: readonly DomBlock[] }[], prompt: string): number {
+  const needle = normalize(prompt)
   if (needle.length === 0) return -1
-  const texts = rows.map(row => normalize(row.text.trim()))
-  let exact = -1
-  for (let index = 0; index < texts.length; index += 1) {
-    if (texts[index] === needle) exact = index
-  }
-  if (exact >= 0) return exact
   let found = -1
-  for (let index = 0; index < texts.length; index += 1) {
-    if (texts[index]!.startsWith(needle)) found = index
-  }
-  if (found >= 0) return found
-  for (let index = 0; index < texts.length; index += 1) {
-    if (texts[index]!.includes(needle)) found = index
+  for (let index = 0; index < messages.length; index += 1) {
+    const text = normalize(messages[index]!.blocks.map(block => block.text).join(' '))
+    if (text.includes(needle)) found = index
   }
   return found
 }
@@ -92,31 +94,66 @@ function promptRowIndex(rows: readonly { text: string }[], prompt: string): numb
  * is no longer generating and an answer exists.
  */
 export function parseTurn(snapshot: DomSnapshot, prompt: string): TurnParse {
-  const rows = snapshot.rows
-  const index = promptRowIndex(rows, prompt)
+  const index = promptMessageIndex(snapshot.messages, prompt)
   if (index < 0) {
-    return { answer: '', toolActions: [], started: false, done: false }
+    return { answer: '', trace: [], links: [], started: false, complete: false }
   }
+  const messages = snapshot.messages.slice(index + 1)
+  const blocks: DomBlock[] = []
+  for (const message of messages) {
+    blocks.push(...message.blocks)
+  }
+  if (blocks.length === 0) {
+    return { answer: '', trace: [], links: [], started: false, complete: false }
+  }
+  // The footer belongs to the last message of the turn.
+  const lastMessage = messages[messages.length - 1]
+  const complete = lastMessage !== undefined
+    && lastMessage.blocks.some(block => block.kind === 'noise')
+
+  // The answer starts after the last step title; before it is the trace.
+  //
+  // A turn with several steps puts its narration BETWEEN them (measured:
+  // step → 我来搜索… → step → 搜索结果已返回… → step → the answer), so the
+  // narration lands in the trace. A turn with a single step cannot be split
+  // that way — its one narration line is read as part of the answer, which is
+  // a sentence too many rather than a wrong answer.
+  let lastStep = -1
+  for (let position = 0; position < blocks.length; position += 1) {
+    if (blocks[position]!.kind === 'step') lastStep = position
+  }
+  const answerBlocks = blocks.slice(lastStep + 1)
+  const traceBlocks = blocks.slice(0, lastStep + 1)
+
   const answerLines: string[] = []
-  const toolActions: string[] = []
-  for (const row of rows.slice(index + 1)) {
-    for (const line of row.text.split('\n')) {
-      const trimmed = line.trim()
-      if (trimmed.length === 0) continue
-      if (isNoise(trimmed)) continue
-      if (TOOL_ACTION.test(trimmed)) {
-        toolActions.push(trimmed)
-        continue
-      }
-      answerLines.push(trimmed)
+  const trace: string[] = []
+  const links: { text: string; href?: string }[] = []
+  for (const block of answerBlocks) {
+    if (block.kind === 'noise') continue
+    if (block.kind === 'link') {
+      links.push(block.href === undefined ? { text: block.text } : { text: block.text, href: block.href })
+      answerLines.push(block.text)
+      continue
     }
+    if (block.kind === 'text' && TOOL_ACTIVITY.test(block.text)) {
+      trace.push(block.text)
+      continue
+    }
+    if (block.kind === 'text' && NOISE_LINE.test(block.text)) continue
+    answerLines.push(block.text)
   }
-  const started = rows.length > index + 1
+  for (const block of traceBlocks) {
+    if (block.kind === 'noise' || block.kind === 'link') continue
+    if (block.text.length === 0) continue
+    trace.push(block.text)
+  }
+
   return {
     answer: answerLines.join('\n'),
-    toolActions,
-    started,
-    done: started && snapshot.generating === false,
+    trace,
+    links,
+    started: true,
+    complete,
   }
 }
 
