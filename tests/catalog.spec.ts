@@ -100,6 +100,19 @@ describe('catalogAdapter', () => {
     expect(qoderAdapter.providerInfo(providerRoute('acp-qoder')).name).toBe('Qoder')
   })
 
+  it('先把清单准备好再回答：模型插件的清单要能主动进账本', async () => {
+    // 选择器在用户打开时就会问「这一行有哪些模型」；清单要在这之前就位，
+    // 否则用户看到的是一份静态兜底清单。
+    const ensured: string[] = []
+    const ensuredAdapter = catalogAdapter(CONFIG, {
+      modelsOf,
+      dialectOf: () => undefined,
+      ensureModels: async (presetId: string) => { ensured.push(presetId) },
+    })
+    await ensuredAdapter.listModels(providerRoute('acp-claude'))
+    expect(ensured).toEqual(['acp-claude'])
+  })
+
   it('advertises the models that agent actually reports', async () => {
     const models = await adapter.listModels(providerRoute('acp-claude'))
     expect(models).toEqual([{

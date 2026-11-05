@@ -9,6 +9,7 @@ export type { WorkBuddyChatRequest } from './chat.ts'
 export { fetchAccount, LOGIN_PENDING_CODE, pollForToken, refreshSession, startLogin } from './auth.ts'
 export type { WorkBuddyAccount, WorkBuddyCredential, WorkBuddyLoginStart } from './auth.ts'
 export {
+  attachAccount,
   clearStoredCredential,
   credentialFilePath,
   credentialResolver,
@@ -18,5 +19,5 @@ export {
   writeStoredCredential,
 } from './credential.ts'
 export type { CredentialStoreOptions } from './credential.ts'
-export { fetchModels, parseModels } from './models.ts'
-export type { WorkBuddyModel } from './models.ts'
+export { fetchModels, loadCatalog, parseModels, readDesktopCatalog } from './models.ts'
+export type { WorkBuddyCatalog, WorkBuddyCatalogSource, WorkBuddyModel } from './models.ts'

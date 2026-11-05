@@ -38,6 +38,7 @@ import { switchShared } from './switch-shared.ts'
 import { selectionOf } from './selection.ts'
 import type { CatalogDeps } from './catalog.ts'
 import { describeClaimedModels, isModelBackedAgent, modelPluginStream } from './model-plugins.ts'
+import { ensureWorkBuddyModels } from './workbuddy-model.ts'
 import type { AcpPresetBinding } from './dispatch.ts'
 import type { AcpDialect, AcpTransport } from './index.ts'
 
@@ -311,6 +312,7 @@ export function applyAcpPlugin(
     modelStream: modelPluginStream(presets, {
       onRuntimeModels: (presetId, models) => { runtimeModelReports.record(presetId, models) },
     }),
+    ensureModels: async (presetId: string) => { await ensureWorkBuddyModels(presetId) },
   }
   // Self-report: a model row that never got claimed still shows up in the picker,
   // and the first symptom is an empty or stale answer at send time, long after

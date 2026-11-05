@@ -14,7 +14,7 @@
  * 令牌不出现在任何一条消息里：错误消息、失败块、日志，一律抹掉。
  */
 
-import { resolveEndpoints } from './endpoints.ts'
+import { resolveEndpoints, workBuddyHeaders } from './endpoints.ts'
 import type { WorkBuddyEndpoints } from './endpoints.ts'
 import { buildChatBody } from './openai.ts'
 import { chunksFromOpenAiEvents, readSseEvents } from './sse.ts'
@@ -53,6 +53,8 @@ export type WorkBuddyChatRequest = {
   readonly messageId?: string | undefined
   readonly signal?: AbortSignal | undefined
   readonly endpoints?: WorkBuddyEndpoints | undefined
+  /** 覆盖模型请求的地址（站点下发的端点：清单与模型请求要打同一个地方）。 */
+  readonly baseUrl?: string | undefined
   readonly fetchImpl?: typeof fetch | undefined
   /** 令牌过期时的续期钩子：返回新令牌，或 `undefined` 表示续不了。 */
   readonly onUnauthorized?: (() => Promise<string | undefined>) | undefined
@@ -69,7 +71,7 @@ export type WorkBuddyChatRequest = {
  * @returns DSH 的块序列。
  */
 export async function* streamWorkBuddy(request: WorkBuddyChatRequest): AsyncGenerator<WorkBuddyStreamChunk> {
-  const endpoints = request.endpoints ?? resolveEndpoints()
+  const endpoints = request.endpoints ?? resolveEndpoints(request.baseUrl)
   const fetchImpl = request.fetchImpl ?? fetch
   const sleep = request.sleepImpl ?? ((ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)))
   const body = buildChatBody({
@@ -151,11 +153,11 @@ export async function* streamWorkBuddy(request: WorkBuddyChatRequest): AsyncGene
 }
 
 function headersOf(request: WorkBuddyChatRequest, token: string): Record<string, string> {
-  const headers: Record<string, string> = {
+  const headers: Record<string, string> = workBuddyHeaders({
     'content-type': 'application/json',
     accept: 'text/event-stream',
     authorization: `Bearer ${token}`,
-  }
+  })
   const uid = request.account?.uid
   if (uid !== undefined && uid !== '') headers['x-user-id'] = uid
   const enterpriseId = request.account?.enterpriseId

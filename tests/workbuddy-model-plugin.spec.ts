@@ -37,10 +37,14 @@ vi.mock('../src/workbuddy/index.ts', async (importOriginal) => {
     ...actual,
     credentialResolver: () => async () => ({ accessToken: 'ACCESS', account: { uid: 'uid-1' } }),
     forceRefreshCredential: async () => ({ accessToken: 'ACCESS-2', account: { uid: 'uid-1' } }),
-    fetchModels: async () => {
+    loadCatalog: async () => {
       fetches += 1
       if (modelListFails) throw new Error('no model list')
-      return [{ id: 'auto', name: 'Auto' }, { id: 'fast-model', name: '快速' }]
+      return {
+        models: [{ id: 'auto', name: 'Auto' }, { id: 'fast-model', name: '快速' }],
+        endpoint: 'https://copilot.tencent.com',
+        source: 'desktop',
+      }
     },
     streamWorkBuddy: (request: Captured & { endpoints?: { chatUrl: string } }) => {
       captured.model = request.model
@@ -53,7 +57,7 @@ vi.mock('../src/workbuddy/index.ts', async (importOriginal) => {
   }
 })
 
-const { workBuddyModelStream } = await import('../src/workbuddy-model.ts')
+const { invalidateWorkBuddyCatalog, workBuddyModelStream } = await import('../src/workbuddy-model.ts')
 const { modelPluginStream } = await import('../src/model-plugins.ts')
 
 const config = {
@@ -134,14 +138,15 @@ describe('端点', () => {
     expect(captured.chatUrl).toBe('https://wb.example.com/v2/chat/completions')
   })
 
-  it('没写端点时用默认站点', async () => {
+  it('没写端点时用站点给的端点（清单与模型请求打同一个地方）', async () => {
     await drain(workBuddyModelStream(config)('acp-workbuddy', request))
-    expect(captured.chatUrl).toBe('https://www.workbuddy.cn/v2/chat/completions')
+    expect(captured.chatUrl).toBe('https://copilot.tencent.com/v2/chat/completions')
   })
 })
 
 describe('运行时模型清单', () => {
   it('拉到的清单写进目录的账本', async () => {
+    invalidateWorkBuddyCatalog()
     state.recorded = undefined
     const stream = modelPluginStream(config, {
       onRuntimeModels: (presetId, models) => { state.recorded = { presetId, models } },
@@ -152,6 +157,7 @@ describe('运行时模型清单', () => {
   })
 
   it('拉不到清单时不要每一轮都去拉一次', async () => {
+    invalidateWorkBuddyCatalog()
     state.recorded = undefined
     modelListFails = true
     fetches = 0
@@ -166,6 +172,7 @@ describe('运行时模型清单', () => {
   })
 
   it('拉不到清单不影响发消息', async () => {
+    invalidateWorkBuddyCatalog()
     state.recorded = undefined
     modelListFails = true
     const stream = modelPluginStream(config, {

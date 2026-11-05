@@ -220,6 +220,16 @@ export type CatalogDeps = {
   /** The frame dialect of one preset's agent. */
   dialectOf(presetId: string): AcpDialect | undefined
   /**
+   * Make sure one preset's model list is in the runtime ledger before the
+   * catalog answers.
+   *
+   * A model plugin can learn its list on its own (it logs in and asks the
+   * upstream). The picker asks for the list when the user opens it — which is
+   * before anyone sent a message — so the list has to be ready by then, or the
+   * user sees the static fallback instead of the real one.
+   */
+  ensureModels?(presetId: string): Promise<void>
+  /**
    * The in-place answerer for sessions this row does not drive. When the
    * adapter is absent, a foreign conversation request can only be refused.
    */
@@ -343,6 +353,8 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
       const presetId = presetOfRoute(provider)
       if (presetId === undefined) return []
       if (config.presets[presetId] === undefined) return []
+      // 先让模型插件把清单备好（它自己登录、自己问上游），再回答。
+      await deps.ensureModels?.(presetId)
       const models = modelsFor(presetId)
       // Collapse same-base entries (one model published as base[low]…base[ultra])
       // into a single row carrying its efforts, so the picker shows the model
