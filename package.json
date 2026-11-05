@@ -71,11 +71,7 @@
       "types": "./src/workbuddy-route.ts",
       "default": "./src/workbuddy-route.ts"
     },
-    "./package.json": "./package.json",
-    "./qoder-login": {
-      "types": "./src/qoder-route.ts",
-      "default": "./src/qoder-route.ts"
-    }
+    "./package.json": "./package.json"
   },
   "files": [
     "LICENSE",

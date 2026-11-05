@@ -13,7 +13,6 @@ import { minimaxiModelStream } from './minimaxi-model.ts'
 import type { PresetConfig } from './registry.ts'
 import { pairToolResults } from './tool-pairing.ts'
 import { workBuddyModelStream } from './workbuddy-model.ts'
-import { qoderModelStream } from './qoder-model.ts'
 import { zcodeModelStream } from './zcode-model.ts'
 import type { MiniMaxStreamChunk } from './minimaxi/index.ts'
 import type { GlmStreamChunk } from './zcode/index.ts'
@@ -30,7 +29,7 @@ export function modelPluginStream(
     readonly onRuntimeModels?: ((presetId: string, models: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[]) => void) | undefined
   },
 ): (presetId: string, request: CatalogTurnRequest) => AsyncIterable<GlmStreamChunk | MiniMaxStreamChunk | WorkBuddyStreamChunk> | undefined {
-  const plugins = [zcodeModelStream(config), minimaxiModelStream(config), workBuddyModelStream(config, deps), qoderModelStream(config, deps)]
+  const plugins = [zcodeModelStream(config), minimaxiModelStream(config), workBuddyModelStream(config, deps)]
   return (presetId, request) => {
     const paired = withPairedResults(request)
     for (const plugin of plugins) {
@@ -61,7 +60,7 @@ function withPairedResults(request: CatalogTurnRequest): CatalogTurnRequest {
  * this row have a dialect, or is it a model?" must read the same list. Listing
  * one of them in a second place is how a row ends up mounted and inert.
  */
-const MODEL_BACKED_AGENTS = new Set(['zcode', 'minimaxi', 'workbuddy', 'qoder-global'])
+const MODEL_BACKED_AGENTS = new Set(['zcode', 'minimaxi', 'workbuddy'])
 
 export function isModelBackedAgent(agent: string | undefined): boolean {
   return agent !== undefined && MODEL_BACKED_AGENTS.has(agent)

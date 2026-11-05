@@ -35,15 +35,6 @@ describe('makeSessionFactory', () => {
     expect(factory.dialectFor('acp-codex', CONFIG.presets['acp-codex']!)).toBe(codexDialect)
   })
 
-  it('does not open the Qoder international row as an ACP process', async () => {
-    // 这一行是模型行：在 DSH 自己的循环里回答，不该被当成一个要拉起的进程。
-    const factory = makeSessionFactory({
-      presets: { 'acp-qoder-global': { agent: 'qoder-global', models: [{ id: 'qwen3.8-max', name: 'Qwen 3.8 Max' }] } },
-    }, deps)
-    expect(factory.dialectFor('acp-qoder-global', { agent: 'qoder-global' })).toBeUndefined()
-    await expect(factory.open('acp-qoder-global', { cwd: '/tmp' })).rejects.toThrow(/native loop/)
-  })
-
   it('does not open zcode as an ACP process', async () => {
     const factory = makeSessionFactory({
       presets: { 'acp-zcode': { agent: 'zcode', models: [{ id: 'GLM-5.3', name: 'GLM 5.3' }] } },
