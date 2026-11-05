@@ -172,3 +172,44 @@ worker 内置的默认模型是 **`qwen3.8-max`**（`Qwen 3.8 Max`），它的
 
 **推理请求本身不需要签名**：`{api2-v2}/model/v1/chat/completions` 用我们的设备令牌
 就能通（`Cosy-Version` / `Cosy-ClientType` / `Cosy-MachineOS` 三个头就够）。
+
+## 为什么我们拿不到桌面版那份登录凭证（核对时间 2026-11-05）
+
+按「复用桌面版登录」的思路查了一轮，结论是**拿不到**，原因有三条，每条都有实测：
+
+1. **桌面版的本地服务不是模型清单的来源。** 它的地址与密钥明文写在
+   `~/.qoder/mcp-router.json`（`baseUrl` + `apiKey`），鉴权头是 `x-api-key`
+   （带上就从 401 变 404，说明过了）。但它是 **MCP 路由器**（把 MCP 客户端接到
+   应用的各种 MCP 服务器），**没有模型清单这个接口**——扫了 50 多条路径（`/models`、
+   `/api/v1/models`、`/catalog`、`/api/v2/model/list`、`/mcp`…）全是 404。
+
+2. **站点的清单接口要他们自己的签名。** 真实地址是
+   `{api3}/algo/api/v2/model/list?Encode=1`——**少了 `/algo` 这一段直接 404**
+   （SDK 拼地址时会加）。加上之后是 **403 `Signature invalid`**：签名由他们的
+   **原生模块**算（`qodercontext_prepareRequest`），不是 JS 能复刻的；应用里那份
+   agent SDK 是 35MB 的 worker 包（`qoder-worker-runtime.obf.mjs`），没有可调用的
+   库入口。
+
+3. **应用缓存的清单是加密的。** `~/.qoder/.models/<uid>/catalog-v7`（CLI 日志说
+   **24 个模型**）读不出来。钥匙串里只有主密钥（service `Qoder App Safe Storage`
+   / account `Qoder App Key`），应用数据库 `collaboration_runtime_credentials` 里还有
+   一份 `v10` 密文的运行时令牌——试了十几种 Electron safe storage 的参数组合
+   （salt、迭代次数、AES-128/256、是否 hex 解码口令）都解不开。
+
+### 顺带查到的三件有用的事
+
+- **`x-gw-user-id` 头**：带上它，推理错误会从 `All models failed`（模型解析不出来）
+  变成 `All backends failed`（模型解析出来了，但没有这个令牌作用域可用的后端）。
+- **这个账号只认 `auto` 一个 id**：`qwen3.8-max` 被服务端拒（`invalid_model_error:
+  Unsupported model`），SDK 里内嵌的另外 19 个候选 id 也全部被拒。
+- **应用自己的会话是 2026-07-28 的**（12 轮全成、0 报错），不是今天；所以
+  「All backends failed」到底是令牌作用域问题还是后端当下不可用，**分不开**。
+
+### 由此得出的取舍
+
+这一行要真正能用，需要桌面版那份 job 令牌，而那份令牌只在应用进程内（由它自己的原生
+模块解密）。从外面拿它只有两条路：把他们的原生模块打包进来（35MB + 内部 API，不稳），
+或者继续攻他们的加密（目前没有进展）。
+
+所以要么**这一行先不挂**（代码留着，等有别的入口再说），要么改成走 ACP 路线（像 zcode
+那样用官方 CLI，而不是我们自己做模型客户端）。
