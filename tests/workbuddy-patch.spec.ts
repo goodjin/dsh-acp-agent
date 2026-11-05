@@ -48,12 +48,23 @@ describe('挂载配置', () => {
     expect(row).toContain('agent: workbuddy')
   })
 
-  it('声明了推理档位与兜底模型清单', () => {
+  it('模型清单是白名单：只列要提供的那几个', () => {
     const row = rowOf('acp-workbuddy')
-    expect(row).toContain('efforts:')
-    for (const effort of ['low', 'medium', 'high']) expect(row).toContain(`id: ${effort}`)
-    for (const model of ['auto', 'fast-model', 'balanced-model', 'deep-model']) {
+    for (const model of [
+      'hy4free', 'hy4std', 'hy4-preview-ctrl', 'hy4-preview-exp', 'hy4preview-exp1',
+      'hy4preview-exp2', 'hy4-preview-x', 'glm-5.3', 'glm-5.3-flash', 'deepseek-v4-pro',
+      'deepseek-v4.1-flash', 'kimi-k3.1-pro', 'kimi-k3-1', 'minimax-m3.1-flash',
+      'step-5-preview', 'mimo-v2.6-pro', 'default-1.1', 'default-1.2',
+    ]) {
       expect(row).toContain(`id: "${model}"`)
     }
+    // 套餐档位与那些不支持工具调用的都不在这一行里。
+    for (const model of ['auto', 'fast-model', 'balanced-model', 'deep-model', 'hy3', 'wb-lite']) {
+      expect(row).not.toContain(`id: "${model}"`)
+    }
+  })
+
+  it('同名模型各成一行：关掉按名合并', () => {
+    expect(rowOf('acp-workbuddy')).toContain('collapseEfforts: false')
   })
 })
