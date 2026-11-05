@@ -97,7 +97,11 @@ WorkBuddy 的账号体系是「浏览器授权 + 站点轮询」，插件复刻�
 
 令牌只落在两个地方：宿主进程内存，和 `~/.dsh/workbuddy/credentials.json`（文件 0600、目录 0700）。**令牌不出现在日志、错误消息、路由应答里**，界面那一侧从头到尾没有令牌。
 
-浏览器侧在设置里有一节「WorkBuddy 账号」：问宿主「登了没」，没登录时给一个「去登录」按钮，点了开授权页。宿主那边的两条路由是 `GET /acp-agent/workbuddy/session` 与 `POST /acp-agent/workbuddy/login`。
+浏览器侧在设置里有一节「WorkBuddy 账号」，**账号与模型列表都在这一节里**：上面是账号
+（一个框里显示昵称与 uid，独占一行），下面一行两个按钮（「登录 WorkBuddy」「检查授权」，
+一样大、留出间距），再往下是模型列表（搜索框 + 勾选清单）。宿主那边有三条路由：
+`GET /acp-agent/workbuddy/session`、`POST /acp-agent/workbuddy/login`、
+`GET`/`POST /acp-agent/workbuddy/models`（整份清单与勾选结果）。
 
 ## 出错时怎么看
 

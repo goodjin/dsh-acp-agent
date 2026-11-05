@@ -8,15 +8,8 @@
  * 令牌不出宿主，所以这一侧拿到的只有模型的名字、倍率与 id。
  */
 
-import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { NAMESPACE, fallbackT } from './locales.ts'
-
-/** 设置里的行 id。 */
-export const WORKBUDDY_MODELS_SECTION_ID = 'acp-agent-workbuddy-models'
-
-/** 行在设置侧栏里的顺序（跟在账号那段后面）。 */
-export const WORKBUDDY_MODELS_SECTION_ORDER = 122
+import { fallbackT } from './locales.ts'
 
 /** 宿主路由路径（与宿主侧那一条一致）。 */
 export const WORKBUDDY_MODELS_URL = '/acp-agent/workbuddy/models'
@@ -189,6 +182,7 @@ export function workBuddyModelsView(props: WorkBuddyModelsViewProps): ReactNode 
 
   return (
     <div data-workbuddy-models="root">
+      <h4 data-workbuddy-models-title={true}>{t('workbuddy.models.title')}</h4>
       <input
         type="search"
         data-workbuddy-models-search={true}
@@ -221,106 +215,4 @@ export function workBuddyModelsView(props: WorkBuddyModelsViewProps): ReactNode 
       </button>
     </div>
   )
-}
-
-/** 组件：取一次清单，勾一下存一次。 */
-export function WorkBuddyModelsSection(props: { readonly t?: WorkBuddyModelsT }): ReactNode {
-  const [list, setList] = useState<WorkBuddyModelList>({ models: [], selected: [], custom: false })
-  const [query, setQuery] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | undefined>(undefined)
-
-  const reload = useCallback(async () => {
-    setBusy(true)
-    try {
-      setList(await readWorkBuddyModels({}))
-      setError(undefined)
-    } catch (problem) {
-      setError(problem instanceof Error ? problem.message : String(problem))
-    } finally {
-      setBusy(false)
-    }
-  }, [])
-
-  useEffect(() => { void reload() }, [reload])
-
-  const toggle = useCallback((id: string, checked: boolean) => {
-    setBusy(true)
-    const next = checked
-      ? [...list.selected.filter(item => item !== id), id]
-      : list.selected.filter(item => item !== id)
-    setList({ ...list, selected: next, custom: true })
-    void saveWorkBuddySelection(next)
-      .then(() => reload())
-      .catch((problem: unknown) => {
-        setError(problem instanceof Error ? problem.message : String(problem))
-        setBusy(false)
-      })
-  }, [list, reload])
-
-  const restoreDefault = useCallback(() => {
-    setBusy(true)
-    // 恢复成「默认那一份」，不是把六十几个全勾上。
-    const defaults = list.default ?? []
-    void saveWorkBuddySelection(defaults)
-      .then(() => reload())
-      .catch((problem: unknown) => {
-        setError(problem instanceof Error ? problem.message : String(problem))
-        setBusy(false)
-      })
-  }, [list.default, reload])
-
-  return (
-    <div>
-      {error === undefined
-        ? null
-        : <p data-workbuddy-models-error="true">{error}</p>}
-      {workBuddyModelsView({
-        list,
-        busy,
-        query,
-        onQueryChange: (value: string) => { setQuery(value) },
-        onToggle: (id, checked) => { toggle(id, checked) },
-        onRestoreDefault: () => { restoreDefault() },
-        ...(props.t === undefined ? {} : { t: props.t }),
-      })}
-    </div>
-  )
-}
-
-/** 设置侧栏的插槽面。 */
-export type WorkBuddyModelsSlotHost = {
-  inject(key: string, callback: () => unknown): unknown
-  register(options: {
-    name: string
-    id?: string
-    order?: number
-    label?: () => string
-    locale?: string
-    inject?: () => unknown
-  }, component: unknown): unknown
-}
-
-/**
- * 把这一段挂进设置对话框。
- * @param slots - 设置的插槽注册面。
- * @param label - 侧栏那一行的标题。
- * @param t - 文案座位。
- */
-export function registerWorkBuddyModelsSection(
-  slots: WorkBuddyModelsSlotHost,
-  label: () => string,
-  t?: WorkBuddyModelsT,
-): void {
-  slots.inject('settings.section', () => slots.register(
-    {
-      name: 'settings.section',
-      id: WORKBUDDY_MODELS_SECTION_ID,
-      order: WORKBUDDY_MODELS_SECTION_ORDER,
-      label,
-      locale: NAMESPACE,
-      inject: () => ({ t }),
-    },
-    WorkBuddyModelsSection,
-  ))
 }
