@@ -17,8 +17,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { fetchAccount, pollForToken, startLogin } from './workbuddy/auth.ts'
 import type { WorkBuddyAccount, WorkBuddyCredential, WorkBuddyLoginStart } from './workbuddy/auth.ts'
 import { attachAccount, credentialFilePath, readStoredCredential, writeStoredCredential } from './workbuddy/credential.ts'
+import { loadCatalog } from './workbuddy/models.ts'
+import { readSelection, writeSelection } from './workbuddy/selection.ts'
 import { resolveEndpoints } from './workbuddy/endpoints.ts'
-import { ensureWorkBuddyModels, invalidateWorkBuddyCatalog } from './workbuddy-model.ts'
+import { ensureWorkBuddyModels, invalidateWorkBuddyCatalog, workBuddyDeclaredModelIds } from './workbuddy-model.ts'
 
 export const name = 'acp-agent-workbuddy-login'
 
@@ -30,6 +32,9 @@ export const WORKBUDDY_SESSION_ROUTE_PATH = '/acp-agent/workbuddy/session'
 
 /** 开始登录。 */
 export const WORKBUDDY_LOGIN_ROUTE_PATH = '/acp-agent/workbuddy/login'
+
+/** 模型清单与勾选。 */
+export const WORKBUDDY_MODELS_ROUTE_PATH = '/acp-agent/workbuddy/models'
 
 /** 这个入口需要的宿主面（窄接口，测试立桩照这个来）。 */
 export interface WorkBuddyRouteContext {
@@ -64,6 +69,12 @@ export interface WorkBuddyRouteDeps {
   readonly attachAccount?: ((account: WorkBuddyAccount) => Promise<WorkBuddyCredential | undefined>) | undefined
   /** 刷新模型清单（登录后选择器要马上看到真实清单）。 */
   readonly ensureModels?: (() => Promise<void>) | undefined
+  /** 取整份清单（设置里那个列表要全部的模型，不只是勾了的）。 */
+  readonly loadCatalog?: (() => Promise<readonly { id: string; name: string; description?: string | undefined; credits?: string | undefined; supportsToolCall?: boolean | undefined }[]>) | undefined
+  /** 读勾选结果。 */
+  readonly readSelection?: (() => Promise<readonly string[] | undefined>) | undefined
+  /** 写勾选结果。 */
+  readonly writeSelection?: ((ids: readonly string[]) => Promise<void>) | undefined
 }
 
 /**
@@ -96,6 +107,14 @@ export function registerWorkBuddyRoutes(ctx: WorkBuddyRouteContext, deps: WorkBu
     return fetchAccount({ accessToken, endpoints }).catch(() => undefined)
   })
   const refreshModels = deps.ensureModels ?? (() => ensureWorkBuddyModels())
+  const catalog = deps.loadCatalog ?? (async () => {
+    const credential = await read().catch(() => undefined)
+    if (credential === undefined) return []
+    const loaded = await loadCatalog({ credential }).catch(() => undefined)
+    return loaded?.models ?? []
+  })
+  const selectedIds = deps.readSelection ?? (() => readSelection(file))
+  const saveSelection = deps.writeSelection ?? ((ids: readonly string[]) => writeSelection(ids, file))
   const saveAccount = deps.attachAccount ?? ((who: WorkBuddyAccount) => attachAccount(who, file))
 
   ctx.effect(() => {
@@ -149,6 +168,64 @@ export function registerWorkBuddyRoutes(ctx: WorkBuddyRouteContext, deps: WorkBu
   ctx.effect(() => {
     ctx.webServer.register({
       kind: 'exact',
+      path: WORKBUDDY_MODELS_ROUTE_PATH,
+      async handler(req, res) {
+        if (!admit(ctx, req, res)) return
+        if (req.method === 'GET') {
+          try {
+            const models = await catalog()
+            const stored = await selectedIds().catch(() => undefined)
+            // 没自己勾过时，生效的是挂载行里声明的那一份——界面照它显示勾选状态。
+            const selected = stored ?? workBuddyDeclaredModelIds()
+            respondJson(res, 200, JSON.stringify({
+              ok: true,
+              models: models.map(model => ({
+                id: model.id,
+                name: model.name,
+                ...(model.description === undefined ? {} : { description: model.description }),
+                ...(model.credits === undefined ? {} : { credits: model.credits }),
+                ...(model.supportsToolCall === undefined ? {} : { supportsToolCall: model.supportsToolCall }),
+              })),
+              selected: [...selected],
+              // 自己勾过没有：界面据此显示「已自定义」并给一个「恢复默认」。
+              custom: stored !== undefined,
+            }))
+          } catch (error) {
+            respondJson(res, 200, JSON.stringify({
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error),
+            }))
+          }
+          return
+        }
+        if (req.method === 'POST') {
+          try {
+            const body = await readJsonBody(req)
+            const ids = Array.isArray(body?.['ids'])
+              ? body['ids'].filter((id): id is string => typeof id === 'string' && id !== '')
+              : []
+            await saveSelection(ids)
+            // 勾完立刻重发清单：选择器下一次打开就是新的那份。
+            invalidateWorkBuddyCatalog()
+            await refreshModels().catch(() => undefined)
+            respondJson(res, 200, JSON.stringify({ ok: true, selected: ids }))
+          } catch (error) {
+            respondJson(res, 200, JSON.stringify({
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error),
+            }))
+          }
+          return
+        }
+        res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8', allow: 'GET, POST' })
+        res.end('method not allowed')
+      },
+    })
+  }, 'acp-agent-workbuddy-login: models route')
+
+  ctx.effect(() => {
+    ctx.webServer.register({
+      kind: 'exact',
       path: WORKBUDDY_LOGIN_ROUTE_PATH,
       async handler(req, res) {
         if (!admit(ctx, req, res)) return
@@ -193,6 +270,22 @@ function admit(ctx: WorkBuddyRouteContext, req: IncomingMessage, res: ServerResp
     return false
   }
   return true
+}
+
+/** 读请求体（JSON）。 */
+async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown> | undefined> {
+  const chunks: Buffer[] = []
+  for await (const chunk of req) chunks.push(Buffer.from(chunk as Uint8Array))
+  const text = Buffer.concat(chunks).toString('utf8')
+  if (text === '') return undefined
+  try {
+    const parsed = JSON.parse(text) as unknown
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /** JSON 应答：no-store（缓存归宿主管，不许任何一环替我们缓存）+ 固定长度。 */

@@ -17,6 +17,7 @@ import {
   fetchAccount,
   forceRefreshCredential,
   loadCatalog,
+  readSelection,
   resolveEndpoints,
   streamWorkBuddy,
 } from './workbuddy/index.ts'
@@ -53,6 +54,21 @@ export function invalidateWorkBuddyCatalog(): void {
   lastCatalog = undefined
   lastCatalogFailedAt = undefined
   modelListAt.clear()
+}
+
+/**
+ * 这一行真正提供哪些模型。
+ *
+ * 用户在设置里勾过的优先（那是他的意思），没勾过（没有这个文件）就用挂载行里
+ * 声明的那份——装上就有默认的一套，用户可以改。
+ */
+async function effectiveDeclared(
+  declared: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[],
+): Promise<readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[]> {
+  const selected = await readSelection().catch(() => undefined)
+  if (selected === undefined) return declared
+  // 勾选只给 id：名字与描述从站点那份清单里补（勾了但站点没有的，按 id 显示）。
+  return selected.map(id => ({ id, name: id }))
 }
 
 /**
@@ -99,23 +115,37 @@ export function mergeDeclaredModels(
   runtime: readonly WorkBuddyReportedModel[],
 ): WorkBuddyReportedModel[] {
   const byId = new Map(runtime.map(model => [model.id, model]))
-  // 同名的（站点的 hy4free 与 hy4std 都叫「Hy4」）在选择器里会长得一模一样，
-  // 分不出谁是谁——补上 id 让人认得出。
-  const nameCount = new Map<string, number>()
-  for (const entry of declared) {
-    nameCount.set(entry.name, (nameCount.get(entry.name) ?? 0) + 1)
-  }
-  return declared.map(entry => {
+  const resolved = declared.map(entry => {
     const found = byId.get(entry.id)
-    const source = found ?? entry
-    const name = (nameCount.get(entry.name) ?? 0) > 1 ? `${entry.name}（${entry.id}）` : source.name
-    const description = source.description ?? entry.description
+    const name = found?.name ?? entry.name
+    const description = found?.description ?? entry.description
     return {
       id: entry.id,
       name,
       ...(description === undefined ? {} : { description }),
     }
   })
+  // 同名的（站点的 hy4free 与 hy4std 都叫「Hy4」）在选择器里会长得一模一样，
+  // 分不出谁是谁——补上 id 让人认得出。
+  const nameCount = new Map<string, number>()
+  for (const entry of resolved) {
+    nameCount.set(entry.name, (nameCount.get(entry.name) ?? 0) + 1)
+  }
+  return resolved.map(entry => (
+    (nameCount.get(entry.name) ?? 0) > 1
+      ? { ...entry, name: `${entry.name}（${entry.id}）` }
+      : entry
+  ))
+}
+
+/**
+ * 默认勾了哪些模型（挂载行里声明的那份）。
+ *
+ * 设置界面要显示「当前生效的是哪些」——用户还没自己勾过时，生效的就是这一份。
+ */
+export function workBuddyDeclaredModelIds(): readonly string[] {
+  const first = [...publishers.values()][0]
+  return first?.declared.map(entry => entry.id) ?? []
 }
 
 /**
@@ -143,7 +173,8 @@ export async function ensureWorkBuddyModels(
   for (const target of targets) {
     const publisher = publishers.get(target)
     if (publisher === undefined) continue
-    publisher.publish(mergeDeclaredModels(publisher.declared, catalog.models))
+    const declared = await effectiveDeclared(publisher.declared)
+    publisher.publish(mergeDeclaredModels(declared, catalog.models))
   }
 }
 
@@ -197,15 +228,16 @@ export function workBuddyModelStream(
   },
 ): (presetId: string, request: CatalogTurnRequest) => AsyncIterable<WorkBuddyStreamChunk> | undefined {
   // 登记发布口：清单要能主动进目录账本，不能等用户先发一条消息。
+  //
+  // 登记本身不依赖回调在不在——设置界面要显示「默认勾了哪些」，那一份就是挂载行
+  // 里声明的，宿主有没有给账本回调都得能读到。
   for (const [presetId, preset] of Object.entries(config.presets)) {
     if (preset.agent !== 'workbuddy') continue
-    if (deps?.onRuntimeModels !== undefined) {
-      registerWorkBuddyModelPublisher(
-        presetId,
-        preset.models ?? [],
-        models => { deps.onRuntimeModels?.(presetId, models) },
-      )
-    }
+    registerWorkBuddyModelPublisher(
+      presetId,
+      preset.models ?? [],
+      models => { deps?.onRuntimeModels?.(presetId, models) },
+    )
   }
   return (presetId, request) => {
     const preset = config.presets[presetId]
@@ -231,7 +263,7 @@ async function* answer(
   const resolve = credentialResolver({ endpoints })
   const credential = await resolveWithAccount(resolve, endpoints)
   const catalog = await loadWorkBuddyCatalog(credential, endpoints)
-  publishModels(presetId, catalog?.models, deps, declared)
+  publishModels(presetId, catalog?.models, deps, await effectiveDeclared(declared))
   // 站点说模型在哪儿就打哪儿；配置里显式写了端点就听配置的（那是部署方的意思）。
   const modelEndpoints = followCatalogEndpoint && catalog?.endpoint !== undefined
     ? resolveEndpoints(catalog.endpoint)

@@ -38,6 +38,9 @@ export type ClientLocaleKey =
   | 'workbuddy.section.label'
   | 'workbuddy.account.signedIn' | 'workbuddy.account.signedOut'
   | 'workbuddy.account.login' | 'workbuddy.account.refresh'
+  | 'workbuddy.models.section.label' | 'workbuddy.models.summary'
+  | 'workbuddy.models.custom' | 'workbuddy.models.defaultHint'
+  | 'workbuddy.models.noTool' | 'workbuddy.models.restore'
   | 'qoder.section.label'
   | 'qoder.account.signedIn' | 'qoder.account.signedOut'
   | 'qoder.account.login' | 'qoder.account.refresh'
@@ -108,6 +111,12 @@ export const zh: Record<ClientLocaleKey, string> = {
   'workbuddy.account.signedOut': '未登录 WorkBuddy：这一组模型发消息会被拒绝。',
   'workbuddy.account.login': '去登录',
   'workbuddy.account.refresh': '刷新状态',
+  'workbuddy.models.section.label': 'WorkBuddy 模型',
+  'workbuddy.models.summary': '站点共 {total} 个模型，勾上的 {selected} 个会出现在模型选择器里。',
+  'workbuddy.models.custom': '当前用的是你自己勾的。',
+  'workbuddy.models.defaultHint': '当前用的是默认那一份（还没自己勾过）。',
+  'workbuddy.models.noTool': '不能带工具（只能聊天）',
+  'workbuddy.models.restore': '全部勾上并保存',
   'qoder.section.label': 'Qoder 国际版账号',
   'qoder.account.signedIn': '已登录 Qoder 国际版：',
   'qoder.account.signedOut': '未登录 Qoder 国际版：这一组模型发消息会被拒绝。',
@@ -182,6 +191,12 @@ export const en: Record<ClientLocaleKey, string> = {
   'workbuddy.account.signedOut': 'Not signed in to WorkBuddy: messages in this group will be refused.',
   'workbuddy.account.login': 'Sign in',
   'workbuddy.account.refresh': 'Refresh status',
+  'workbuddy.models.section.label': 'WorkBuddy models',
+  'workbuddy.models.summary': 'The site lists {total} models; the {selected} you tick show up in the model picker.',
+  'workbuddy.models.custom': 'Using your own selection.',
+  'workbuddy.models.defaultHint': 'Using the default selection (nothing ticked by hand yet).',
+  'workbuddy.models.noTool': 'no tools (chat only)',
+  'workbuddy.models.restore': 'Tick all and save',
   'qoder.section.label': 'Qoder international account',
   'qoder.account.signedIn': 'Signed in to Qoder international:',
   'qoder.account.signedOut': 'Not signed in to Qoder international: messages in this group will be refused.',
