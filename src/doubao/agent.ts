@@ -40,9 +40,14 @@ export type DoubaoBrowserLike = {
 
 /** A JSON-RPC error the agent answers with, code included. */
 export class DoubaoRpcError extends Error {
-  constructor(readonly code: number, message: string) {
+  readonly code: number
+
+  // No constructor parameter properties: DSH erases plugin types with a
+  // strip-only eraser, which cannot erase `constructor(readonly x: T)`.
+  constructor(code: number, message: string) {
     super(message)
     this.name = 'DoubaoRpcError'
+    this.code = code
   }
 }
 
