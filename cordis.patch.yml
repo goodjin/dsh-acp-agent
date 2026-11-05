@@ -553,50 +553,50 @@
               # initialize + session/new）读到的 models.availableModels，一字不差。
               models:
                 - id: auto
-                  name: Auto (default)（0.50x）
-                  description: "Reasoning · Vision"
+                  name: Auto (default)
+                  description: Reasoning · Vision · 0.50x Credit
                 - id: fast
-                  name: Fast（0.80x）
-                  description: "Reasoning · Vision"
+                  name: Fast
+                  description: Reasoning · Vision · 0.80x Credit
                 - id: qmodel_38max
-                  name: Qwen3.8-Max（0.50x）
-                  description: "Reasoning · Vision · New"
+                  name: Qwen3.8-Max
+                  description: Reasoning · Vision · New · 0.50x Credit
                 - id: qfmodel
-                  name: Qwen3.8-Flash（0.00x）
-                  description: "Reasoning · Vision · New"
+                  name: Qwen3.8-Flash
+                  description: Reasoning · Vision · New · 0.00x Credit
                 - id: qmodel_latest
-                  name: Qwen3.7-Max（0.50x）
-                  description: "Reasoning · Vision · New"
+                  name: Qwen3.7-Max
+                  description: Reasoning · Vision · New · 0.50x Credit
                 - id: qmodel
-                  name: Qwen3.7-Plus（0.10x）
-                  description: "Reasoning · Vision · New"
+                  name: Qwen3.7-Plus
+                  description: Reasoning · Vision · New · 0.10x Credit
                 - id: q37fmodel
-                  name: Qwen3.7-Flash（0.10x）
-                  description: "Reasoning · Vision · New"
+                  name: Qwen3.7-Flash
+                  description: Reasoning · Vision · New · 0.10x Credit
                 - id: dmodel
-                  name: DeepSeek-V4-Pro（0.50x）
-                  description: "Reasoning · Vision · New"
+                  name: DeepSeek-V4-Pro
+                  description: Reasoning · Vision · New · 0.50x Credit
                 - id: dfmodel
-                  name: DeepSeek-Flash（0.00x）
-                  description: "Vision · New"
+                  name: DeepSeek-Flash
+                  description: Vision · New · 0.00x Credit
                 - id: gmodel
-                  name: GLM-5.3（0.80x）
-                  description: "Reasoning · Vision · New"
+                  name: GLM-5.3
+                  description: Reasoning · Vision · New · 0.80x Credit
                 - id: gfmodel
-                  name: GLM-5.3-Flash（0.10x）
-                  description: "Reasoning · Vision · New"
+                  name: GLM-5.3-Flash
+                  description: Reasoning · Vision · New · 0.10x Credit
                 - id: gm51model
-                  name: GLM-5.2（0.60x）
-                  description: "Reasoning · Vision · New"
+                  name: GLM-5.2
+                  description: Reasoning · Vision · New · 0.60x Credit
                 - id: kmodel_latest
-                  name: Kimi-K3（1.40x）
-                  description: "Vision · New"
+                  name: Kimi-K3
+                  description: Vision · New · 1.40x Credit
                 - id: kmodel
-                  name: Kimi-K2.8-Preview（0.80x）
-                  description: "Reasoning · Vision · New"
+                  name: Kimi-K2.8-Preview
+                  description: Reasoning · Vision · New · 0.80x Credit
                 - id: mmodel
-                  name: MiniMax-M3.1-Flash（0.10x）
-                  description: "Vision · New"
+                  name: MiniMax-M3.1-Flash
+                  description: Vision · New · 0.10x Credit
           # DSH 工具行：ACP 预设自己的回合由外部 agent 驱动，父会话用不到；
           # 挂在这里是给 DSH 侧起的子会话继承的——孩子继承本预设组合，没有
           # 这几行它拿到的工具表是空的，bash/fs 都用不了。别删。

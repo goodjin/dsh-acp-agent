@@ -387,8 +387,7 @@ describe('qoder dialect', () => {
     // content. Standard first, fallback for a build that omits the selector.
     const models = qoderDialect.readModels(qoderCaptured.sessionNew)
     expect(models).toHaveLength(15)
-    // 倍率从描述提到名字上：选择器里显示的就是名字，倍率留在描述里看不见。
-    expect(models[0]).toEqual({ id: 'auto', name: 'Auto (default)（0.50x）', description: 'Reasoning · Vision' })
+    expect(models[0]).toEqual({ id: 'auto', name: 'Auto (default)', description: 'Reasoning · Vision · 0.50x Credit' })
     expect(models.map(model => model.id)).toContain('qmodel_38max')
     expect(qoderDialect.readModels({ models: { availableModels: [{ modelId: 'm1', name: 'M1' }] } }))
       .toEqual([{ id: 'm1', name: 'M1' }])

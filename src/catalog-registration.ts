@@ -97,7 +97,14 @@ export function registerCatalog(ctx: unknown, config: PresetConfig, deps: Catalo
   const routes = catalogRoutes(config)
   if (routes.length === 0) return
   const registry = registryOf(ctx)
+  process.stderr.write(`[acp-debug] registerCatalog routes=${JSON.stringify(routes)} registry=${registry === undefined ? 'MISSING' : 'ok'} presets=${JSON.stringify(Object.keys(config.presets))}\n`)
   if (registry === undefined) return
+  for (const r of routes) {
+    const presetId = r.replace(/^acp:/, '')
+    const raw = config.presets[presetId]
+    const viaDeps = deps.modelsOf?.(presetId)
+    process.stderr.write(`[acp-debug] preset=${presetId} keys=${JSON.stringify(Object.keys(raw ?? {}))} rawModels=${Array.isArray(raw?.models) ? raw.models.length : String(raw?.models)} depsModels=${Array.isArray(viaDeps) ? viaDeps.length : String(viaDeps)}\n`)
+  }
   registry.registerAdapter(routes, catalogAdapter(config, deps))
 }
 

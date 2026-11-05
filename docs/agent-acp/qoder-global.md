@@ -1,5 +1,7 @@
 # Qoder 国际版的模型行
 
+> 这一篇是**国际版**（`acp-qoder-global`，模型插件）。**国内版**是另一个 agent（`acp-qoder`，走 ACP 的 Qoder CN），见 [qoder.md](./qoder.md)——两者互不相干，改动不要混在一起。
+
 > 核对时间：2026-11-05
 > 来源：本机 `/Applications/Qoder.app`（0.5.3，com.qoder.app）内置的
 > `@qoder-ai/qoder-agent-sdk` worker（`dist/_worker/qoder-worker-runtime.obf.mjs`，

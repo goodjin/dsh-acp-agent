@@ -55,20 +55,6 @@ const CHATTER = new Set([
   'usage_update',
 ])
 
-/**
- * 把描述里的倍率提到名字上。
- *
- * Qoder 报的描述长这样：「Reasoning · Vision · 0.50x Credit」。选择器里显示的是
- * **名字**，倍率留在描述里看不见——所以把它取出来挂到名字后面，描述里那截就去掉。
- */
-function withMultiplier(name: string, description: string | undefined): { name: string; description?: string | undefined } {
-  if (description === undefined) return { name }
-  const match = /(\d+(?:\.\d+)?x)\s*Credit/.exec(description)
-  if (match === null) return { name, description }
-  const rest = description.replace(match[0], '').replace(/[·\s]+$/u, '').trim()
-  return { name: `${name}（${match[1]}）`, ...(rest === '' ? {} : { description: rest }) }
-}
-
 export const qoderDialect: AcpDialect = {
   id: 'qoder',
 
@@ -187,8 +173,7 @@ export const qoderDialect: AcpDialect = {
           if (typeof id !== 'string') return []
           const name = typeof choice['name'] === 'string' ? choice.name : id
           const description = typeof choice['description'] === 'string' ? choice['description'] : undefined
-          const labelled = withMultiplier(name, description)
-          return [{ id, name: labelled.name, ...(labelled.description === undefined ? {} : { description: labelled.description }) }]
+          return [{ id, name, ...(description === undefined ? {} : { description }) }]
         })
       }
     }
@@ -199,8 +184,7 @@ export const qoderDialect: AcpDialect = {
       if (typeof id !== 'string') return []
       const name = typeof model['name'] === 'string' ? model.name : id
       const description = typeof model['description'] === 'string' ? model['description'] : undefined
-      const labelled = withMultiplier(name, description)
-      return [{ id, name: labelled.name, ...(labelled.description === undefined ? {} : { description: labelled.description }) }]
+      return [{ id, name, ...(description === undefined ? {} : { description }) }]
     })
   },
 
