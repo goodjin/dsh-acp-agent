@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ReactElement } from 'react'
 import {
+  filterModels,
   readWorkBuddyModels,
   saveWorkBuddySelection,
   WORKBUDDY_MODELS_SECTION_ID,
@@ -46,6 +47,7 @@ const LIST: WorkBuddyModelList = {
   ],
   selected: ['glm-5.3'],
   custom: false,
+  default: ['glm-5.3', 'hy4free'],
 }
 
 describe('问宿主', () => {
@@ -118,6 +120,42 @@ describe('勾选界面', () => {
     const onChange = box?.props?.onChange as ((event: { target: { checked: boolean } }) => void) | undefined
     onChange?.({ target: { checked: true } })
     expect(toggled).toEqual([{ id: 'hy4free', checked: true }])
+  })
+
+  it('有搜索框：输入的词传给外面', () => {
+    const queries: string[] = []
+    const view = workBuddyModelsView({
+      list: LIST,
+      onQueryChange: (value: string) => { queries.push(value) },
+    })
+    const box = find(view, props => props['data-workbuddy-models-search'] === true)
+    expect(box).toBeDefined()
+    const onChange = box?.props?.onChange as ((event: { target: { value: string } }) => void) | undefined
+    onChange?.({ target: { value: 'glm' } })
+    expect(queries).toEqual(['glm'])
+  })
+
+  it('按搜索词过滤：名字、id、倍率、描述都算', () => {
+    expect(filterModels(LIST.models, 'glm').map(model => model.id)).toEqual(['glm-5.3'])
+    expect(filterModels(LIST.models, 'Kling').map(model => model.id)).toEqual(['kling-video-v3'])
+    expect(filterModels(LIST.models, 'x0.00').map(model => model.id)).toEqual(['hy4free'])
+    expect(filterModels(LIST.models, '旗舰').map(model => model.id)).toEqual(['glm-5.3'])
+    expect(filterModels(LIST.models, '  ').map(model => model.id)).toHaveLength(3)
+  })
+
+  it('搜索时列表里只剩匹配的那些', () => {
+    const view = workBuddyModelsView({ list: LIST, query: 'hy4' })
+    expect(find(view, props => props['data-workbuddy-model'] === 'hy4free')).toBeDefined()
+    expect(find(view, props => props['data-workbuddy-model'] === 'glm-5.3')).toBeUndefined()
+  })
+
+  it('倍率是胶囊：圆角、小间距、数字等宽', () => {
+    const view = workBuddyModelsView({ list: LIST })
+    const pill = find(view, props => props['data-workbuddy-model-credits'] === true)
+    const style = pill?.props?.style as Record<string, unknown> | undefined
+    expect(style?.['borderRadius']).toBe('999px')
+    expect(style?.['fontVariantNumeric']).toBe('tabular-nums')
+    expect(style?.['display']).toBe('inline-flex')
   })
 
   it('行 id 是约定的那个', () => {
