@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest'
 import {
   apply,
   registerWorkBuddyRoutes,
+  WORKBUDDY_CHECKIN_ROUTE_PATH,
   WORKBUDDY_LOGIN_ROUTE_PATH,
   WORKBUDDY_MODELS_ROUTE_PATH,
   WORKBUDDY_SESSION_ROUTE_PATH,
@@ -206,18 +207,20 @@ describe('路由', () => {
     const { ctx, routes } = rig()
     registerWorkBuddyRoutes(ctx)
     expect(routes.map(route => route.path).sort()).toEqual([
+      WORKBUDDY_CHECKIN_ROUTE_PATH,
       WORKBUDDY_LOGIN_ROUTE_PATH,
       WORKBUDDY_MODELS_ROUTE_PATH,
       WORKBUDDY_SESSION_ROUTE_PATH,
     ].sort())
   })
 
-  it('宿主按 apply(ctx, config) 调用时挂的也是这两条', () => {
+  it('宿主按 apply(ctx, config) 调用时挂的也是这些', () => {
     // 宿主把插件配置当第二个参数传进来；注入面不能占这个位置，
     // 否则配置里的字段会被当成注入面读。
     const { ctx, routes } = rig()
     apply(ctx, { startLogin: async () => ({ state: 'x', url: 'https://x.example' }) })
     expect(routes.map(route => route.path).sort()).toEqual([
+      WORKBUDDY_CHECKIN_ROUTE_PATH,
       WORKBUDDY_LOGIN_ROUTE_PATH,
       WORKBUDDY_MODELS_ROUTE_PATH,
       WORKBUDDY_SESSION_ROUTE_PATH,
@@ -310,5 +313,109 @@ describe('登录', () => {
     apply(ctx)
     const result = await call(routes, WORKBUDDY_SESSION_ROUTE_PATH, 'POST')
     expect(result.status).toBe(405)
+  })
+})
+
+
+describe('每日签到', () => {
+  it('GET 给签到状态：今天签没签、连续几天、每天多少积分', async () => {
+    const { ctx, routes } = rig()
+    registerWorkBuddyRoutes(ctx, {
+      checkinStatus: async () => ({
+        active: true,
+        todayCheckedIn: true,
+        streakDays: 13,
+        dailyCredit: 100,
+        todayCredit: 100,
+        isStreakDay: false,
+        checkinDates: ['2026-11-05'],
+      }),
+    })
+    const result = await call(routes, WORKBUDDY_CHECKIN_ROUTE_PATH, 'GET')
+    expect(result.status).toBe(200)
+    const body = JSON.parse(result.body)
+    expect(body.ok).toBe(true)
+    expect(body.status.todayCheckedIn).toBe(true)
+    expect(body.status.streakDays).toBe(13)
+    expect(body.status.dailyCredit).toBe(100)
+  })
+
+  it('没登录时说的是「需要登录」，不是崩了', async () => {
+    const { ctx, routes } = rig()
+    registerWorkBuddyRoutes(ctx, {
+      checkinStatus: async () => undefined,
+    })
+    const result = await call(routes, WORKBUDDY_CHECKIN_ROUTE_PATH, 'GET')
+    expect(result.status).toBe(200)
+    const body = JSON.parse(result.body)
+    expect(body.ok).toBe(false)
+    expect(String(body.reason)).toContain('登录')
+  })
+
+  it('POST 领一次：领到了就说领到多少', async () => {
+    const { ctx, routes } = rig()
+    registerWorkBuddyRoutes(ctx, {
+      claimCheckin: async () => ({ claimed: true, alreadyClaimed: false, credit: 100, streakDays: 14 }),
+    })
+    const result = await call(routes, WORKBUDDY_CHECKIN_ROUTE_PATH, 'POST')
+    const body = JSON.parse(result.body)
+    expect(body.ok).toBe(true)
+    expect(body.claimed).toBe(true)
+    expect(body.credit).toBe(100)
+  })
+
+  it('POST 时今天已经领过：说清楚「已经领过了」，不是错误', async () => {
+    const { ctx, routes } = rig()
+    registerWorkBuddyRoutes(ctx, {
+      claimCheckin: async () => ({
+        claimed: false,
+        alreadyClaimed: true,
+        credit: 0,
+        streakDays: 13,
+        message: '今天已签到，请明天再来',
+      }),
+    })
+    const result = await call(routes, WORKBUDDY_CHECKIN_ROUTE_PATH, 'POST')
+    const body = JSON.parse(result.body)
+    expect(body.ok).toBe(true)
+    expect(body.alreadyClaimed).toBe(true)
+    expect(body.message).toBe('今天已签到，请明天再来')
+  })
+
+  it('方法不对时说清楚', async () => {
+    const { ctx, routes } = rig()
+    registerWorkBuddyRoutes(ctx, {})
+    const result = await call(routes, WORKBUDDY_CHECKIN_ROUTE_PATH, 'DELETE')
+    expect(result.status).toBe(405)
+  })
+
+  it('定时器在装载时起，卸载时撤', async () => {
+    const started: unknown[] = []
+    const stopped: unknown[] = []
+    const cleanups: (() => void)[] = []
+    const routes: CapturedRoute[] = []
+    const ctx = {
+      effect(factory: () => unknown) {
+        const handle = factory()
+        cleanups.push(() => { (handle as (() => void) | undefined)?.() })
+        return () => {}
+      },
+      webServer: {
+        register(route: CapturedRoute) {
+          routes.push(route)
+          return () => {}
+        },
+      },
+      connection: fakeConnection(),
+    }
+    registerWorkBuddyRoutes(ctx as unknown as WorkBuddyRouteContext, {
+      startDaily: (options) => {
+        started.push(options)
+        return () => { stopped.push(true) }
+      },
+    })
+    expect(started).toHaveLength(1)
+    for (const cleanup of cleanups) cleanup()
+    expect(stopped).toHaveLength(1)
   })
 })

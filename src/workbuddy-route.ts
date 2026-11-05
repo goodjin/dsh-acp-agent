@@ -1,13 +1,17 @@
 /**
- * WorkBuddy 的登录与状态接口（宿主侧）。
+ * WorkBuddy 的登录、状态与签到接口（宿主侧）。
  *
- * 浏览器要能问「登了没」，也要能拿到一个能点开的授权地址——这两件事都在宿主这
- * 一侧做，因为令牌不能进浏览器：
+ * 浏览器要能问「登了没」，也要能拿到一个能点开的授权地址，还要能看见「今天签了没」——
+ * 这些事都在宿主这一侧做，因为令牌不能进浏览器：
  * - `GET /acp-agent/workbuddy/session` → 登了没、是谁；
- * - `POST /acp-agent/workbuddy/login` → 开始一次登录，返回授权地址。
+ * - `POST /acp-agent/workbuddy/login` → 开始一次登录，返回授权地址；
+ * - `GET/POST /acp-agent/workbuddy/models` → 模型清单与勾选结果；
+ * - `GET/POST /acp-agent/workbuddy/checkin` → 每日签到的状态与领取。
  *
  * 登录的轮询在宿主这边跑（用户点完授权页，站点把令牌绑在 state 上，宿主轮询到
  * 就落盘）。应答里只有状态与地址，永远没有令牌。
+ *
+ * 每天 10:00 的自动签到也在这里起：定时器挂在 `effect` 里，插件卸载时随之撤销。
  *
  * 准入照官方 /api 的写法：先 admit 后应答，拒绝时状态码原样、短体固定。取数失败
  * 折成 200 + ok:false + 原因，不甩 500——界面上要能显示「去登录」，不是「崩了」。
@@ -20,6 +24,8 @@ import { attachAccount, credentialFilePath, readStoredCredential, writeStoredCre
 import { loadCatalog } from './workbuddy/models.ts'
 import { readSelection, writeSelection } from './model-selection.ts'
 import { resolveEndpoints } from './workbuddy/endpoints.ts'
+import { claimDailyCheckin, fetchCheckinStatus, startDailyCheckin } from './workbuddy/checkin.ts'
+import type { WorkBuddyCheckinResult, WorkBuddyCheckinSchedulerOptions, WorkBuddyCheckinStatus } from './workbuddy/checkin.ts'
 import { ensureWorkBuddyModels, invalidateWorkBuddyCatalog, workBuddyDeclaredModelIds } from './workbuddy-model.ts'
 
 export const name = 'acp-agent-workbuddy-login'
@@ -35,6 +41,9 @@ export const WORKBUDDY_LOGIN_ROUTE_PATH = '/acp-agent/workbuddy/login'
 
 /** 模型清单与勾选。 */
 export const WORKBUDDY_MODELS_ROUTE_PATH = '/acp-agent/workbuddy/models'
+
+/** 每日签到：GET 查状态，POST 领一次。 */
+export const WORKBUDDY_CHECKIN_ROUTE_PATH = '/acp-agent/workbuddy/checkin'
 
 /** 这个入口需要的宿主面（窄接口，测试立桩照这个来）。 */
 export interface WorkBuddyRouteContext {
@@ -75,6 +84,12 @@ export interface WorkBuddyRouteDeps {
   readonly readSelection?: (() => Promise<readonly string[] | undefined>) | undefined
   /** 写勾选结果。 */
   readonly writeSelection?: ((ids: readonly string[]) => Promise<void>) | undefined
+  /** 查签到状态；返回 `undefined` 表示没登录。 */
+  readonly checkinStatus?: (() => Promise<WorkBuddyCheckinStatus | undefined>) | undefined
+  /** 领一次当天积分。 */
+  readonly claimCheckin?: (() => Promise<WorkBuddyCheckinResult>) | undefined
+  /** 起每天 10:00 的定时器；返回停掉它的函数。 */
+  readonly startDaily?: ((options: WorkBuddyCheckinSchedulerOptions) => () => void) | undefined
 }
 
 /**
@@ -116,6 +131,20 @@ export function registerWorkBuddyRoutes(ctx: WorkBuddyRouteContext, deps: WorkBu
   const selectedIds = deps.readSelection ?? (() => readSelection('workbuddy', file))
   const saveSelection = deps.writeSelection ?? ((ids: readonly string[]) => writeSelection('workbuddy', ids, file))
   const saveAccount = deps.attachAccount ?? ((who: WorkBuddyAccount) => attachAccount(who, file))
+  // 签到：凭据取法是「每次现取」——定时触发时才知道用户登录了没有。
+  const checkinStatus = deps.checkinStatus ?? (async () => {
+    const credential = await read().catch(() => undefined)
+    if (credential === undefined) return undefined
+    const endpoints = resolveEndpoints()
+    return fetchCheckinStatus({ credential, endpoints }).catch(() => undefined)
+  })
+  const claimCheckin = deps.claimCheckin ?? (async () => {
+    const credential = await read()
+    if (credential === undefined) throw new Error('WorkBuddy 未登录：请先登录 WorkBuddy')
+    const endpoints = resolveEndpoints()
+    return claimDailyCheckin({ credential, endpoints })
+  })
+  const startDaily = deps.startDaily ?? startDailyCheckin
 
   ctx.effect(() => {
     ctx.webServer.register({
@@ -261,6 +290,66 @@ export function registerWorkBuddyRoutes(ctx: WorkBuddyRouteContext, deps: WorkBu
       },
     })
   }, 'acp-agent-workbuddy-login: login route')
+
+  ctx.effect(() => {
+    ctx.webServer.register({
+      kind: 'exact',
+      path: WORKBUDDY_CHECKIN_ROUTE_PATH,
+      async handler(req, res) {
+        if (!admit(ctx, req, res)) return
+        if (req.method !== 'GET' && req.method !== 'POST') {
+          res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8', allow: 'GET, POST' })
+          res.end('method not allowed')
+          return
+        }
+        try {
+          if (req.method === 'GET') {
+            const status = await checkinStatus()
+            if (status === undefined) {
+              respondJson(res, 200, JSON.stringify({ ok: false, reason: 'WorkBuddy 未登录：请先登录 WorkBuddy' }))
+              return
+            }
+            respondJson(res, 200, JSON.stringify({ ok: true, status }))
+            return
+          }
+          const result = await claimCheckin()
+          respondJson(res, 200, JSON.stringify({
+            ok: true,
+            claimed: result.claimed,
+            alreadyClaimed: result.alreadyClaimed,
+            credit: result.credit,
+            streakDays: result.streakDays,
+            ...(result.message === undefined ? {} : { message: result.message }),
+          }))
+        } catch (error) {
+          respondJson(res, 200, JSON.stringify({
+            ok: false,
+            reason: error instanceof Error ? error.message : String(error),
+          }))
+        }
+      },
+    })
+  }, 'acp-agent-workbuddy-login: checkin route')
+
+  // 每天 10:00 自动领一次积分：定时器挂在这个 effect 里，插件卸载时随之撤销。
+  ctx.effect(() => {
+    const stop = startDaily({
+      credential: async () => read().catch(() => undefined),
+      onClaimed: result => {
+        if (result.claimed) {
+          console.info(`[acp-agent] WorkBuddy 每日签到：领到 ${String(result.credit)} 积分，连续 ${String(result.streakDays)} 天`)
+          return
+        }
+        if (result.alreadyClaimed) {
+          console.info('[acp-agent] WorkBuddy 每日签到：今天已经领过了')
+        }
+      },
+      onError: error => {
+        console.warn(`[acp-agent] WorkBuddy 每日签到没成功：${error instanceof Error ? error.message : String(error)}`)
+      },
+    })
+    return () => { stop() }
+  }, 'acp-agent-workbuddy-login: daily checkin')
 }
 
 /** 准入：被拒时状态码原样、短体固定。 */
