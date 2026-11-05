@@ -18,22 +18,28 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { AcpClient, TerminalService, StdioAcpTransport } from '../src/index.ts'
+import { AcpClient, TerminalService, StdioAcpTransport, GrokServeTransport } from '../src/index.ts'
 import type { AcpDialect, AcpTransport } from '../src/index.ts'
 import { AcpTurnRunner } from '../src/runner.ts'
 import type { ChildSessionLike, SubagentSessionHost } from '../src/subagent-sessions.ts'
-import type { AcpClientPort } from '../src/runner.ts'
+import type { AcpClientPort, StdioMcpServer } from '../src/runner.ts'
 import { adaptClient } from '../src/factory.ts'
-import { stdioArgsForDialect } from '../src/index.ts'
+import { stdioArgsForDialect, stdioEnvFor } from '../src/index.ts'
 import { AcpAssistantStream } from '../src/stream.ts'
 import { makeContentWriter, UNDELIVERED } from '../src/content-writer.ts'
 import { projectStepContent } from '../src/index.ts'
 import { claudeDialect } from '../src/index.ts'
-import { codexDialect, cursorDialect } from '../src/index.ts'
+import { codexDialect, cursorDialect, qoderDialect } from '../src/index.ts'
 import { grokDialect } from '../src/index.ts'
 import { bridgePermissions } from '../src/index.ts'
+import { DELEGATION_ROUTE_PATH } from '../src/delegation-route.ts'
 import type { StepEndReason, TurnContext } from '../src/dispatch.ts'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { randomBytes } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -601,4 +607,328 @@ describe.skipIf(!LIVE)('dispatch stack against real agents', () => {
       client.close()
     }
   }, 240_000)
+})
+
+// ───────────────────────── MCP 委派探针（Task 9）─────────────────────────
+//
+// 验的不是接管路径，而是「外部 agent 认不认 session/new 里挂的 stdio MCP
+// 服务器」：initialize / tools/list / tools/call 有没有真的到达桥接进程，
+// delegate 的结果有没有回到回合里。宿主侧没有真宿主——回调路由用进程内的
+// node:http 假宿主扮演（形状与 src/delegation-route.ts 一致：验
+// x-dsh-delegation-token 头后回一份 DelegationResult），断言到「桥接 ↔
+// 假宿主」为止；真委派实现（superpowers 仓）的联调属 Task 10。
+//
+// 观测手段是一个 tee 垫片：agent 拉起的「MCP 服务器」实为垫片，垫片再拉起
+// 真桥接进程（bridge/dsh-acp-mcp-bridge.mjs，一字不改），双向帧记账后原样
+// 转发。这是唯一能同时看清「桥接收到了哪些方法」与「agent 发没发 ping」的
+// 位置；代价是 args[0] 与生产挂载（直接是桥接路径）不同，env 与命令形状
+// 照抄生产（tests/mcp-attach.spec.ts 钉死的那份），帧内容零修改。
+
+const QODER_ACP = process.env['THREADHARBOR_QODER_ACP'] ?? 'qoderclicn'
+const GROK_CLI = process.env['THREADHARBOR_GROK_ACP'] ?? 'grok'
+
+/** 假宿主认的会话 id：桥接进程原样转发挂载时 env 里那一份，收到即证明 env 通了 */
+const PROBE_DSH_SESSION = 'probe-dsh-session'
+
+/** 真桥接进程的绝对路径（与 src/factory.ts 同一解析法：从包位置出发） */
+const PROBE_BRIDGE_PATH = fileURLToPath(new URL('../bridge/dsh-acp-mcp-bridge.mjs', import.meta.url))
+
+/** tee 垫片记下的帧：dir=in 是 agent→桥接，dir=out 是桥接→agent */
+type TeeEntry = {
+  readonly dir: 'in' | 'out'
+  readonly method?: string
+  readonly id?: number | string
+  readonly params?: Record<string, unknown>
+  readonly errorCode?: number
+  readonly isError?: boolean
+  readonly resultText?: string
+  readonly raw?: string
+}
+
+/** 假宿主：探针在测试进程内自起的回调路由，形状与生产路由一致 */
+type ProbeHost = {
+  readonly origin: string
+  readonly token: string
+  /** 每轮随机的输出标记：agent 不真调工具就编不出来 */
+  readonly nonce: string
+  readonly hits: { readonly body: Record<string, unknown> }[]
+  readonly close: () => Promise<void>
+}
+
+async function startProbeHost(): Promise<ProbeHost> {
+  const token = randomBytes(24).toString('hex')
+  const nonce = randomBytes(8).toString('hex')
+  const hits: ProbeHost['hits'] = []
+  const server = createServer((req, res) => {
+    // 只认回调路径上的 POST（与生产路由同一形状）
+    if (req.method !== 'POST' || req.url !== DELEGATION_ROUTE_PATH) {
+      res.writeHead(404).end()
+      return
+    }
+    const chunks: Buffer[] = []
+    req.on('data', (chunk: Buffer) => chunks.push(chunk))
+    req.on('end', () => {
+      // 令牌走专用请求头，不进 URL 也不进载荷（Task 5/6 的跨任务约定）
+      if (req.headers['x-dsh-delegation-token'] !== token) {
+        res.writeHead(401, { 'content-type': 'text/plain' }).end('unauthorized')
+        return
+      }
+      const raw = Buffer.concat(chunks).toString('utf8')
+      hits.push({ body: raw === '' ? {} : JSON.parse(raw) as Record<string, unknown> })
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({
+        output: `子代理答：17 + 25 = 42（探针标记 ${nonce}）`,
+        model: 'probe-fake-model',
+        childId: 'probe-child-1',
+      }))
+    })
+  })
+  await new Promise<void>(resolve => { server.listen(0, '127.0.0.1', resolve) })
+  const { port } = server.address() as AddressInfo
+  return {
+    origin: `http://127.0.0.1:${port}`,
+    token,
+    nonce,
+    hits,
+    close: () => new Promise<void>(resolve => { server.close(() => resolve()) }),
+  }
+}
+
+/** 观测垫片源码（测试在运行时写进 agent 工作目录，不进仓库固定位置） */
+const TEE_SOURCE = `// 探针观测垫片：agent 以为在跟 MCP 服务器直连；垫片把双向帧记账后原样
+// 转发给真桥接进程。对帧内容零修改，env 原样继承。
+import { spawn } from 'node:child_process'
+import { createInterface } from 'node:readline'
+import { appendFileSync } from 'node:fs'
+
+const bridgePath = process.argv[2]
+const logPath = process.argv[3]
+const child = spawn(process.execPath, [bridgePath], { stdio: ['pipe', 'pipe', 'inherit'], env: process.env })
+child.stdin.on('error', () => {})
+child.on('exit', code => { process.exit(code === null ? 0 : code) })
+
+function record(dir, line) {
+  let frame = null
+  try { frame = JSON.parse(line) } catch { frame = null }
+  if (frame === null || typeof frame !== 'object') {
+    appendFileSync(logPath, JSON.stringify({ dir, raw: String(line) }) + '\\n')
+    return
+  }
+  const entry = { dir }
+  if (frame.method !== undefined) entry.method = frame.method
+  if (frame.id !== undefined) entry.id = frame.id
+  if (frame.error !== undefined) entry.errorCode = frame.error.code
+  if (frame.result !== undefined) {
+    if (frame.result.isError === true) entry.isError = true
+    if (Array.isArray(frame.result.content)) {
+      entry.resultText = frame.result.content
+        .map(part => (part && typeof part.text === 'string') ? part.text : '')
+        .join('')
+    }
+  }
+  // tools/call 的参数是探针要核对的事实（点了哪个工具、带了什么参数）
+  if (dir === 'in' && frame.method === 'tools/call') entry.params = frame.params
+  appendFileSync(logPath, JSON.stringify(entry) + '\\n')
+}
+
+createInterface({ input: process.stdin }).on('line', line => {
+  record('in', line)
+  child.stdin.write(line + '\\n')
+})
+createInterface({ input: child.stdout }).on('line', line => {
+  record('out', line)
+  process.stdout.write(line + '\\n')
+})
+// agent 关闭 stdin（会话结束）时原样传递：桥接进程按 stdin 关闭退出
+process.stdin.on('close', () => { child.stdin.end() })
+process.stdout.on('error', error => {
+  if (error && error.code === 'EPIPE') process.exit(0)
+  throw error
+})
+`
+
+/** 一家探针的输入：命令、方言与三家特有的接线 */
+type ProbeAgent = {
+  readonly command: string
+  readonly dialect: AcpDialect
+  /** claude 不给 'default' 连问都不问 */
+  readonly modeId?: string
+  /** grok 不是 stdio 服务端，是 agent serve + WebSocket */
+  readonly viaWebSocket?: boolean
+  /** qoder 要过滤 IDE 注入的启动环境 */
+  readonly scrubEnv?: boolean
+}
+
+/** 一家探针带回的全部观测 */
+type ProbeOutcome = {
+  readonly endKind: unknown
+  readonly prose: string
+  readonly nonce: string
+  readonly hostHits: ProbeHost['hits']
+  readonly tee: TeeEntry[]
+}
+
+async function runMcpProbe(agent: ProbeAgent): Promise<ProbeOutcome> {
+  const host = await startProbeHost()
+  const cwd = await mkdtemp(join(tmpdir(), 'th-acp-mcp-probe-'))
+  const teePath = join(cwd, 'mcp-tee.mjs')
+  await writeFile(teePath, TEE_SOURCE)
+  const logPath = join(cwd, 'mcp-tee.jsonl')
+  // 条目形状照抄 factory 的挂载（stdio 变体不带 type；command 是当前 node；
+  // env 三项）。args[0] 是垫片——探针要看桥接收到了什么，垫片只记账转发。
+  const server: StdioMcpServer = {
+    name: 'dsh-delegation',
+    command: process.execPath,
+    args: [teePath, PROBE_BRIDGE_PATH, logPath],
+    env: [
+      { name: 'DSH_DELEGATION_URL', value: `${host.origin}${DELEGATION_ROUTE_PATH}` },
+      { name: 'DSH_DELEGATION_SESSION', value: PROBE_DSH_SESSION },
+      { name: 'DSH_DELEGATION_TOKEN', value: host.token },
+    ],
+  }
+
+  const transport = agent.viaWebSocket === true
+    ? await GrokServeTransport.create({ command: agent.command, cwd, onDiagnostic: () => {} })
+    : new StdioAcpTransport({
+        command: agent.command,
+        args: stdioArgsForDialect(agent.dialect),
+        cwd,
+        onDiagnostic: () => {},
+        // qoder 继承 IDE 启动标记会直接死（spawn-args.ts 的实测）；探针与
+        // 生产同一份过滤，结论才不依赖跑测时用的是哪个外壳
+        ...(agent.scrubEnv === true ? { env: stdioEnvFor(agent.dialect.id) ?? undefined } : {}),
+      })
+  const client = new AcpClient(transport, agent.dialect)
+  if (agent.dialect.id === 'grok') client.terminals = new TerminalService()
+  // 与 runStepsLive 同一套应答器：qoder 不应答权限请求会把 session/prompt 挂死
+  client.onPermissionRequest = request => bridgePermissions(request, async () => 'allowed-once')
+  client.onExtensionRequest = frame => {
+    if (agent.dialect.id !== 'cursor' || typeof frame.id !== 'number') return false
+    if (frame.method === 'cursor/ask_question') { client.reply(frame.id, { outcome: { outcome: 'skipped' } }); return true }
+    if (frame.method === 'cursor/create_plan') { client.reply(frame.id, { outcome: { outcome: 'cancelled' } }); return true }
+    return false
+  }
+
+  const appended: { type: string; payload: Record<string, unknown> }[] = []
+  const write = makeContentWriter((type, payload) => ({ seq: appended.push({ type, payload: payload as Record<string, unknown> }) }))
+  const runner = new AcpTurnRunner(adaptClient(client, agent.dialect), {
+    cwd,
+    dialect: agent.dialect,
+    mcpServers: [server],
+    ...(agent.modeId === undefined ? {} : { modeId: agent.modeId }),
+  })
+  try {
+    const result = await runner.run(
+      {
+        kind: 'enter',
+        messages: [{
+          role: 'user',
+          content: [{
+            type: 'text',
+            text: '请使用 dsh-delegation 这个 MCP 服务器提供的 delegate 工具，把「计算 17 + 25」委派给 DSH 侧的子代理，等结果返回后，把子代理返回文本里的「探针标记」原样告诉我。不要自己计算。',
+          }],
+        }],
+      },
+      {
+        sessionId: 's1',
+        position: { turn: 1, step: 1 },
+        produce: r => projectStepContent(r.frames as never[], { turn: 1, step: 1, dialect: agent.dialect }),
+        write,
+      },
+    )
+    // 垫片没被拉起 = 一帧都记不下（agent 压根没 spawn MCP 子进程）；回空表，
+    // 让握手断言红掉并如实反映，而不是让读文件把「没连」伪装成「测试崩了」
+    let tee: TeeEntry[] = []
+    try {
+      tee = readFileSync(logPath, 'utf8').split('\n').filter(line => line !== '').map(line => JSON.parse(line) as TeeEntry)
+    } catch {
+      tee = []
+    }
+    const prose = appended
+      .filter(event => event.type === 'assistant/message')
+      .flatMap(event => (event.payload['message'] as { content: { type: string; text?: string }[] }).content)
+      .filter(block => block.type === 'text')
+      .map(block => block.text ?? '')
+      .join('')
+    return { endKind: (result.end as { kind?: unknown } | undefined)?.kind, prose, nonce: host.nonce, hostHits: host.hits, tee }
+  } finally {
+    client.close()
+    await host.close()
+  }
+}
+
+/** 基础断言：initialize 与 tools/list 真的到达桥接（= 认了这个服务器并要了工具表） */
+function expectBridgeHandshake(outcome: ProbeOutcome): void {
+  const methods = outcome.tee.filter(entry => entry.dir === 'in').map(entry => entry.method)
+  expect(methods, `垫片一帧未见：agent 可能没拉起 MCP 子进程；已记录 ${JSON.stringify(outcome.tee)}`).toContain('initialize')
+  expect(methods).toContain('tools/list')
+}
+
+/** 会调用家的完整链：tools/call → 桥接转发到假宿主 → 子代理输出回到回合 */
+function expectDelegated(outcome: ProbeOutcome): void {
+  const calls = outcome.tee.filter(entry => entry.dir === 'in' && entry.method === 'tools/call')
+  expect(calls.length).toBeGreaterThanOrEqual(1)
+  for (const call of calls) {
+    expect(call.params?.['name'], '工具调用点的不是 delegate').toBe('delegate')
+  }
+  expect(outcome.hostHits.length).toBeGreaterThanOrEqual(1)
+  const hit = outcome.hostHits[0]!
+  // env 通不通看这里：桥接原样转发挂载时给的会话 id
+  expect(hit.body['sessionId']).toBe(PROBE_DSH_SESSION)
+  expect(String(hit.body['task'] ?? '').length, 'task 为空').toBeGreaterThan(0)
+  expect(String(hit.body['brief'] ?? '').length, 'brief 为空').toBeGreaterThan(0)
+  const skill = hit.body['skill']
+  expect(skill === undefined || (typeof skill === 'string' && skill.length > 0)).toBe(true)
+  // 工具结果里带着子代理的输出（含随机 nonce，不调工具就编不出来）
+  expect(outcome.tee.some(entry => (entry.resultText ?? '').includes(outcome.nonce))).toBe(true)
+  // 回合完成，且 agent 把子代理输出转述进了正文
+  expect(outcome.endKind).toBe('completed')
+  expect(outcome.prose).toContain(outcome.nonce)
+}
+
+/** 观察记录（不设门）：这家真机发没发 ping——桥接未实现 ping，发了会拿到 -32601 */
+function pingSent(outcome: ProbeOutcome): boolean {
+  return outcome.tee.some(entry => entry.dir === 'in' && entry.method === 'ping')
+}
+
+describe.skipIf(!LIVE)('MCP 委派探针：五家真机认不认客户端挂的 MCP 服务器', () => {
+  it('codex：认 MCP、列工具、调 delegate，子代理输出回到回合', async () => {
+    const outcome = await runMcpProbe({ command: CODEX_ACP, dialect: codexDialect })
+    expectBridgeHandshake(outcome)
+    expectDelegated(outcome)
+    console.log(`[mcp-probe] codex 发 ping：${pingSent(outcome)}`)
+  }, 300_000)
+
+  it('claude：认 MCP、列工具、调 delegate，子代理输出回到回合', async () => {
+    const outcome = await runMcpProbe({ command: CLAUDE_ACP, dialect: claudeDialect, modeId: 'default' })
+    expectBridgeHandshake(outcome)
+    expectDelegated(outcome)
+    console.log(`[mcp-probe] claude 发 ping：${pingSent(outcome)}`)
+  }, 300_000)
+
+  it('cursor：认 MCP、列工具；实测不调用 delegate，回合仍正常完成', async () => {
+    const outcome = await runMcpProbe({ command: CURSOR_ACP, dialect: cursorDialect })
+    expectBridgeHandshake(outcome)
+    // 实测基线（2026-11-05 控制者手工探针）：cursor 要了工具表但整回合不调
+    // delegate。钉成基线——将来「会调了」或「连都不连了」都该在这里红出来，
+    // 实测记录（docs/agent-acp/mcp-probe.md）跟着改。
+    expect(outcome.tee.filter(entry => entry.dir === 'in' && entry.method === 'tools/call')).toHaveLength(0)
+    expect(outcome.hostHits).toHaveLength(0)
+    expect(outcome.endKind).toBe('completed')
+    console.log(`[mcp-probe] cursor 发 ping：${pingSent(outcome)}`)
+  }, 300_000)
+
+  it('qoder：认 MCP、列工具、调 delegate，子代理输出回到回合', async () => {
+    const outcome = await runMcpProbe({ command: QODER_ACP, dialect: qoderDialect, scrubEnv: true })
+    expectBridgeHandshake(outcome)
+    expectDelegated(outcome)
+    console.log(`[mcp-probe] qoder 发 ping：${pingSent(outcome)}`)
+  }, 300_000)
+
+  it('grok：认 MCP、列工具、调 delegate，子代理输出回到回合（WebSocket）', async () => {
+    const outcome = await runMcpProbe({ command: GROK_CLI, dialect: grokDialect, viaWebSocket: true })
+    expectBridgeHandshake(outcome)
+    expectDelegated(outcome)
+    console.log(`[mcp-probe] grok 发 ping：${pingSent(outcome)}`)
+  }, 300_000)
 })
