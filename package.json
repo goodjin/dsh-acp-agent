@@ -67,14 +67,14 @@
       "types": "./src/delegation-route.ts",
       "default": "./src/delegation-route.ts"
     },
-    "./workbuddy-login": {
-      "types": "./src/workbuddy-route.ts",
-      "default": "./src/workbuddy-route.ts"
-    },
     "./package.json": "./package.json",
     "./qoder-login": {
-      "types": "./src/qoder-route.ts",
-      "default": "./src/qoder-route.ts"
+      "types": "./src/qoder-login.ts",
+      "default": "./src/qoder-login.ts"
+    },
+    "./workbuddy-login": {
+      "types": "./src/workbuddy-login.ts",
+      "default": "./src/workbuddy-login.ts"
     }
   },
   "files": [
@@ -131,41 +131,42 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-api-session-controller": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-session": "0.2.0-rc.2",
     "@deepseek-ai/schemastery": "^3.18.1",
-    "proper-lockfile": "^4.1.2",
-    "@deepseek-ai/dsh-session": "0.2.0-rc.2"
+    "proper-lockfile": "^4.1.2"
   },
   "devDependencies": {
-    "@types/proper-lockfile": "^4.1.4",
-    "@types/qrcode": "^1.5.6",
-    "@types/react": "^18.2.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "typescript": "^5.9.2",
-    "vitest": "^3.2.4",
-    "@types/node": "^24.0.0",
     "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-ui-chat": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.2.0-rc.2",
     "@deepseek-ai/dsh-client-ui-layout": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-model-selection": "0.2.0-rc.2",
     "@deepseek-ai/dsh-client-ui-primitives": "0.2.0-rc.2",
     "@deepseek-ai/dsh-client-ui-renderer": "0.2.0-rc.2",
     "@deepseek-ai/dsh-client-ui-sidebar": "0.2.0-rc.2",
     "@deepseek-ai/dsh-client-ui-slots": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-client-ui-conversation": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-client-ui-chat": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-client-ui-model-selection": "0.2.0-rc.2",
+    "@goodjin2/dsh-model-kit": "link:../dsh-model-kit",
+    "@types/node": "^24.0.0",
+    "@types/proper-lockfile": "^4.1.4",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^18.2.0",
+    "lightningcss": "^1.30.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "tsdown": "^0.15.0",
-    "lightningcss": "^1.30.1"
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
   },
   "peerDependencies": {
+    "@deepseek-ai/dsh-client-ui-chat": ">=0.2.0-rc.2 <0.3",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.2.0-rc.2 <0.3",
     "@deepseek-ai/dsh-client-ui-layout": ">=0.2.0-rc.2 <0.3",
+    "@deepseek-ai/dsh-client-ui-model-selection": ">=0.2.0-rc.2 <0.3",
     "@deepseek-ai/dsh-client-ui-primitives": ">=0.2.0-rc.2 <0.3",
     "@deepseek-ai/dsh-client-ui-renderer": ">=0.2.0-rc.2 <0.3",
     "@deepseek-ai/dsh-client-ui-sidebar": ">=0.2.0-rc.2 <0.3",
     "@deepseek-ai/dsh-client-ui-slots": ">=0.2.0-rc.2 <0.3",
-    "react": "^18.2.0",
-    "@deepseek-ai/dsh-client-ui-conversation": ">=0.2.0-rc.2 <0.3",
-    "@deepseek-ai/dsh-client-ui-chat": ">=0.2.0-rc.2 <0.3",
-    "@deepseek-ai/dsh-client-ui-model-selection": ">=0.2.0-rc.2 <0.3"
+    "react": "^18.2.0"
   },
   "bin": {
     "doubao-acp": "./lib/src/doubao/main.js"

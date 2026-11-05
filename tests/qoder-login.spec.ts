@@ -6,8 +6,8 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { LOGIN_PATH, MODELS_PATH, SESSION_PATH, registerQoderRoutes } from '../src/qoder-route.ts'
-import type { WorkBuddyRouteContext } from '../src/workbuddy-route.ts'
+import { LOGIN_PATH, MODELS_PATH, SESSION_PATH, registerQoderRoutes } from '../src/qoder-login.ts'
+import type { WorkBuddyRouteContext } from '../src/workbuddy-login.ts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 const credential = { accessToken: 'secret-access', refreshToken: 'secret-refresh', machineId: 'machine', expiresAt: Date.now() + 3600_000 }

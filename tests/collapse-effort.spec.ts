@@ -19,7 +19,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { collapseEffortModels, effortLabelOf } from '../src/catalog.ts'
+import { collapseEffortModels, collapsedToCatalog, effortLabelOf } from '@goodjin2/dsh-model-kit'
 
 describe('collapseEffortModels', () => {
   it('把同一基础模型的多个 [强度] 归并成一个', () => {
@@ -33,17 +33,23 @@ describe('collapseEffortModels', () => {
     expect(result[0]?.displayName).toBe('GPT-6-Astra')
   })
 
-  it('归并后附上各强度的 efforts（标签只写强度本身，wire id 保持原样）', () => {
+  it('归并后附上各强度的 efforts（只收 wire 值，标签由 collapsedToCatalog 现算）', () => {
     const result = collapseEffortModels([
       { id: 'gpt-6-astra[low]', name: 'GPT-6-Astra (low)' },
       { id: 'gpt-6-astra[high]', name: 'GPT-6-Astra (high)' },
     ])
     const efforts = result[0]?.efforts
-    expect(efforts?.map(e => e.id)).toEqual(['low', 'high'])
+    expect(efforts).toEqual(['low', 'high'])
     // 选择器把 effort 当模型下的一档渲染，模型名已在上面一行，这里只留档位单词。
-    expect(efforts?.find(e => e.id === 'high')?.name).toBe('High')
-    expect(efforts?.find(e => e.id === 'low')?.name).toBe('Low')
-    expect(efforts?.find(e => e.id === 'high')?.wireId).toBe('gpt-6-astra[high]')
+    // 标签不落在折叠后的清单上，由 collapsedToCatalog 用 effortLabelOf 现拼。
+    expect(effortLabelOf('high')).toBe('High')
+    expect(effortLabelOf('low')).toBe('Low')
+    // 目录里发布的 reasoning.efforts 带 { id, name }。
+    const published = collapsedToCatalog('acp:acp-codex', result[0]!)
+    expect(published.reasoning?.efforts).toEqual([
+      { id: 'low', name: 'Low' },
+      { id: 'high', name: 'High' },
+    ])
   })
 
   it('裸 id（无强度后缀）原样保留，不带 efforts', () => {
@@ -95,7 +101,7 @@ describe('collapseEffortModels', () => {
       { id: 'm[ultra]', name: 'M (ultra)' },
     ])
     expect(result).toHaveLength(1)
-    expect(result[0]?.efforts?.map(e => e.id)).toEqual(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
+    expect(result[0]?.efforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
   })
 })
 
@@ -130,8 +136,10 @@ describe('强度标签只写强度本身', () => {
     const collapsed = collapseEffortModels(models)
     expect(collapsed).toHaveLength(1)
     expect(collapsed[0]?.displayName).toBe('6.1 Sol')
-    expect(collapsed[0]?.efforts?.map(effort => effort.name)).toEqual(['Low', 'Medium', 'High', 'xHigh', 'Max', 'Ultra'])
-    // wire id 仍是一字不差的组合 id（选择要能拼回去）。
-    expect(collapsed[0]?.efforts?.map(effort => effort.wireId)).toEqual(models.map(model => model.id))
+    expect(collapsed[0]?.efforts?.map(id => effortLabelOf(id))).toEqual(['Low', 'Medium', 'High', 'xHigh', 'Max', 'Ultra'])
+    // 选择器宣告的 reasoning.efforts 由 collapsedToCatalog 拼出，wire id 仍能一字不差拼回。
+    const published = collapsedToCatalog('acp:acp-codex', collapsed[0]!)
+    expect(published.reasoning?.efforts?.map(e => e.id)).toEqual(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
+    expect(published.id).toBe('gpt-6.1-sol')
   })
 })

@@ -18,8 +18,8 @@ import {
   WORKBUDDY_LOGIN_ROUTE_PATH,
   WORKBUDDY_MODELS_ROUTE_PATH,
   WORKBUDDY_SESSION_ROUTE_PATH,
-} from '../src/workbuddy-route.ts'
-import type { WorkBuddyRouteContext } from '../src/workbuddy-route.ts'
+} from '../src/workbuddy-login.ts'
+import type { WorkBuddyRouteContext } from '../src/workbuddy-login.ts'
 
 type RouteHandler = (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
 interface CapturedRoute {

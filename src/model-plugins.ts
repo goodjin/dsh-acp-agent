@@ -8,7 +8,7 @@
  * asked in turn and declines by returning nothing.
  */
 
-import type { CatalogTurnRequest } from './catalog.ts'
+import type { ModelTurnRequest } from '@goodjin2/dsh-model-kit'
 import { minimaxiModelStream } from './minimaxi-model.ts'
 import type { PresetConfig } from './registry.ts'
 import { pairToolResults } from './tool-pairing.ts'
@@ -29,7 +29,7 @@ export function modelPluginStream(
     /** 把某个 agent 自报的模型清单写进目录账本（选择器以它为准）。 */
     readonly onRuntimeModels?: ((presetId: string, models: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[]) => void) | undefined
   },
-): (presetId: string, request: CatalogTurnRequest) => AsyncIterable<GlmStreamChunk | MiniMaxStreamChunk | WorkBuddyStreamChunk> | undefined {
+): (presetId: string, request: ModelTurnRequest) => AsyncIterable<GlmStreamChunk | MiniMaxStreamChunk | WorkBuddyStreamChunk> | undefined {
   const plugins = [zcodeModelStream(config), minimaxiModelStream(config), workBuddyModelStream(config, deps), qoderModelStream(config, deps)]
   return (presetId, request) => {
     const paired = withPairedResults(request)
@@ -50,7 +50,7 @@ export function modelPluginStream(
  * call that never got its result has it written at the tail of the log — and
  * the provider refuses such a request outright.
  */
-function withPairedResults(request: CatalogTurnRequest): CatalogTurnRequest {
+function withPairedResults(request: ModelTurnRequest): ModelTurnRequest {
   const messages = Array.isArray(request.messages) ? request.messages : []
   return { ...request, messages: pairToolResults(messages) }
 }

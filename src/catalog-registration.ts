@@ -14,41 +14,10 @@ import type { AcpDialect } from './index.ts'
 import { isModelBackedAgent } from './model-plugins.ts'
 import type { AcpPresetConfig, PresetConfig } from './registry.ts'
 
-/**
- * One model as a live `session/new` reply reported it.
- *
- * The same shape `AcpDialect.readModels` returns, keyed by preset so several
- * configured agents each keep their own report.
- */
-export type ReportedModel = { readonly id: string; readonly name: string; readonly description?: string }
-
-/**
- * The models the agents themselves reported, per preset.
- *
- * The picker is meant to serve what the agent serves — not the operator's
- * configured guess that predates the first turn. The runner reads the list off
- * each `session/new` reply and records it here; the catalog adapter prefers
- * this report over the configured list the moment one exists.
- */
-export interface RuntimeModels {
-  /** Record (or replace) one preset's report. A re-opened session reports afresh. */
-  record(presetId: string, models: readonly ReportedModel[]): void
-  /** The preset's latest report, or `undefined` while none has arrived. */
-  modelsOf(presetId: string): readonly ReportedModel[] | undefined
-}
-
-/** One in-memory report ledger, shared by the runner seam and the catalog adapter. */
-export function runtimeModels(): RuntimeModels {
-  const byPreset = new Map<string, readonly ReportedModel[]>()
-  return {
-    record: (presetId, models) => {
-      // Keep only entries an agent could actually serve: a model names itself
-      // with a wire id, and anything else would render as a broken picker row.
-      byPreset.set(presetId, models.filter(model => typeof model?.id === 'string'))
-    },
-    modelsOf: presetId => byPreset.get(presetId),
-  }
-}
+// 运行时清单账本已迁到 @goodjin2/dsh-model-kit；这里继续用，并把对外的名字再导出一层，
+// 保持本仓既有引用路径（service.ts / entry.ts / plugin.ts / 各 spec）不变。
+export { runtimeModels } from '@goodjin2/dsh-model-kit'
+export type { ReportedModel, RuntimeModels } from '@goodjin2/dsh-model-kit'
 
 /**
  * The provider routes this configuration adds to the catalog.

@@ -1,6 +1,6 @@
 /** Host-only login flow; the browser receives status and the PKCE challenge, never credentials. */
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { WorkBuddyRouteContext } from './workbuddy-route.ts'
+import type { WorkBuddyRouteContext } from './workbuddy-login.ts'
 import { attachAccount, fetchModels, pollForToken, readCredential, startLogin, writeCredential } from './qoder/index.ts'
 import { fetchQoderAccount } from './qoder/auth.ts'
 import { readSelection, writeSelection } from './model-selection.ts'

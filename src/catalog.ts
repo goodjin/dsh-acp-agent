@@ -20,191 +20,13 @@ import type { PresetConfig } from './registry.ts'
 import { baseIdOf } from './selection.ts'
 import { GatewayChunkQueue } from './gateway.ts'
 import type { GatewayChunk, GatewaySink } from './gateway.ts'
+import { collapseEffortModels, collapsedToCatalog, presetOfRoute } from '@goodjin2/dsh-model-kit'
+import type { CatalogModel } from '@goodjin2/dsh-model-kit'
 
-/** One model as the catalog publishes it. */
-export type CatalogModel = {
-  readonly provider: string
-  readonly id: string
-  readonly name: string
-  readonly description?: string
-  /**
-   * Reasoning efforts this model offers, when the agent publishes one model per
-   * effort as `base[effort]`. Absent for bare-id agents — DSH's picker renders a
-   * reasoning sub-control exactly when this is present, which is what turns the
-   * effort into a separate axis instead of N duplicate rows.
-   */
-  readonly reasoning?: { readonly efforts: readonly { readonly id: string; readonly name: string }[] }
-}
-
-/**
- * One collapsed base model as the catalog publishes it: base id, base display
- * name, the declared description, and — only when the agent publishes efforts —
- * a `reasoning.efforts` array, which is the signal DSH's picker reads to render
- * the effort as a separate choice instead of one row per effort.
- *
- * Deliberately omits `defaultEffort`: DSH's picker treats an absent default as
- * "show a Provider default row and pre-select nothing" (it synthesizes that row
- * only when `defaultEffort` is undefined), which is the honest first paint — the
- * agent picks its own default until the user chooses an effort. Setting one here
- * would silently pre-select an effort the user never chose.
- */
-function collapsedToCatalog(
-  provider: string,
-  model: CollapsedModel,
-  declaredEfforts?: readonly { readonly id: string; readonly name?: string }[],
-): CatalogModel {
-  // 档位来源有两条：模型 id 里归并出来的（codex 那种 `base[effort]`），或者 preset
-  // 声明的（claude/grok 的会话级选项、zcode/minimax 这种模型插件）。前者优先——
-  // 它带着 wire id，能一字不差拼回去。
-  const efforts = model.efforts !== undefined
-    ? model.efforts.map(effort => ({ id: effort.id, name: effort.name }))
-    : declaredEfforts?.map(effort => ({ id: effort.id, name: effort.name ?? effortLabelOf(effort.id) }))
-  return {
-    provider,
-    id: model.baseId,
-    name: model.displayName,
-    ...(model.description === undefined ? {} : { description: model.description }),
-    ...(efforts === undefined || efforts.length === 0 ? {} : { reasoning: { efforts } }),
-  }
-}
-
-/** One selectable reasoning effort, as a model the agent offers it. */
-export type CatalogEffort = {
-  /** The wire value the agent selects on — the `[suffix]` after the base id. */
-  readonly id: string
-  /** Human label for the effort alone（`Low`/`High`/`xHigh`…），不带模型名前缀。 */
-  readonly name: string
-  /** The full wire id this effort stands for (`base[id]`), so a selection re-attaches it verbatim. */
-  readonly wireId: string
-}
-
-/** A model after collapsing same-base entries: one base, its efforts (absent when the agent offers none). */
-export type CollapsedModel = {
-  /** The base wire id, with any `[effort]` suffix stripped. */
-  readonly baseId: string
-  /** The display name for the single base entry. */
-  readonly displayName: string
-  /** The declared description from the agent's report, or undefined. */
-  readonly description?: string
-  /** The efforts this model offers, or undefined when the agent publishes bare ids. */
-  readonly efforts: readonly CatalogEffort[] | undefined
-}
-
-/**
- * 强度的显示名：只写强度本身，不重复模型名。
- *
- * 真机清单里 codex 每一项都叫 `<模型> (low)` 这种，选择器把 effort 当**模型下的一档**
- * 渲染，于是下拉里出现「6.1 Sol (low)」——模型名在上面已经有了，这里再写一遍既长又
- * 分不清档位。按档位名给独立单词：`low` → `Low`、`xhigh` → `xHigh`、`max` → `Max`，
- * 未知后缀首字母大写兜底（不猜语义，也不把它丢掉）。
- * @param effort - `[suffix]` 里的原始写法。
- * @returns 只含强度本身的标签。
- */
-export function effortLabelOf(effort: string): string {
-  const known: Record<string, string> = {
-    none: 'None',
-    off: 'Off',
-    minimal: 'Minimal',
-    low: 'Low',
-    medium: 'Medium',
-    high: 'High',
-    xhigh: 'xHigh',
-    max: 'Max',
-    ultra: 'Ultra',
-  }
-  const normalized = effort.trim().toLowerCase()
-  const label = known[normalized]
-  if (label !== undefined) return label
-  return normalized === '' ? effort : `${normalized.slice(0, 1).toUpperCase()}${normalized.slice(1)}`
-}
-
-/**
- * Split a model id into its base and reasoning-effort suffix.
- *
- * Some agents (codex-acp, confirmed on a live `session/new` 2026-10-12) publish
- * one model per effort as `base[effort]` — six genuinely distinct wire ids, not a
- * display label. Others (claude, grok) publish bare ids with no suffix. This
- * returns the split for a suffixed id and `undefined` effort for a bare one, so
- * the caller can collapse same-base entries without assuming a fixed vocabulary.
- */
-function splitEffort(id: string): { base: string; effort: string } | undefined {
-  const open = id.lastIndexOf('[')
-  if (open === -1 || !id.endsWith(']')) return undefined
-  const base = id.slice(0, open)
-  const effort = id.slice(open + 1, -1)
-  if (base === '' || effort === '' || effort.includes(']') || effort.includes('[')) return undefined
-  return { base, effort }
-}
-
-/**
- * Collapse same-base models into one entry and collect their efforts.
- *
- * This is what makes "reasoning effort its own choice" and "no duplicate models"
- * hold at once: a model published as `base[low]`…`base[ultra]` becomes a single
- * `base` entry carrying every effort, so DSH's picker shows the model once and
- * offers the effort as a separate axis (it renders a reasoning sub-control
- * exactly when the model advertises `reasoning.efforts`). A bare-id agent is
- * returned unchanged — no invented efforts, no collapsed rows.
- *
- * The base display name keeps what the agent reported; each effort is labelled by
- * the effort alone（`Low`/`High`…，见 {@link effortLabelOf}），because the picker
- * already shows the model name above the effort control。The base id is the most
- * common spelling among a model's entries (first wins ties),
- * which is stable because a model's entries share one spelling in practice.
- * @param models - The models one preset's agent offers, possibly with `[effort]` suffixes.
- * @returns One entry per base model, in first-seen order, efforts in first-seen order.
- */
-export function collapseEffortModels(models: readonly { id: string; name: string; description?: string }[]): CollapsedModel[] {
-  const order: string[] = []
-  const byBase = new Map<string, { wireId?: string; displayName: string; description?: string; count: number; efforts: CatalogEffort[] }>()
-  for (const model of models) {
-    const split = splitEffort(model.id)
-    if (split === undefined) {
-      // Bare-id agent (claude, grok): collapse by display name, not wire id.
-      // claude publishes five entries (default/opus/fable/sonnet/haiku) that all
-      // display as "GLM-5.3"; without name-based dedup the picker shows five
-      // identical rows. The first entry's real wire id is kept as baseId so a
-      // selection re-attaches to a real id, not the display label.
-      const existing = byBase.get(model.name)
-      if (existing === undefined) {
-        order.push(model.name)
-        byBase.set(model.name, { wireId: model.id, displayName: model.name, count: 1, ...(model.description === undefined ? {} : { description: model.description }), efforts: undefined as unknown as CatalogEffort[] })
-      } else {
-        existing.count += 1
-        if (existing.description === undefined && model.description !== undefined) existing.description = model.description
-      }
-      continue
-    }
-    const existing = byBase.get(split.base)
-    if (existing === undefined) {
-      order.push(split.base)
-      byBase.set(split.base, { displayName: baseName(model.name, split.effort), ...(model.description === undefined ? {} : { description: model.description }), count: 1, efforts: [{ id: split.effort, name: effortLabelOf(split.effort), wireId: model.id }] })
-      continue
-    }
-    existing.count += 1
-    if (existing.description === undefined && model.description !== undefined) existing.description = model.description
-    if (existing.efforts !== undefined && !existing.efforts.some(effort => effort.id === split.effort)) {
-      existing.efforts.push({ id: split.effort, name: effortLabelOf(split.effort), wireId: model.id })
-    }
-  }
-  return order.map(base => {
-    const entry = byBase.get(base) as { wireId?: string; displayName: string; description?: string; count: number; efforts: CatalogEffort[] }
-    // Bare-id rows carry the real wire id; suffixed rows use the stripped base id.
-    return { baseId: entry.wireId ?? base, displayName: entry.displayName, ...(entry.description === undefined ? {} : { description: entry.description }), efforts: entry.efforts }
-  })
-}
-
-/**
- * The accumulator entry for one base model, with `description` omitted entirely
- * when the agent reported none — `exactOptionalPropertyTypes` rejects an explicit
- * `undefined` for an optional property, so the field is left off rather than set.
- */
-/** Strip a trailing ` (effort)` from a display name, leaving the base model's label. */
-function baseName(name: string, effort: string): string {
-  const suffix = `(${effort})`
-  return name.endsWith(suffix) ? name.slice(0, -suffix.length).trim() : name
-}
-
+// 路由命名、档位折叠、目录模型类型已迁到 @goodjin2/dsh-model-kit；这里继续用它们，
+// 并把对外的名字再导出一层，保持本仓既有的引用路径（switch.ts / index.ts / 各 spec）不变。
+export { collapseEffortModels, collapsedToCatalog, presetOfRoute, providerRoute } from '@goodjin2/dsh-model-kit'
+export type { CatalogModel } from '@goodjin2/dsh-model-kit'
 
 /** What the adapter needs from the outside world. */
 export type CatalogDeps = {
@@ -252,23 +74,6 @@ export type CatalogDeps = {
   modelStream?(presetId: string, request: CatalogTurnRequest): AsyncIterable<GlmStreamChunk | MiniMaxStreamChunk | WorkBuddyStreamChunk> | undefined
 }
 
-const ROUTE_PREFIX = 'acp:'
-
-/**
- * The provider route for one preset.
- *
- * Derived from the preset id rather than stored, so it is stable across calls
- * and carries the preset back with it.
- */
-export function providerRoute(presetId: string): string {
-  return `${ROUTE_PREFIX}${presetId}`
-}
-
-/** The preset a route stands for, or `undefined` for a native route. */
-export function presetOfRoute(route: string): string | undefined {
-  return route.startsWith(ROUTE_PREFIX) ? route.slice(ROUTE_PREFIX.length) : undefined
-}
-
 /** Which preset serves one exact model, if any. */
 export function presetForModel(
   config: PresetConfig,
@@ -288,20 +93,6 @@ export function presetForModel(
   return (deps.runtimeModelsOf?.(presetId) ?? deps.modelsOf(presetId)).some(model => baseIdOf(model.id) === base)
     ? presetId
     : undefined
-}
-
-/** Names shown in the selector for the agents we drive. */
-const DISPLAY: Readonly<Record<string, string>> = {
-  grok: 'Grok',
-  claude: 'Claude',
-  codex: 'Codex',
-  cursor: 'Cursor',
-  qoder: 'Qoder',
-  'qoder-global': 'Qoder 国际版',
-  zcode: 'ZCode',
-  minimaxi: 'MiniMax',
-  workbuddy: 'WorkBuddy',
-  doubao: '豆包',
 }
 
 /**
@@ -357,12 +148,14 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
       // 先让模型插件把清单备好（它自己登录、自己问上游），再回答。
       await deps.ensureModels?.(presetId)
       const models = modelsFor(presetId)
+      // 声明的强度只取 wire 值：各家预设的 effort 名都等于 effortLabelOf(值)，
+      // 交给 kit 的 collapsedToCatalog 现算标签，结果与本仓旧实现一字不差。
+      const declaredEfforts = config.presets[presetId]?.efforts?.map(effort => effort.id)
       // Collapse same-base entries (one model published as base[low]…base[ultra])
       // into a single row carrying its efforts, so the picker shows the model
       // once and reasoning effort becomes a separate axis rather than N rows.
       // A preset that opts out (cursor, whose ids carry a config suffix rather
       // than an effort) gets one row per id, uncollapsed.
-      const declaredEfforts = config.presets[presetId]?.efforts
       if (config.presets[presetId]?.collapseEfforts === false) {
         return models.map(model => collapsedToCatalog(provider, {
           baseId: model.id,
@@ -401,7 +194,7 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
         ? undefined
         : collapseEffortModels(modelsFor(presetId)).find(entry => entry.baseId === model)
       if (collapsed === undefined) return { provider, id: model, name: model }
-      return collapsedToCatalog(provider, collapsed, config.presets[presetId ?? '']?.efforts)
+      return collapsedToCatalog(provider, collapsed, config.presets[presetId ?? '']?.efforts?.map(effort => effort.id))
     },
 
     // An async generator rather than a synchronous throw: the switch hook is
@@ -486,6 +279,20 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
     }),
   }
   return adapter
+}
+
+/** Names shown in the selector for the agents we drive. */
+const DISPLAY: Readonly<Record<string, string>> = {
+  grok: 'Grok',
+  claude: 'Claude',
+  codex: 'Codex',
+  cursor: 'Cursor',
+  qoder: 'Qoder',
+  'qoder-global': 'Qoder 国际版',
+  zcode: 'ZCode',
+  minimaxi: 'MiniMax',
+  workbuddy: 'WorkBuddy',
+  doubao: '豆包',
 }
 
 /** The adapter surface the runtime consumes, stated here so this compiles alone. */
