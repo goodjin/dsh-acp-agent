@@ -27,6 +27,11 @@ import type { QoderEndpoints } from './endpoints.ts'
 export const QODER_CLIENT_ID = 'e883ade2-e6e3-4d6d-adf7-f92ceff5fdcb'
 
 /** 一次登录的凭据。 */
+export type QoderAccount = {
+  readonly uid: string
+  readonly nickname?: string | undefined
+}
+
 export type QoderCredential = {
   /** 模型请求的 Bearer（worker 叫它 security_oauth_token / access_token）。 */
   readonly accessToken: string
@@ -115,6 +120,36 @@ export async function pollForToken(
       throw new Error(`Qoder 登录失败（HTTP ${response.status}）`)
     }
     return credentialOfPoll(await response.json(), login.machineId)
+  }
+}
+
+/**
+ * 取账号资料（昵称）。
+ *
+ * 登录应答里不一定带 `user_name`；账号中心这个接口一定给——`{id, name, …}`。
+ * 界面上显示昵称比显示一串 uid 像样得多。
+ * @param options - 访问令牌、端点与 fetch 实现。
+ * @returns 账号信息；取不到时是 `undefined`。
+ */
+export async function fetchQoderAccount(options: {
+  readonly accessToken: string
+  readonly endpoints?: QoderEndpoints | undefined
+  readonly fetchImpl?: typeof fetch | undefined
+}): Promise<QoderAccount | undefined> {
+  const endpoints = options.endpoints ?? resolveEndpoints()
+  const fetchImpl = options.fetchImpl ?? fetch
+  try {
+    const response = await fetchImpl(endpoints.accountUrl, {
+      headers: { authorization: `Bearer ${options.accessToken}`, accept: 'application/json' },
+    })
+    if (!response.ok) return undefined
+    const data = record(await response.json() as unknown)
+    const uid = data['id']
+    if (typeof uid !== 'string' || uid === '') return undefined
+    const nickname = data['name']
+    return { uid, ...(typeof nickname === 'string' && nickname !== '' ? { nickname } : {}) }
+  } catch {
+    return undefined
   }
 }
 
