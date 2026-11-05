@@ -1,5 +1,5 @@
 /**
- * 设置里的「WorkBuddy 模型」勾选界面。
+ * 设置里的「模型」勾选界面。
  *
  * 这里钉住：整份清单都要列出来（勾掉的也得看得见，否则站点上新了模型就再也找不
  * 回来）、勾选状态要跟宿主给的一致、勾一下要存回去、不能带工具的模型要标出来。
@@ -63,8 +63,8 @@ describe('问宿主', () => {
       }), { status: 200 })
     }) as unknown as typeof fetch
 
-    const list = await readModelChecklist('/acp-agent/workbuddy/models', { fetchImpl })
-    expect(calls[0]).toContain('/acp-agent/workbuddy/models')
+    const list = await readModelChecklist('/acp-agent/qoder-global/models', { fetchImpl })
+    expect(calls[0]).toContain('/acp-agent/qoder-global/models')
     expect(list.models).toHaveLength(3)
     expect(list.selected).toEqual(['glm-5.3'])
     expect(list.custom).toBe(false)
@@ -77,7 +77,7 @@ describe('问宿主', () => {
       return new Response(JSON.stringify({ ok: true, selected: ['a'] }), { status: 200 })
     }) as unknown as typeof fetch
 
-    await saveModelChecklist('/acp-agent/workbuddy/models', ['a', 'b'], { fetchImpl })
+    await saveModelChecklist('/acp-agent/qoder-global/models', ['a', 'b'], { fetchImpl })
     expect(bodies).toEqual([{ ids: ['a', 'b'] }])
   })
 })

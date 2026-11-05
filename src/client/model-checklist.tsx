@@ -156,7 +156,7 @@ export function modelChecklistView(props: ModelChecklistViewProps): ReactNode {
         <span data-model-name="true">{model.name}</span>
         <code data-model-id="true">{model.id}</code>
         {model.supportsToolCall === false
-          ? <span data-model-notool={true}>{t('workbuddy.models.noTool')}</span>
+          ? <span data-model-notool={true}>{t('modelChecklist.noTool')}</span>
           : null}
       </label>
     )
@@ -167,30 +167,30 @@ export function modelChecklistView(props: ModelChecklistViewProps): ReactNode {
       data-model-checklist="root"
       style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}
     >
-      <h4 data-model-title={true}>{t('workbuddy.models.title')}</h4>
+      <h4 data-model-title={true}>{t('modelChecklist.title')}</h4>
       <input
         type="search"
         data-model-search={true}
         value={query}
-        placeholder={t('workbuddy.models.search')}
+        placeholder={t('modelChecklist.search')}
         disabled={props.busy === true}
         onChange={(event: { target: { value: string } }) => { props.onQueryChange?.(event.target.value) }}
       />
       <p data-model-summary={true}>
-        {t('workbuddy.models.summary', {
+        {t('modelChecklist.summary', {
           total: props.list.models.length,
           selected: props.list.selected.length,
         })}
       </p>
       {props.list.custom
-        ? <span data-model-custom={true}>{t('workbuddy.models.custom')}</span>
-        : <span data-model-default={true}>{t('workbuddy.models.defaultHint')}</span>}
+        ? <span data-model-custom={true}>{t('modelChecklist.custom')}</span>
+        : <span data-model-default={true}>{t('modelChecklist.defaultHint')}</span>}
       <div
         data-model-list={true}
         style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}
       >
         {rows.length === 0
-          ? <p data-model-empty={true}>{t('workbuddy.models.empty')}</p>
+          ? <p data-model-empty={true}>{t('modelChecklist.empty')}</p>
           : rows}
       </div>
       <button
@@ -199,7 +199,7 @@ export function modelChecklistView(props: ModelChecklistViewProps): ReactNode {
         disabled={props.busy === true}
         onClick={() => { props.onRestoreDefault?.() }}
       >
-        {t('workbuddy.models.restore')}
+        {t('modelChecklist.restore')}
       </button>
     </div>
   )

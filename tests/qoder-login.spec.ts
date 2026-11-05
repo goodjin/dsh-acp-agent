@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { LOGIN_PATH, MODELS_PATH, SESSION_PATH, registerQoderRoutes } from '../src/qoder-login.ts'
-import type { WorkBuddyRouteContext } from '../src/workbuddy-login.ts'
+import type { RouteContext } from '../src/openai-stream/route-context.ts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 const credential = { accessToken: 'secret-access', refreshToken: 'secret-refresh', machineId: 'machine', expiresAt: Date.now() + 3600_000 }
@@ -31,7 +31,7 @@ function harness(options: {
   const box: { signal?: AbortSignal } = {}
   const poll = options.poll ?? vi.fn((_login, opts) => { box.signal = opts.signal; return new Promise<never>(() => {}) })
   let dispose: (() => void) | undefined
-  const ctx: WorkBuddyRouteContext = {
+  const ctx: RouteContext = {
     effect: fn => { dispose = fn() as () => void },
     connection: { admit: req => req.headers.cookie ? { peer: {} } : { rejection: 401 } },
     webServer: { register: route => { routes.set(route.path, route.handler); return () => { routes.delete(route.path) } } },

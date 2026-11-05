@@ -11,13 +11,12 @@
 | **Qoder** | ✅ 已实现，已实测 | stdio（`--acp`） | [qoder.md](./qoder.md) |
 | **zcode** | ✅ 模型插件 | 直连 GLM，不走 ACP | [zcode.md](./zcode.md) |
 | **minimaxi** | ✅ 模型插件，已实测 | 复用 MiniMax Code 登录，直连托管网关 | [minimaxi.md](./minimaxi.md) |
-| **workbuddy** | ✅ 模型插件 | 插件自己走账号登录，直连兼容 OpenAI 的模型端点 | [workbuddy.md](./workbuddy.md) |
 
 五家共用的代码在本包根目录：传输、客户端、投影、审批桥接是共用的，**每个 agent 只提供一个 dialect**。
 
-> **zcode、minimaxi 与 workbuddy 不在下面的字段对照表里。** 它们是模型列表里单独的三组，不走 ACP，对话由 DSH 自己的循环处理。见 [zcode.md](./zcode.md)、[minimaxi.md](./minimaxi.md) 与 [workbuddy.md](./workbuddy.md)。
+> **zcode 与 minimaxi 不在下面的字段对照表里。** 它们是模型列表里单独的两组，不走 ACP，对话由 DSH 自己的循环处理。见 [zcode.md](./zcode.md) 与 [minimaxi.md](./minimaxi.md)。
 >
-> 这三组贴着 ZCode、MiniMax Code 与 WorkBuddy 三个上游走（凭据、接口、模型清单、额度口径）。上游更新时如何判断要不要跟，见 [上游同步说明](../upstream-sync.zh.md)。
+> 这两组贴着 ZCode 与 MiniMax Code 两个上游走（凭据、接口、模型清单、额度口径）。上游更新时如何判断要不要跟，见 [上游同步说明](../upstream-sync.zh.md)。
 
 ## 五家的字段差异对照
 

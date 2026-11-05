@@ -1,7 +1,7 @@
 /**
- * WorkBuddy 国内网关的「渠道校验」与我们的应对。
+ * 国内网关的「渠道校验」与我们的应对。
  *
- * 国内网关（copilot.tencent.com / www.workbuddy.cn）对 **system、developer、
+ * 国内网关（如 copilot.tencent.com）对 **system、developer、
  * assistant** 消息做内容校验：认出某些「只有官方客户端才有的指纹」就回
  * `400 / 11128 Illegal API invocation from an unapproved channel`，一句回复都
  * 没有。国际网关不做这个校验。

@@ -22,7 +22,19 @@ import {
   saveModelChecklist,
 } from './model-checklist.tsx'
 import type { ModelChecklistState } from './model-checklist.tsx'
-import type { WorkBuddyAccountSlotHost } from './workbuddy-account-section.tsx'
+
+/** 设置侧栏的插槽面。 */
+export type AccountSlotHost = {
+  inject(key: string, callback: () => unknown): unknown
+  register(options: {
+    name: string
+    id?: string
+    order?: number
+    label?: () => string
+    locale?: string
+    inject?: () => unknown
+  }, component: unknown): unknown
+}
 
 /** 设置里的行 id。 */
 export const QODER_ACCOUNT_SECTION_ID = 'acp-agent-qoder-account'
@@ -318,7 +330,7 @@ export function QoderAccountSection(props: { readonly t?: QoderAccountT }): Reac
  * @param t - 文案座位。
  */
 export function registerQoderAccountSection(
-  slots: WorkBuddyAccountSlotHost,
+  slots: AccountSlotHost,
   label: () => string,
   t?: QoderAccountT,
 ): void {

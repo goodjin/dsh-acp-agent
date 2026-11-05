@@ -35,7 +35,7 @@ vi.mock('../src/model-selection.ts', () => ({
   readSelection: async () => undefined,
   writeSelection: async () => {},
   clearSelection: async () => {},
-  selectionFilePath: () => '/tmp/workbuddy-test-selection.json',
+  selectionFilePath: () => '/tmp/qoder-test-selection.json',
 }))
 
 vi.mock('../src/qoder/index.ts', async (importOriginal) => {

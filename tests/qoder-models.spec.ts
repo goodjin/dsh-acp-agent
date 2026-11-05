@@ -47,7 +47,7 @@ describe('Qoder 国际版的模型清单', () => {
 
   it('清单走 SDK：拿不到时是空清单，不把令牌反射出去', async () => {
     // 站点那份清单要 Qoder 自己的原生模块算签名，JS 复刻不了——所以借 SDK
-    // （协议本身见 tests/workbuddy-qoder-catalog.spec.ts）。
+    // （协议本身见 tests/qoder-catalog.spec.ts）。
     const models = await fetchModels({
       credential: { accessToken: 'tok', machineId: 'mid' },
       sdkPath: '/nowhere/qoder-sdk.mjs',

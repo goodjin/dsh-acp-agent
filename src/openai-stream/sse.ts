@@ -1,5 +1,5 @@
 /**
- * WorkBuddy 的 SSE 读取与增量翻译。
+ * OpenAI 的 SSE 读取与增量翻译。
  *
  * 帧是 OpenAI 形状：每帧 `data:` 一个 JSON，增量在 `choices[0].delta` 里。翻译成
  * DSH 循环认得的块词汇（开块 → 增量 → 收块 → 用量 → 结束），块序号按首次出现
@@ -9,33 +9,33 @@
  * 靠自己的 `index` 归并。归并错了就是半截 JSON，工具执行直接失败。
  */
 
-export type WorkBuddyBlock =
+export type OpenAiBlock =
   | { readonly type: 'text'; readonly text: string }
   | { readonly type: 'reasoning'; readonly text: string }
   | { readonly type: 'tool-call'; readonly id: string; readonly name: string; readonly arguments: string }
 
-export type WorkBuddyUsage = {
+export type OpenAiUsage = {
   readonly inputTokens: number
   readonly outputTokens: number
   readonly totalTokens?: number
 }
 
-export type WorkBuddyFinish =
+export type OpenAiFinish =
   | { readonly kind: 'stop' }
   | { readonly kind: 'tool-calls' }
   | { readonly kind: 'max-tokens' }
   | { readonly kind: 'error'; readonly failure: { readonly message: string; readonly code: string } }
 
-export type WorkBuddyStreamChunk =
+export type OpenAiStreamChunk =
   | { readonly type: 'block-start'; readonly index: number; readonly blockType: 'text' | 'reasoning' | 'tool-call' }
   | { readonly type: 'text-delta'; readonly index: number; readonly text: string }
   | { readonly type: 'reasoning-delta'; readonly index: number; readonly text: string }
   | { readonly type: 'tool-call-delta'; readonly index: number; readonly id: string; readonly name?: string; readonly argumentsDelta: string }
-  | { readonly type: 'block-end'; readonly index: number; readonly block: WorkBuddyBlock }
-  | { readonly type: 'usage'; readonly usage: WorkBuddyUsage }
+  | { readonly type: 'block-end'; readonly index: number; readonly block: OpenAiBlock }
+  | { readonly type: 'usage'; readonly usage: OpenAiUsage }
   | {
     readonly type: 'finish'
-    readonly reason: WorkBuddyFinish
+    readonly reason: OpenAiFinish
     readonly replayState?: { readonly response: { readonly stopReason: string }; readonly blocks: readonly Record<string, never>[] }
   }
 
@@ -103,15 +103,15 @@ function parseFrame(frame: string): unknown {
  * @param events - 逐帧的事件对象。
  * @returns DSH 的块序列。
  */
-export async function* chunksFromOpenAiEvents(events: AsyncIterable<unknown>): AsyncGenerator<WorkBuddyStreamChunk> {
+export async function* chunksFromOpenAiEvents(events: AsyncIterable<unknown>): AsyncGenerator<OpenAiStreamChunk> {
   const open = new Map<string, OpenBlock>()
   const replay: Record<string, never>[] = []
   let nextIndex = 0
   let stopReason = ''
   let sawTool = false
-  let usage: WorkBuddyUsage | undefined
+  let usage: OpenAiUsage | undefined
 
-  const close = function* close(key: string): Generator<WorkBuddyStreamChunk> {
+  const close = function* close(key: string): Generator<OpenAiStreamChunk> {
     const block = open.get(key)
     if (block === undefined) return
     open.delete(key)
@@ -134,7 +134,7 @@ export async function* chunksFromOpenAiEvents(events: AsyncIterable<unknown>): A
     replay[block.index] = {}
   }
 
-  const start = function* start(key: string, kind: OpenBlock['kind'], seed: Partial<OpenBlock>): Generator<WorkBuddyStreamChunk> {
+  const start = function* start(key: string, kind: OpenBlock['kind'], seed: Partial<OpenBlock>): Generator<OpenAiStreamChunk> {
     const block: OpenBlock = {
       index: nextIndex,
       kind,
@@ -236,7 +236,7 @@ function reasoningOf(delta: Record<string, unknown>): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
-function readUsage(value: unknown): WorkBuddyUsage | undefined {
+function readUsage(value: unknown): OpenAiUsage | undefined {
   if (!isRecord(value)) return undefined
   const input = typeof value['prompt_tokens'] === 'number' ? value['prompt_tokens'] : undefined
   const output = typeof value['completion_tokens'] === 'number' ? value['completion_tokens'] : undefined
@@ -251,7 +251,7 @@ function readUsage(value: unknown): WorkBuddyUsage | undefined {
   }
 }
 
-function finishOf(stopReason: string, sawTool: boolean): WorkBuddyFinish {
+function finishOf(stopReason: string, sawTool: boolean): OpenAiFinish {
   if (stopReason === 'length') return { kind: 'max-tokens' }
   if (stopReason === 'tool_calls' || (stopReason === '' && sawTool)) return { kind: 'tool-calls' }
   return { kind: 'stop' }

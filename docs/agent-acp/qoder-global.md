@@ -150,7 +150,7 @@ worker 内置的默认模型是 **`qwen3.8-max`**（`Qwen 3.8 Max`），它的
 
 - 勾选结果存在本机：`~/.dsh/qoder/selection.json`（0600）。没自己勾过时，生效的是挂载行里声明的那一份；自己勾过就以勾的为准。
 - 勾完立刻重发清单，选择器下一次打开就是新的那份。
-- 清单里没勾的模型**不进账本**：这一行只提供勾上的那些（与 WorkBuddy 同一套规矩）。
+- 清单里没勾的模型**不进账本**：这一行只提供勾上的那些。
 - 宿主那边的路由：`GET /acp-agent/qoder-global/session`、`POST /acp-agent/qoder-global/login`、`GET`/`POST /acp-agent/qoder-global/models`。
 
 ## 模型清单：站点那份要 Qoder 自己的签名（核对时间 2026-11-05）

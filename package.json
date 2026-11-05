@@ -71,10 +71,6 @@
     "./qoder-login": {
       "types": "./src/qoder-login.ts",
       "default": "./src/qoder-login.ts"
-    },
-    "./workbuddy-login": {
-      "types": "./src/workbuddy-login.ts",
-      "default": "./src/workbuddy-login.ts"
     }
   },
   "files": [

@@ -21,7 +21,6 @@ import { makeSessionFactory } from './factory.ts'
 import type { FactoryDeps } from './factory.ts'
 import { modelsOfPreset, registerCatalog, runtimeModels } from './catalog-registration.ts'
 import { modelPluginStream } from './model-plugins.ts'
-import { ensureWorkBuddyModels } from './workbuddy-model.ts'
 import { buildPresetTable, sessionsRegistry } from './registry.ts'
 import type { PresetConfig } from './registry.ts'
 
@@ -85,7 +84,6 @@ export function attachAcpDispatch(
     modelStream: modelPluginStream(config, {
       onRuntimeModels: (presetId, models) => { runtimeModelReports.record(presetId, models) },
     }),
-    ensureModels: async (presetId: string) => { await ensureWorkBuddyModels(presetId) },
   })
 
   ctx.on('agent/created', payload => {

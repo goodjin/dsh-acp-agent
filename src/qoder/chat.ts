@@ -20,9 +20,9 @@
 
 import { randomUUID } from 'node:crypto'
 import { baseIdOf } from '../selection.ts'
-import { buildChatBody } from '../workbuddy/openai.ts'
-import { chunksFromOpenAiEvents, readSseEvents } from '../workbuddy/sse.ts'
-import type { WorkBuddyStreamChunk } from '../workbuddy/sse.ts'
+import { buildChatBody } from '../openai-stream/openai.ts'
+import { chunksFromOpenAiEvents, readSseEvents } from '../openai-stream/sse.ts'
+import type { OpenAiStreamChunk } from '../openai-stream/sse.ts'
 import type { CatalogTurnRequest } from '../catalog.ts'
 import { qoderIdentityHeaders, resolveEndpoints } from './endpoints.ts'
 import type { QoderEndpoints } from './endpoints.ts'
@@ -104,7 +104,7 @@ export async function* streamQoder(
     /** 这个模型声明的最大 token 字段名。 */
     readonly maxTokensField?: 'max_tokens' | 'max_completion_tokens' | undefined
   },
-): AsyncGenerator<WorkBuddyStreamChunk> {
+): AsyncGenerator<OpenAiStreamChunk> {
   const endpoints = deps.endpoints ?? resolveEndpoints()
   const requestId = randomUUID()
   const sessionId = typeof request.sessionId === 'string' && request.sessionId !== '' ? request.sessionId : randomUUID()

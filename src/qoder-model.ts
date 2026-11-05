@@ -18,7 +18,7 @@ import type { PresetConfig } from './registry.ts'
 import { readSelection } from './model-selection.ts'
 import { BUILTIN_MODELS, fetchModels, resolveCredential, streamQoder } from './qoder/index.ts'
 import type { QoderCredential, QoderModel } from './qoder/index.ts'
-import type { WorkBuddyStreamChunk } from './workbuddy/sse.ts'
+import type { OpenAiStreamChunk } from './openai-stream/sse.ts'
 
 /** 运行时清单写进目录账本时用的形状。 */
 export type QoderReportedModel = {
@@ -139,7 +139,7 @@ export function qoderModelStream(
   deps?: {
     readonly onRuntimeModels?: ((presetId: string, models: readonly QoderReportedModel[]) => void) | undefined
   },
-): (presetId: string, request: CatalogTurnRequest) => AsyncGenerator<WorkBuddyStreamChunk> | undefined {
+): (presetId: string, request: CatalogTurnRequest) => AsyncGenerator<OpenAiStreamChunk> | undefined {
   // 登记默认清单与发布口：设置界面要显示「默认勾了哪些」，勾完要立刻重发清单。
   for (const [presetId, preset] of Object.entries(config.presets)) {
     if (preset.agent !== 'qoder-global') continue
@@ -167,7 +167,7 @@ async function* answer(
     readonly onRuntimeModels?: ((presetId: string, models: readonly QoderReportedModel[]) => void) | undefined
   } | undefined,
   declared: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[],
-): AsyncGenerator<WorkBuddyStreamChunk> {
+): AsyncGenerator<OpenAiStreamChunk> {
   const credential = await resolveCredential()
   await publishModels(presetId, credential, deps, await effectiveDeclared(declared))
   yield* streamQoder(requestWithKnownEffort(request), {

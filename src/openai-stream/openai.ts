@@ -1,7 +1,7 @@
 /**
- * WorkBuddy 的模型请求体（OpenAI Chat Completions 形状）。
+ * OpenAI 的模型请求体（Chat Completions 形状）。
  *
- * WorkBuddy 的模型端点是 OpenAI 兼容的，所以请求体不用自造：把 DSH 的消息投影
+ * 模型端点是 OpenAI 兼容的，所以请求体不用自造：把 DSH 的消息投影
  * 成 chat 消息、把 DSH 的工具投影成 function schema 就行。
  *
  * 三处投影是有讲究的：
@@ -20,24 +20,24 @@
 import { sanitizeGatewayText } from './gateway-guard.ts'
 import type { GatewayTextMode } from './gateway-guard.ts'
 
-export type WorkBuddyContentPart =
+export type OpenAiContentPart =
   | { readonly type: 'text'; readonly text: string }
   | { readonly type: 'image_url'; readonly image_url: { readonly url: string } }
 
-export type WorkBuddyToolCall = {
+export type OpenAiToolCall = {
   readonly id: string
   readonly type: 'function'
   readonly function: { readonly name: string; readonly arguments: string }
 }
 
-export type WorkBuddyMessage = {
+export type OpenAiMessage = {
   readonly role: 'system' | 'user' | 'assistant' | 'tool'
-  readonly content?: string | readonly WorkBuddyContentPart[]
-  readonly tool_calls?: readonly WorkBuddyToolCall[]
+  readonly content?: string | readonly OpenAiContentPart[]
+  readonly tool_calls?: readonly OpenAiToolCall[]
   readonly tool_call_id?: string
 }
 
-export type WorkBuddyTool = {
+export type OpenAiTool = {
   readonly type: 'function'
   readonly function: {
     readonly name: string
@@ -46,11 +46,11 @@ export type WorkBuddyTool = {
   }
 }
 
-export type WorkBuddyBody = {
+export type OpenAiBody = {
   readonly model: string
-  readonly messages: readonly WorkBuddyMessage[]
+  readonly messages: readonly OpenAiMessage[]
   readonly stream: true
-  readonly tools?: readonly WorkBuddyTool[]
+  readonly tools?: readonly OpenAiTool[]
   readonly max_tokens?: number
   readonly reasoning_effort?: string
   readonly temperature?: number
@@ -82,7 +82,7 @@ const IMAGE_PLACEHOLDER = '[image attached]'
  * @param input - 模型、消息、工具与各项上限。
  * @returns 请求体。
  */
-export function buildChatBody(input: ChatBodyInput): WorkBuddyBody {
+export function buildChatBody(input: ChatBodyInput): OpenAiBody {
   const mode = input.gatewayTextMode ?? 'standard'
   const systemParts: string[] = []
   if (input.system !== undefined && input.system.trim() !== '') {
@@ -136,7 +136,7 @@ function toolSchema(tool: {
   readonly name: string
   readonly description?: string | undefined
   readonly parameters?: unknown
-}): WorkBuddyTool {
+}): OpenAiTool {
   const parameters = isRecord(tool.parameters) ? { ...tool.parameters } : {}
   if (typeof parameters['type'] !== 'string') parameters['type'] = 'object'
   return {
@@ -154,9 +154,9 @@ function projectMessages(
   systemParts: string[],
   supportsImages: boolean,
   mode: GatewayTextMode,
-): WorkBuddyMessage[] {
-  const turns: WorkBuddyMessage[] = []
-  const push = (message: WorkBuddyMessage): void => {
+): OpenAiMessage[] {
+  const turns: OpenAiMessage[] = []
+  const push = (message: OpenAiMessage): void => {
     const last = turns[turns.length - 1]
     // 只合并相邻的用户消息：assistant 消息带工具调用，合并会弄乱调用的对应关系。
     if (last !== undefined && last.role === 'user' && message.role === 'user') {
@@ -189,7 +189,7 @@ function projectMessages(
   return turns
 }
 
-function mergeUser(left: WorkBuddyMessage, right: WorkBuddyMessage): WorkBuddyMessage {
+function mergeUser(left: OpenAiMessage, right: OpenAiMessage): OpenAiMessage {
   const leftParts = partsOf(left.content)
   const rightParts = partsOf(right.content)
   const merged = [...leftParts, ...rightParts]
@@ -199,16 +199,16 @@ function mergeUser(left: WorkBuddyMessage, right: WorkBuddyMessage): WorkBuddyMe
   return { role: 'user', content: merged }
 }
 
-function partsOf(content: string | readonly WorkBuddyContentPart[] | undefined): WorkBuddyContentPart[] {
+function partsOf(content: string | readonly OpenAiContentPart[] | undefined): OpenAiContentPart[] {
   if (content === undefined) return []
   if (typeof content === 'string') return content === '' ? [] : [{ type: 'text', text: content }]
   return [...content]
 }
 
-function assistantMessage(message: Record<string, unknown>, mode: GatewayTextMode): WorkBuddyMessage {
+function assistantMessage(message: Record<string, unknown>, mode: GatewayTextMode): OpenAiMessage {
   const blocks = Array.isArray(message['content']) ? message['content'] : []
   const texts: string[] = []
-  const calls: WorkBuddyToolCall[] = []
+  const calls: OpenAiToolCall[] = []
   let index = 0
   for (const block of blocks) {
     if (!isRecord(block)) continue
@@ -231,7 +231,7 @@ function assistantMessage(message: Record<string, unknown>, mode: GatewayTextMod
   }
 }
 
-function toolResult(message: Record<string, unknown>): WorkBuddyMessage {
+function toolResult(message: Record<string, unknown>): OpenAiMessage {
   const source = isRecord(message['source']) ? message['source'] : undefined
   const fromSource = source?.['callId']
   const id = typeof message['toolCallId'] === 'string' && message['toolCallId'] !== ''
@@ -242,9 +242,9 @@ function toolResult(message: Record<string, unknown>): WorkBuddyMessage {
   return { role: 'tool', tool_call_id: id, content: textOf(message['content']).join('\n') }
 }
 
-function userContent(content: unknown, supportsImages: boolean): string | readonly WorkBuddyContentPart[] {
+function userContent(content: unknown, supportsImages: boolean): string | readonly OpenAiContentPart[] {
   const blocks = Array.isArray(content) ? content : typeof content === 'string' ? [{ type: 'text', text: content }] : []
-  const parts: WorkBuddyContentPart[] = []
+  const parts: OpenAiContentPart[] = []
   for (const block of blocks) {
     if (!isRecord(block)) continue
     if (block['type'] === 'text' && typeof block['text'] === 'string' && block['text'] !== '') {

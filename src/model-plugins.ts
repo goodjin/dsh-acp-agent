@@ -12,12 +12,10 @@ import type { ModelTurnRequest } from '@goodjin2/dsh-model-kit'
 import { minimaxiModelStream } from './minimaxi-model.ts'
 import type { PresetConfig } from './registry.ts'
 import { pairToolResults } from './tool-pairing.ts'
-import { workBuddyModelStream } from './workbuddy-model.ts'
 import { qoderModelStream } from './qoder-model.ts'
 import { zcodeModelStream } from './zcode-model.ts'
 import type { MiniMaxStreamChunk } from './minimaxi/index.ts'
 import type { GlmStreamChunk } from './zcode/index.ts'
-import type { WorkBuddyStreamChunk } from './workbuddy/sse.ts'
 
 /**
  * One answerer for every model row. Returning nothing leaves the request on the
@@ -29,8 +27,8 @@ export function modelPluginStream(
     /** 把某个 agent 自报的模型清单写进目录账本（选择器以它为准）。 */
     readonly onRuntimeModels?: ((presetId: string, models: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[]) => void) | undefined
   },
-): (presetId: string, request: ModelTurnRequest) => AsyncIterable<GlmStreamChunk | MiniMaxStreamChunk | WorkBuddyStreamChunk> | undefined {
-  const plugins = [zcodeModelStream(config), minimaxiModelStream(config), workBuddyModelStream(config, deps), qoderModelStream(config, deps)]
+): (presetId: string, request: ModelTurnRequest) => AsyncIterable<GlmStreamChunk | MiniMaxStreamChunk> | undefined {
+  const plugins = [zcodeModelStream(config), minimaxiModelStream(config), qoderModelStream(config, deps)]
   return (presetId, request) => {
     const paired = withPairedResults(request)
     for (const plugin of plugins) {
@@ -61,7 +59,7 @@ function withPairedResults(request: ModelTurnRequest): ModelTurnRequest {
  * this row have a dialect, or is it a model?" must read the same list. Listing
  * one of them in a second place is how a row ends up mounted and inert.
  */
-const MODEL_BACKED_AGENTS = new Set(['zcode', 'minimaxi', 'workbuddy', 'qoder-global'])
+const MODEL_BACKED_AGENTS = new Set(['zcode', 'minimaxi', 'qoder-global'])
 
 export function isModelBackedAgent(agent: string | undefined): boolean {
   return agent !== undefined && MODEL_BACKED_AGENTS.has(agent)

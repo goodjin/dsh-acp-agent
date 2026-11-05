@@ -1,6 +1,6 @@
 /** Host-only login flow; the browser receives status and the PKCE challenge, never credentials. */
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { WorkBuddyRouteContext } from './workbuddy-login.ts'
+import type { RouteContext } from './openai-stream/route-context.ts'
 import { attachAccount, fetchModels, pollForToken, readCredential, startLogin, writeCredential } from './qoder/index.ts'
 import { fetchQoderAccount } from './qoder/auth.ts'
 import { readSelection, writeSelection } from './model-selection.ts'
@@ -11,7 +11,7 @@ export const inject = ['webServer', 'connection']
 export const SESSION_PATH = '/acp-agent/qoder-global/session'
 export const LOGIN_PATH = '/acp-agent/qoder-global/login'
 export const MODELS_PATH = '/acp-agent/qoder-global/models'
-export function apply(ctx: WorkBuddyRouteContext): void { registerQoderRoutes(ctx) }
+export function apply(ctx: RouteContext): void { registerQoderRoutes(ctx) }
 /** 这个入口要的动作（窄接口，测试注入假件）。 */
 export interface QoderRouteDeps {
   readonly startLogin: typeof startLogin
@@ -26,7 +26,7 @@ export interface QoderRouteDeps {
   readonly writeSelection?: (ids: readonly string[]) => Promise<void>
 }
 
-export function registerQoderRoutes(ctx: WorkBuddyRouteContext, deps: QoderRouteDeps = { startLogin, pollForToken, readCredential, writeCredential }): void {
+export function registerQoderRoutes(ctx: RouteContext, deps: QoderRouteDeps = { startLogin, pollForToken, readCredential, writeCredential }): void {
   const selectedIds = deps.readSelection ?? (() => readSelection('qoder'))
   const saveSelection = deps.writeSelection ?? ((ids: readonly string[]) => writeSelection('qoder', ids))
   const listModels = deps.fetchModels ?? fetchModels

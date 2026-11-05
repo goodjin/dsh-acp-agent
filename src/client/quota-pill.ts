@@ -43,9 +43,6 @@ export const CODEX_QUOTA_ROUTE_PATH = '/acp-agent/codex/quota'
 /** Claude（Anthropic 官方订阅）宿主路由（见 dsh-preset-dispatch/claude-quota）。 */
 export const CLAUDE_QUOTA_ROUTE_PATH = '/acp-agent/claude/quota'
 
-/** WorkBuddy 套餐与积分的宿主路由。 */
-export const WORKBUDDY_QUOTA_ROUTE_PATH = '/acp-agent/workbuddy/credits'
-
 /** dock 里的条目 id 与顺序：排在官方 stats（order 0）之后。 */
 export const QUOTA_DOCK_ID = 'acp-agent-zcode-quota'
 export const QUOTA_DOCK_ORDER = 10
@@ -112,16 +109,6 @@ export const GROK_QUOTA_PILL_SPEC: QuotaPillSpec = {
   dockOrder: 15,
 }
 
-/** WorkBuddy 那套：同按 provider id 认；多一枚积分胶囊（走宿主 credits 路由）。 */
-export const WORKBUDDY_QUOTA_PILL_SPEC: QuotaPillSpec = {
-  provider: 'workbuddy',
-  providerId: 'acp:acp-workbuddy',
-  showCredit: true,
-  routePath: WORKBUDDY_QUOTA_ROUTE_PATH,
-  dockId: 'acp-agent-workbuddy-quota',
-  dockOrder: 16,
-}
-
 /** 全部口径，按 dock 顺序——apply 按它各挂一条轮询器、各进一个 dock 条目。 */
 export const QUOTA_PILL_SPECS: readonly QuotaPillSpec[] = [
   GLM_QUOTA_PILL_SPEC,
@@ -130,7 +117,6 @@ export const QUOTA_PILL_SPECS: readonly QuotaPillSpec[] = [
   CLAUDE_QUOTA_PILL_SPEC,
   DEEPSEEK_QUOTA_PILL_SPEC,
   GROK_QUOTA_PILL_SPEC,
-  WORKBUDDY_QUOTA_PILL_SPEC,
 ]
 
 /**
