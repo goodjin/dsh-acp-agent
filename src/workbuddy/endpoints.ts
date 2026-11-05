@@ -78,6 +78,10 @@ export type WorkBuddyEndpoints = {
   readonly configUrl: string
   /** 模型请求：`{base}/v2/chat/completions`。 */
   readonly chatUrl: string
+  /** 签到状态：`{base}/v2/billing/meter/checkin-activity-status`。 */
+  readonly checkinStatusUrl: string
+  /** 领当天积分：`{base}/v2/billing/meter/daily-checkin`。 */
+  readonly dailyCheckinUrl: string
 }
 
 /**
@@ -101,5 +105,7 @@ export function resolveEndpoints(
     accountUrl: `${auth}/account`,
     configUrl: `${base}/v3/config`,
     chatUrl: `${base}/v2/chat/completions`,
+    checkinStatusUrl: `${base}/v2/billing/meter/checkin-activity-status`,
+    dailyCheckinUrl: `${base}/v2/billing/meter/daily-checkin`,
   }
 }

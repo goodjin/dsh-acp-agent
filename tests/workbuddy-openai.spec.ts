@@ -24,6 +24,8 @@ describe('端点解析', () => {
     expect(endpoints.authTokenUrl).toBe('https://www.workbuddy.cn/v2/plugin/auth/token')
     expect(endpoints.authRefreshUrl).toBe('https://www.workbuddy.cn/v2/plugin/auth/token/refresh')
     expect(endpoints.accountUrl).toBe('https://www.workbuddy.cn/v2/plugin/account')
+    expect(endpoints.checkinStatusUrl).toBe('https://www.workbuddy.cn/v2/billing/meter/checkin-activity-status')
+    expect(endpoints.dailyCheckinUrl).toBe('https://www.workbuddy.cn/v2/billing/meter/daily-checkin')
   })
 
   it('环境变量能整体换站，且登录站与模型站同源', () => {
@@ -32,6 +34,12 @@ describe('端点解析', () => {
     expect(new URL(endpoints.chatUrl).host).toBe('copilot.tencent.com')
     expect(new URL(endpoints.configUrl).host).toBe('copilot.tencent.com')
     expect(endpoints.configUrl).toBe('https://copilot.tencent.com/v3/config')
+  })
+
+  it('签到与领积分的地址跟着同一个基址换', () => {
+    const endpoints = resolveEndpoints(undefined, { WORKBUDDY_BASE_URL: 'https://copilot.tencent.com' })
+    expect(endpoints.checkinStatusUrl).toBe('https://copilot.tencent.com/v2/billing/meter/checkin-activity-status')
+    expect(endpoints.dailyCheckinUrl).toBe('https://copilot.tencent.com/v2/billing/meter/daily-checkin')
   })
 
   it('显式指定的基址优先于环境变量，尾斜杠不产生双斜杠', () => {
