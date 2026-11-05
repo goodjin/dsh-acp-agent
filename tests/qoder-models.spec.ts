@@ -45,28 +45,14 @@ describe('Qoder 国际版的模型清单', () => {
     expect(parseModels(null)).toEqual([])
   })
 
-  it('拉清单带上 Bearer 与身份头', async () => {
-    const mock = vi.fn().mockResolvedValue(Response.json({ assistant: [{ key: 'm', display_name: 'M' }] }))
+  it('清单走 SDK：拿不到时是空清单，不把令牌反射出去', async () => {
+    // 站点那份清单要 Qoder 自己的原生模块算签名，JS 复刻不了——所以借 SDK
+    // （协议本身见 tests/workbuddy-qoder-catalog.spec.ts）。
     const models = await fetchModels({
       credential: { accessToken: 'tok', machineId: 'mid' },
-      fetchImpl: mock,
+      sdkPath: '/nowhere/qoder-sdk.mjs',
+      spawnSdk: () => undefined,
     })
-    expect(mock.mock.calls[0]?.[0]).toBe('https://api3.qoder.sh/api/v2/model/list?Encode=1')
-    const headers = mock.mock.calls[0]?.[1]?.headers as Record<string, string>
-    expect(headers['Authorization']).toBe('Bearer tok')
-    expect(headers['Cosy-ClientType']).toBe('5')
-    expect(models.map(model => model.id)).toEqual(['m'])
-  })
-
-  it('拉不到时只报状态码，不把令牌反射出去', async () => {
-    const mock = vi.fn().mockResolvedValue(new Response('tok', { status: 401 }))
-    await expect(fetchModels({
-      credential: { accessToken: 'tok', machineId: 'mid' },
-      fetchImpl: mock,
-    })).rejects.toThrow(/HTTP 401/)
-    await expect(fetchModels({
-      credential: { accessToken: 'tok', machineId: 'mid' },
-      fetchImpl: mock,
-    })).rejects.not.toThrow(/tok/)
+    expect(models).toEqual([])
   })
 })

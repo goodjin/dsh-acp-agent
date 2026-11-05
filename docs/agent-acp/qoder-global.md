@@ -173,6 +173,50 @@ worker 内置的默认模型是 **`qwen3.8-max`**（`Qwen 3.8 Max`），它的
 **推理请求本身不需要签名**：`{api2-v2}/model/v1/chat/completions` 用我们的设备令牌
 就能通（`Cosy-Version` / `Cosy-ClientType` / `Cosy-MachineOS` 三个头就够）。
 
+## 模型清单：借应用自带的 SDK 拿（核对时间 2026-11-05）
+
+**结论先说**：站点那份清单**拿不到**——它要 Qoder 自己的**原生模块**算签名，JS 复刻不了。
+所以我们不自己发那一发，而是**让 SDK 自己算**：应用里带着 agent SDK（`--sdk` 模式跑起来，
+stdin/stdout 说 NDJSON 的控制协议），我们把令牌交给它，它去把清单拉回来。
+
+宿主侧的做法（`src/qoder/catalog.ts`）：
+
+1. 起 SDK：`Qoder <qoder-worker-runtime.obf.mjs> --sdk`，令牌写在
+   `QODER_SDK_AUTH_PAYLOAD_FILE` 指向的文件里（不经过协议、不进日志）；
+2. 说两句：`daemon.initialize`（协议版本 2、能力 `multi_session_v2`）→
+   `daemon.get_models`（`fetchStrategy: "live"` 强制去远端拉）；
+3. 拿到清单（id、显示名、倍率、上下文、**每个模型支持哪些档位**）就关掉进程。
+
+**这解决了三件事**：选择器里能列出真实模型（15 个，带倍率）；每个模型的档位是准的
+（各模型不同，档位发错服务端会拒）；以及不用猜模型 id。
+
+**真实清单**（2026-11-05 拉的）：
+
+| id | 名称 | 倍率 | 上下文 | 档位 |
+|---|---|---|---|---|
+| auto | Auto | x0.5 | 200k | — |
+| ultimate | Ultimate | x2 | 1000k | xhigh/high/low/max/medium |
+| fast | Fast | x0.8 | 200k | — |
+| efficient | Efficient | x0.3 | 200k | — |
+| smodel | Sonus | x8 | 180k | xhigh/high/low/max/medium |
+| cmodel | Cantus | x4 | 180k | xhigh/high/low/max/medium |
+| qmodel_38max | Qwen3.8-Max | x0.5 | 180k | xhigh/low/medium |
+| qfmodel | Qwen3.8-Flash | x0 | 180k | xhigh/low/medium |
+| kmodel_latest | Kimi-K3.1-Pro | x1 | 180k | high/low/max |
+| kmodel | Kimi-K2.8-Preview | x0.8 | — | high/low/max |
+| gmodel | GLM-5.3 | x0.8 | 180k | high/low/max |
+| gfmodel | GLM-5.3-Flash | x0.1 | 1000k | high/max |
+| dmodel | DeepSeek-V4-Pro | x0.5 | 1000k | high/max |
+| dfmodel | DeepSeek-Flash | x0.1 | 1000k | high/max/low |
+| mmodel | MiniMax-M3.1-Flash | x0.1 | 180k | xhigh/high/low/max/medium |
+
+**推理不需要 SDK**：用这些真 id，我们的客户端直接就能跑（2026-11-05 实测 `gmodel`、
+`mmodel` 返回正常流式内容）。SDK 只用来拿清单。
+
+> ⚠️ **别再用假 id**：早先声明的 `qwen3.8-max` 不是这个账号的真实 id，服务端会回
+> `invalid_model_error: Unsupported model`；`auto` 这个路由对我们这个令牌作用域
+> 回 `All backends failed`。
+
 ## 为什么我们拿不到桌面版那份登录凭证（核对时间 2026-11-05）
 
 按「复用桌面版登录」的思路查了一轮，结论是**拿不到**，原因有三条，每条都有实测：
