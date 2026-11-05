@@ -2,7 +2,7 @@
 
 [English](README.md) | [中文](README.zh.md)
 
-一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件，把外部 coding agent 接进 DSH 原生会话界面。支持 GLM（ZCode）、MiniMax、WorkBuddy、Codex、Claude、Grok、Cursor、Qoder。
+一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件，把外部 coding agent 接进 DSH 原生会话界面。支持 GLM（ZCode）、MiniMax、Codex、Claude、Grok、Cursor、Qoder。
 
 ## 功能
 
@@ -11,7 +11,6 @@
 - **ACP agent 框架** — 传输层（stdio、WebSocket）、各家帧方言、帧投影、终端与文件子协议
 - **GLM（ZCode）模型客户端** — 解密本机 ZCode 登录凭据、调用 GLM Coding Plan、流式响应
 - **MiniMax 模型客户端** — 读取/刷新 MiniMax Code 凭据、调用托管网关
-- **WorkBuddy 模型客户端** — 插件自己走 WorkBuddy 账号登录（浏览器授权）、调用它兼容 OpenAI 的模型端点
 - **Preset 分发** — 把外部 agent 注册为 DSH preset、接管会话、路由回合、处理模型切换
 - **配额接口** — 宿主侧 GLM/MiniMax/Codex/Claude/Grok 配额路由（凭据不出宿主进程）
 - **名册过滤** — 把标记的 preset 从新建会话选择器隐藏

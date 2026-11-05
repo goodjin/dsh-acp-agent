@@ -38,9 +38,6 @@ export const CODEX_QUOTA_ROUTE_PATH = '/acp-agent/codex/quota'
 /** Claude（Anthropic 官方订阅）宿主路由（见 dsh-preset-dispatch/claude-quota）。 */
 export const CLAUDE_QUOTA_ROUTE_PATH = '/acp-agent/claude/quota'
 
-/** WorkBuddy 套餐与积分的宿主路由。 */
-export const WORKBUDDY_QUOTA_ROUTE_PATH = '/acp-agent/workbuddy/credits'
-
 /** dock 里的条目 id 与顺序：排在官方 stats（order 0）之后。 */
 export const QUOTA_DOCK_ID = 'acp-agent-zcode-quota'
 export const QUOTA_DOCK_ORDER = 10
@@ -56,7 +53,7 @@ const GLM_MODEL_PREFIX = 'GLM-'
  */
 export interface QuotaPillSpec {
   /** 取值口径来源：决定文案命名空间与变色方向。 */
-  readonly provider: 'zcode' | 'minimaxi' | 'claude' | 'codex' | 'deepseek' | 'grok' | 'workbuddy'
+  readonly provider: 'zcode' | 'minimaxi' | 'claude' | 'codex' | 'deepseek' | 'grok'
   /** 当前会话目录里的 provider id（如 `acp:acp-claude`）与此相等才渲染。 */
   readonly providerId?: string
   /** 模型 id 前缀匹配；providerId 已给时可以不填（Claude 的模型 id 是通用别名）。 */
@@ -139,19 +136,6 @@ export const GROK_QUOTA_PILL_SPEC: QuotaPillSpec = {
   dockOrder: 15,
 }
 
-/**
- * WorkBuddy 那套：没有窗口，只有积分池。按目录里的 provider id 精确认
- * （`acp:acp-workbuddy`）——模型 id 是 `hy4free` 这类通用名，按前缀认会误伤。
- */
-export const WORKBUDDY_QUOTA_PILL_SPEC: QuotaPillSpec = {
-  provider: 'workbuddy',
-  providerId: 'acp:acp-workbuddy',
-  showCredit: true,
-  routePath: WORKBUDDY_QUOTA_ROUTE_PATH,
-  dockId: 'acp-agent-workbuddy-quota',
-  dockOrder: 16,
-}
-
 /** 全部口径：apply 按这张表各建一只轮询器、各挂一条 dock。 */
 export const QUOTA_PILL_SPECS: readonly QuotaPillSpec[] = [
   GLM_QUOTA_PILL_SPEC,
@@ -160,7 +144,6 @@ export const QUOTA_PILL_SPECS: readonly QuotaPillSpec[] = [
   CLAUDE_QUOTA_PILL_SPEC,
   DEEPSEEK_QUOTA_PILL_SPEC,
   GROK_QUOTA_PILL_SPEC,
-  WORKBUDDY_QUOTA_PILL_SPEC,
 ]
 
 /**
@@ -199,15 +182,6 @@ export interface QuotaWindows {
     readonly bonus?: number
     /** 非 CNY 钱包的提示（预拼好的字符串，如「另有 $12.00」）；通常为空。 */
     readonly extra?: string
-    /**
-     * 积分构成（WorkBuddy 有）：每一类积分的名称与总额/剩余/已用，进悬停明细。
-     */
-    readonly groups?: readonly {
-      readonly name: string
-      readonly total: number
-      readonly remain: number
-      readonly used: number
-    }[]
   }
   /** 套餐档位（如 Grok 的 `SuperGrok`/`GrokPro`）；进悬停提示的第一句。 */
   readonly tier?: string
@@ -516,7 +490,7 @@ export function QuotaPillRow({ useQuota, useModelDirectory, useLogin, visible = 
       style: { textAlign: 'center', opacity: 0.8, marginBottom: '2px' },
     }, formatResetLine(quota.fiveHour?.resetAt, t)),
     ...windows.map(window => pillOf(window, t, spec, quota.tier)),
-    ...(credit === undefined ? [] : [creditPillOf(credit, t, spec, quota.tier)]),
+    ...(credit === undefined ? [] : [creditPillOf(credit, t, spec)]),
   )
 }
 
@@ -606,13 +580,12 @@ export function pillOf(window: QuotaWindow, t: RuntimeT, spec: QuotaPillSpec, ti
  * （「按量 4.5 / 100」）。文案命名空间跟 provider 走。
  */
 function creditKeys(provider: QuotaPillSpec['provider']): {
-  credit: 'quota.minimaxi.credit' | 'quota.codex.credit' | 'quota.claude.credit' | 'quota.deepseek.credit' | 'quota.workbuddy.credit'
-  title: 'quota.minimaxi.creditTitle' | 'quota.codex.creditTitle' | 'quota.claude.creditTitle' | 'quota.deepseek.creditTitle' | 'quota.workbuddy.creditTitle'
+  credit: 'quota.minimaxi.credit' | 'quota.codex.credit' | 'quota.claude.credit' | 'quota.deepseek.credit'
+  title: 'quota.minimaxi.creditTitle' | 'quota.codex.creditTitle' | 'quota.claude.creditTitle' | 'quota.deepseek.creditTitle'
 } {
   if (provider === 'claude') return { credit: 'quota.claude.credit', title: 'quota.claude.creditTitle' }
   if (provider === 'codex') return { credit: 'quota.codex.credit', title: 'quota.codex.creditTitle' }
   if (provider === 'deepseek') return { credit: 'quota.deepseek.credit', title: 'quota.deepseek.creditTitle' }
-  if (provider === 'workbuddy') return { credit: 'quota.workbuddy.credit', title: 'quota.workbuddy.creditTitle' }
   return { credit: 'quota.minimaxi.credit', title: 'quota.minimaxi.creditTitle' }
 }
 
@@ -630,29 +603,24 @@ export function creditPillOf(credit: {
     readonly remain: number
     readonly used: number
   }[]
-}, t: RuntimeT, spec: QuotaPillSpec, tier?: string): ReactNode {
+}, t: RuntimeT, spec: QuotaPillSpec): ReactNode {
   const keys = creditKeys(spec.provider)
   const isDeepseek = spec.provider === 'deepseek'
-  const isWorkbuddy = spec.provider === 'workbuddy'
   // DeepSeek 的数字是钱：固定两位小数并带上币种符号；其余家照旧。
   const detail = isDeepseek
     ? `¥${(credit.remaining ?? 0).toFixed(2)}`
-    : isWorkbuddy
-      ? `${String(credit.remaining ?? 0)}${credit.limit === undefined ? '' : ` / ${credit.limit}`}`
-      : credit.remaining !== undefined
-        ? String(credit.remaining)
-        : `${credit.used ?? 0}${credit.limit === undefined ? '' : ` / ${credit.limit}`}`
+    : credit.remaining !== undefined
+      ? String(credit.remaining)
+      : `${credit.used ?? 0}${credit.limit === undefined ? '' : ` / ${credit.limit}`}`
   const title = isDeepseek
     ? t('quota.deepseek.creditTitle', {
       recharge: (credit.recharge ?? credit.remaining ?? 0).toFixed(2),
       bonus: (credit.bonus ?? 0).toFixed(2),
       extra: credit.extra ?? '',
     })
-    : isWorkbuddy
-      ? workBuddyCreditTitle(credit, t, tier)
-      : spec.provider === 'claude'
-        ? t('quota.claude.creditTitle', { used: String(credit.used ?? 0), limit: String(credit.limit ?? '') })
-        : t(keys.title, { remaining: String(credit.remaining ?? '') })
+    : spec.provider === 'claude'
+      ? t('quota.claude.creditTitle', { used: String(credit.used ?? 0), limit: String(credit.limit ?? '') })
+      : t(keys.title, { remaining: String(credit.remaining ?? '') })
   return createElement('span', {
     key: 'credit',
     title,
@@ -668,40 +636,6 @@ export function creditPillOf(credit: {
   },
     createElement(IconGaugeOutlineRegular),
     createElement('span', null, t(keys.credit), ' ', createElement('span', null, detail)))
-}
-
-/**
- * WorkBuddy 的悬停明细：套餐名、每一类积分的构成、总积分。
- *
- * 构成是站点给的四类（套餐基础／套餐赠送／购买／平台奖励），少的那几类在站点
- * 里是 0——照实列出来，让人看得见积分是怎么来的。
- */
-function workBuddyCreditTitle(credit: {
-  readonly remaining?: number
-  readonly used?: number
-  readonly limit?: number
-  readonly groups?: readonly {
-    readonly name: string
-    readonly total: number
-    readonly remain: number
-    readonly used: number
-  }[]
-}, t: RuntimeT, tier?: string): string {
-  const lines: string[] = []
-  if (tier !== undefined && tier !== '') lines.push(t('quota.workbuddy.creditTitle.plan', { tier }))
-  for (const group of credit.groups ?? []) {
-    lines.push(t('quota.workbuddy.creditTitle.group', {
-      name: group.name,
-      remain: String(group.remain),
-      total: String(group.total),
-      used: String(group.used),
-    }))
-  }
-  lines.push(t('quota.workbuddy.creditTitle.total', {
-    remaining: String(credit.remaining ?? 0),
-    limit: String(credit.limit ?? 0),
-  }))
-  return lines.join('\n')
 }
 
 /** The dock slot face this registration needs; structural, like every slot host here. */

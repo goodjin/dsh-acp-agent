@@ -23,8 +23,6 @@ export type ClientLocaleKey =
   | 'quota.claude.fiveHour.title' | 'quota.claude.weekly.title'
   | 'quota.claude.credit' | 'quota.claude.creditTitle'
   | 'quota.deepseek.credit' | 'quota.deepseek.creditTitle'
-  | 'quota.workbuddy.credit' | 'quota.workbuddy.creditTitle'
-  | 'quota.workbuddy.creditTitle.plan' | 'quota.workbuddy.creditTitle.group' | 'quota.workbuddy.creditTitle.total'
   | 'quota.grok.weekly.title' | 'quota.grok.weekly.title.tier'
   | 'quota.login.cta' | 'quota.login.code' | 'quota.login.title'
   | 'recovery.interrupted.note' | 'recovery.interrupted.expand'
@@ -37,16 +35,6 @@ export type ClientLocaleKey =
   | 'acpVisibility.error.missing' | 'acpVisibility.error.shape' | 'acpVisibility.error.failed'
   | 'progress.preparing' | 'progress.loading' | 'progress.ready'
   | 'storagePosture.local'
-  | 'workbuddy.section.label'
-  | 'workbuddy.account.signedIn' | 'workbuddy.account.signedOut'
-  | 'workbuddy.account.login' | 'workbuddy.account.refresh' | 'workbuddy.account.relogin'
-  | 'workbuddy.checkin.claimed' | 'workbuddy.checkin.pending'
-  | 'workbuddy.checkin.claim' | 'workbuddy.checkin.alreadyClaimed'
-  | 'workbuddy.credits.plan' | 'workbuddy.credits.group' | 'workbuddy.credits.total'
-  | 'workbuddy.models.section.label' | 'workbuddy.models.summary'
-  | 'workbuddy.models.custom' | 'workbuddy.models.defaultHint'
-  | 'workbuddy.models.noTool' | 'workbuddy.models.restore'
-  | 'workbuddy.models.search' | 'workbuddy.models.empty' | 'workbuddy.models.title'
 
 export const zh: Record<ClientLocaleKey, string> = {
   'handover.title': '已切换到 {target}，对话已移到新会话',
@@ -83,11 +71,6 @@ export const zh: Record<ClientLocaleKey, string> = {
   'quota.grok.weekly.title': 'Grok 周窗口：已用 {percent}%',
   'quota.grok.weekly.title.tier': 'Grok（{tier}）周窗口：已用 {percent}%',
   'quota.deepseek.creditTitle': 'DeepSeek 账户余额 ¥{recharge}；赠送 ¥{bonus}{extra}',
-  'quota.workbuddy.credit': '积分',
-  'quota.workbuddy.creditTitle': 'WorkBuddy 积分：可用 {remaining} / 额度 {limit}',
-  'quota.workbuddy.creditTitle.plan': '套餐：{tier}',
-  'quota.workbuddy.creditTitle.group': '{name}：剩 {remain} / 共 {total}（已用 {used}）',
-  'quota.workbuddy.creditTitle.total': '总积分：{remaining} / {limit}',
   'quota.login.cta': '去授权',
   'quota.login.code': '授权码 {code}',
   'quota.login.title': '登录过期或没有登录：点开授权链接重新登录，授权完成后这一行会自动恢复',
@@ -114,28 +97,6 @@ export const zh: Record<ClientLocaleKey, string> = {
   'progress.preparing': '正在准备打开新会话 · {target}',
   'progress.loading': '正在读新会话的历史 · {target}',
   'progress.ready': '新会话已就绪，正在切换 · {target}',
-  'workbuddy.section.label': 'WorkBuddy 账号',
-  'workbuddy.account.signedIn': '已登录 WorkBuddy：',
-  'workbuddy.account.signedOut': '未登录 WorkBuddy：这一组模型发消息会被拒绝。',
-  'workbuddy.account.login': '登录 WorkBuddy',
-  'workbuddy.account.relogin': '重新登录',
-  'workbuddy.account.refresh': '检查授权',
-  'workbuddy.checkin.claimed': '今日已签 · 连续 {streakDays} 天 · 每天 {dailyCredit} 积分',
-  'workbuddy.checkin.pending': '今日未签 · 每天 {dailyCredit} 积分（每天上午 10:00 自动领）',
-  'workbuddy.checkin.claim': '立即签到',
-  'workbuddy.checkin.alreadyClaimed': '今天已领过了',
-  'workbuddy.credits.plan': '套餐：{plan}',
-  'workbuddy.credits.group': '{name}：剩 {remain} / 共 {total}（已用 {used}）',
-  'workbuddy.credits.total': '总积分：{remaining} / {limit}',
-  'workbuddy.models.section.label': 'WorkBuddy 模型',
-  'workbuddy.models.summary': '站点共 {total} 个模型，勾上的 {selected} 个会出现在模型选择器里。',
-  'workbuddy.models.custom': '当前用的是你自己勾的。',
-  'workbuddy.models.defaultHint': '当前用的是默认那一份（还没自己勾过）。',
-  'workbuddy.models.noTool': '不能带工具（只能聊天）',
-  'workbuddy.models.restore': '恢复默认那一份',
-  'workbuddy.models.title': '模型',
-  'workbuddy.models.search': '搜模型名、id 或倍率',
-  'workbuddy.models.empty': '没有匹配上的模型。',
   'storagePosture.local': '设置保存在本机',
 }
 
@@ -174,11 +135,6 @@ export const en: Record<ClientLocaleKey, string> = {
   'quota.grok.weekly.title': 'Grok weekly window: {percent}% used',
   'quota.grok.weekly.title.tier': 'Grok ({tier}) weekly window: {percent}% used',
   'quota.deepseek.creditTitle': 'DeepSeek account balance ¥{recharge}; bonus ¥{bonus}{extra}',
-  'quota.workbuddy.credit': 'credits',
-  'quota.workbuddy.creditTitle': 'WorkBuddy credits: {remaining} available / {limit} limit',
-  'quota.workbuddy.creditTitle.plan': 'Plan: {tier}',
-  'quota.workbuddy.creditTitle.group': '{name}: {remain} left / {total} total ({used} used)',
-  'quota.workbuddy.creditTitle.total': 'Total credits: {remaining} / {limit}',
   'quota.login.cta': 'Authorize',
   'quota.login.code': 'code {code}',
   'quota.login.title': 'Login expired or missing: open the authorization link to sign in again; this row comes back on its own once you have',
@@ -205,28 +161,6 @@ export const en: Record<ClientLocaleKey, string> = {
   'progress.preparing': 'Preparing to open the new session · {target}',
   'progress.loading': 'Reading the new session’s history · {target}',
   'progress.ready': 'New session ready, switching · {target}',
-  'workbuddy.section.label': 'WorkBuddy account',
-  'workbuddy.account.signedIn': 'Signed in to WorkBuddy:',
-  'workbuddy.account.signedOut': 'Not signed in to WorkBuddy: messages in this group will be refused.',
-  'workbuddy.account.login': 'Sign in to WorkBuddy',
-  'workbuddy.account.relogin': 'Sign in again',
-  'workbuddy.account.refresh': 'Check authorisation',
-  'workbuddy.checkin.claimed': 'Checked in today · {streakDays} days in a row · {dailyCredit} credits a day',
-  'workbuddy.checkin.pending': 'Not checked in today · {dailyCredit} credits a day (claimed automatically at 10:00)',
-  'workbuddy.checkin.claim': 'Check in now',
-  'workbuddy.checkin.alreadyClaimed': 'Already checked in today',
-  'workbuddy.credits.plan': 'Plan: {plan}',
-  'workbuddy.credits.group': '{name}: {remain} left / {total} total ({used} used)',
-  'workbuddy.credits.total': 'Total credits: {remaining} / {limit}',
-  'workbuddy.models.section.label': 'WorkBuddy models',
-  'workbuddy.models.summary': 'The site lists {total} models; the {selected} you tick show up in the model picker.',
-  'workbuddy.models.custom': 'Using your own selection.',
-  'workbuddy.models.defaultHint': 'Using the default selection (nothing ticked by hand yet).',
-  'workbuddy.models.noTool': 'no tools (chat only)',
-  'workbuddy.models.restore': 'Restore the default set',
-  'workbuddy.models.title': 'Models',
-  'workbuddy.models.search': 'Search by name, id or multiplier',
-  'workbuddy.models.empty': 'No model matches.',
   'storagePosture.local': 'Settings are stored on this machine',
 }
 

@@ -2,7 +2,7 @@
 
 [English](README.md) | [中文](README.zh.md)
 
-A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin that connects external coding agents to DSH's native session interface. Supports GLM (ZCode), MiniMax, WorkBuddy, Codex, Claude, Grok, Cursor, and Qoder.
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin that connects external coding agents to DSH's native session interface. Supports GLM (ZCode), MiniMax, Codex, Claude, Grok, Cursor, and Qoder.
 
 ## What it does
 
@@ -11,7 +11,6 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin tha
 - **ACP agent framework** — transports (stdio, WebSocket), per-agent dialects, frame projection, terminal & file sub-protocols
 - **GLM (ZCode) model client** — decrypts local ZCode login, calls GLM Coding Plan, streams responses
 - **MiniMax model client** — reads/refreshes MiniMax Code credentials, calls managed gateway
-- **WorkBuddy model client** — signs in to WorkBuddy itself (browser grant), calls its OpenAI-compatible model endpoint
 - **Preset dispatch** — registers external agents as DSH presets, takes over sessions, routes turns, handles model switching
 - **Quota endpoints** — host-side GLM/MiniMax/Codex/Claude/Grok quota routes (credentials never leave the host process)
 - **Roster filter** — hides marked presets from the new-session picker

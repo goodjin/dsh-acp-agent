@@ -5,7 +5,7 @@
  * 在设置里勾的），没有就用挂载行里声明的那份——所以「装上就有默认的一套，用户
  * 可以在设置里改」这条规矩成立。
  *
- * 一个上游一份文件：WorkBuddy 与 Qoder 国际版的清单互不相干，不该互相覆盖。
+ * 一个上游一份文件：Qoder 国际版的清单与别的上游互不相干，不该互相覆盖。
  */
 
 import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path'
 
 /**
  * 勾选结果文件的位置。
- * @param scope - 上游的名字（`workbuddy`、`qoder`…）。
+ * @param scope - 上游的名字（`qoder`…）。
  * @param env - 环境变量。
  * @returns 路径。
  */

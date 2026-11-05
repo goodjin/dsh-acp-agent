@@ -12,11 +12,9 @@ import type { CatalogTurnRequest } from './catalog.ts'
 import { minimaxiModelStream } from './minimaxi-model.ts'
 import type { PresetConfig } from './registry.ts'
 import { pairToolResults } from './tool-pairing.ts'
-import { workBuddyModelStream } from './workbuddy-model.ts'
 import { zcodeModelStream } from './zcode-model.ts'
 import type { MiniMaxStreamChunk } from './minimaxi/index.ts'
 import type { GlmStreamChunk } from './zcode/index.ts'
-import type { WorkBuddyStreamChunk } from './workbuddy/sse.ts'
 
 /**
  * One answerer for every model row. Returning nothing leaves the request on the
@@ -28,8 +26,8 @@ export function modelPluginStream(
     /** 把某个 agent 自报的模型清单写进目录账本（选择器以它为准）。 */
     readonly onRuntimeModels?: ((presetId: string, models: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[]) => void) | undefined
   },
-): (presetId: string, request: CatalogTurnRequest) => AsyncIterable<GlmStreamChunk | MiniMaxStreamChunk | WorkBuddyStreamChunk> | undefined {
-  const plugins = [zcodeModelStream(config), minimaxiModelStream(config), workBuddyModelStream(config, deps)]
+): (presetId: string, request: CatalogTurnRequest) => AsyncIterable<GlmStreamChunk | MiniMaxStreamChunk> | undefined {
+  const plugins = [zcodeModelStream(config), minimaxiModelStream(config)]
   return (presetId, request) => {
     const paired = withPairedResults(request)
     for (const plugin of plugins) {
@@ -60,7 +58,7 @@ function withPairedResults(request: CatalogTurnRequest): CatalogTurnRequest {
  * this row have a dialect, or is it a model?" must read the same list. Listing
  * one of them in a second place is how a row ends up mounted and inert.
  */
-const MODEL_BACKED_AGENTS = new Set(['zcode', 'minimaxi', 'workbuddy'])
+const MODEL_BACKED_AGENTS = new Set(['zcode', 'minimaxi'])
 
 export function isModelBackedAgent(agent: string | undefined): boolean {
   return agent !== undefined && MODEL_BACKED_AGENTS.has(agent)

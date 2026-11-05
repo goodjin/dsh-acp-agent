@@ -67,10 +67,6 @@
       "types": "./src/delegation-route.ts",
       "default": "./src/delegation-route.ts"
     },
-    "./workbuddy-login": {
-      "types": "./src/workbuddy-route.ts",
-      "default": "./src/workbuddy-route.ts"
-    },
     "./package.json": "./package.json"
   },
   "files": [
