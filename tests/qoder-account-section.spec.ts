@@ -142,11 +142,40 @@ describe('授权之后', () => {
   })
 })
 
+describe('排版', () => {
+  it('账号信息在一个框里，独占一行', () => {
+    const view = qoderAccountView({ state: SIGNED_IN })
+    const box = find(view, props => props['data-qoder-account-box'] === true)
+    expect(box).toBeDefined()
+    const style = box?.props?.style as Record<string, unknown> | undefined
+    expect(String(style?.['border'])).toContain('1px solid')
+  })
+
+  it('两个按钮一样大、留出间距、齐平', () => {
+    const view = qoderAccountView({ state: SIGNED_OUT })
+    const row = find(view, props => props['data-qoder-account-actions'] === true)
+    const rowStyle = row?.props?.style as Record<string, unknown> | undefined
+    expect(rowStyle?.['gap']).toBe('8px')
+    expect(rowStyle?.['alignItems']).toBe('center')
+    const login = find(view, props => props['data-qoder-login'] === true)
+    const check = find(view, props => props['data-qoder-refresh'] === true)
+    expect(login?.props?.style).toEqual(check?.props?.style)
+  })
+
+  it('元素之间都要有间距', () => {
+    const view = qoderAccountView({ state: SIGNED_OUT })
+    const root = find(view, props => props['data-qoder-account'] === 'root')
+    const style = root?.props?.style as Record<string, unknown> | undefined
+    expect(style?.['gap']).toBeDefined()
+    expect(style?.['flexDirection']).toBe('column')
+  })
+})
+
 describe('视图', () => {
-  it('登上了显示是谁，没有登录按钮', () => {
+  it('登上了显示是谁，登录按钮灰着（不藏——两个按钮是一组）', () => {
     const view = qoderAccountView({ state: SIGNED_IN })
     expect(textOf(view)).toContain('某人')
-    expect(find(view, props => props['data-qoder-login'] === true)).toBeUndefined()
+    expect(find(view, props => props['data-qoder-login'] === true)?.props?.disabled).toBe(true)
   })
 
   it('没登录给出登录按钮', () => {

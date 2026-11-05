@@ -15,6 +15,12 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { NAMESPACE, fallbackT } from './locales.ts'
 import {
+  ACCOUNT_ACTIONS_STYLE,
+  ACCOUNT_BOX_STYLE,
+  ACCOUNT_BUTTON_STYLE,
+  ACCOUNT_COLUMN_STYLE,
+} from './account-panel.tsx'
+import {
   readWorkBuddyModels,
   saveWorkBuddySelection,
   workBuddyModelsView,
@@ -40,20 +46,6 @@ export type WorkBuddyAccountState = {
 
 /** 文案座位。 */
 export type WorkBuddyAccountT = (key: string, params?: Record<string, string | number>) => string
-
-/** 两个按钮共用的样式：一样大、一样高，对齐着排。 */
-const BUTTON_STYLE = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '6px',
-  minHeight: '28px',
-  padding: '3px 12px',
-  borderRadius: '6px',
-  fontSize: 'var(--dsh-content-font-size-secondary, 13px)',
-  lineHeight: '1.4',
-  whiteSpace: 'nowrap',
-} as const
 
 /** 视图要什么。 */
 export type WorkBuddyAccountViewProps = {
@@ -165,14 +157,7 @@ export function workBuddyAccountView(props: WorkBuddyAccountViewProps): ReactNod
     <div
       key="box"
       data-workbuddy-account-box={true}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '4px',
-        padding: '10px 12px',
-        border: '1px solid var(--dsw-alias-border-default, rgba(0,0,0,0.12))',
-        borderRadius: '8px',
-      }}
+      style={ACCOUNT_BOX_STYLE}
     >
       {state.authenticated
         ? (
@@ -202,12 +187,12 @@ export function workBuddyAccountView(props: WorkBuddyAccountViewProps): ReactNod
     <div
       key="actions"
       data-workbuddy-account-actions={true}
-      style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}
+      style={ACCOUNT_ACTIONS_STYLE}
     >
       <button
         type="button"
         data-workbuddy-login={true}
-        style={BUTTON_STYLE}
+        style={ACCOUNT_BUTTON_STYLE}
         // 已经登上了就把登录按钮灰掉——两个按钮并排才看得出是一组。
         disabled={props.busy === true || state.authenticated}
         onClick={() => { props.onLogin?.() }}
@@ -217,7 +202,7 @@ export function workBuddyAccountView(props: WorkBuddyAccountViewProps): ReactNod
       <button
         type="button"
         data-workbuddy-refresh={true}
-        style={BUTTON_STYLE}
+        style={ACCOUNT_BUTTON_STYLE}
         disabled={props.busy === true}
         onClick={() => { props.onRefresh?.() }}
       >
@@ -230,7 +215,7 @@ export function workBuddyAccountView(props: WorkBuddyAccountViewProps): ReactNod
   return (
     <div
       data-workbuddy-account="root"
-      style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+      style={ACCOUNT_COLUMN_STYLE}
     >
       {children}
     </div>
