@@ -15,6 +15,7 @@ import {
   claudeDialect,
   codexDialect,
   cursorDialect,
+  doubaoDialect,
   grokDialect,
   qoderDialect,
   stdioArgsFor as acpStdioArgsFor,
@@ -98,6 +99,7 @@ const DIALECTS: Readonly<Record<string, AcpDialect>> = {
   claude: claudeDialect,
   codex: codexDialect,
   cursor: cursorDialect,
+  doubao: doubaoDialect,
   qoder: qoderDialect,
 }
 

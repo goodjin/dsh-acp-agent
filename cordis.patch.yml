@@ -634,3 +634,35 @@
                 - id: qwen3.8-max
                   name: Qwen 3.8 Max
                   description: Qoder 国际版 · 默认模型
+    - id: acp-doubao
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: acp-doubao
+        name: Doubao
+        order: 57
+        plugins:
+          - id: acp-doubao-binding
+            name: '@goodjin2/dsh-acp-agent'
+            config:
+              presetId: acp-doubao
+              agent: doubao
+              hideFromRoster: true
+              # 我们自己的 ACP 服务（src/doubao/）：它驱动豆包桌面端那个
+              # Chromium 外壳的网页，把回答从页面上读回来。豆包的模型请求由它
+              # 自己发出（浏览器端签名），我们不直连接口。
+              #
+              # command 指向 node，args 指向本插件构建出的服务入口
+              # （package.json 的 bin: doubao-acp）。路径按本机 profile 的
+              # link 安装写死，与其它几行 agent 一样的做法。
+              command: /Users/good/bin/node
+              args:
+                - /Users/good/.dsh/profiles/desktop/node_modules/@goodjin2/dsh-acp-agent/lib/src/doubao/main.js
+              # 驱动浏览器的一轮比本地 CLI 慢：页面轮询 + 豆包自己的工具，
+              # 120 秒的默认静默看门狗会误杀，放宽到 5 分钟。
+              stallMs: 300000
+              # 豆包没有可切换的模型清单，选择器只给一项。
+              mode: default
+              models:
+                - id: doubao-default
+                  name: 豆包
+                  description: 豆包桌面端 · 网页版模型

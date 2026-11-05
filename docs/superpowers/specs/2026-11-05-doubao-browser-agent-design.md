@@ -115,6 +115,11 @@ POST https://www.doubao.com/chat/completion
   不对普通 webview 暴露，或需要 appId/白名单。
 
 **结论**：官方 MCP 路径方向正确、服务端完全支持，**唯一缺口是客户端的安装/授权触发**。
+
+补测（2026-11-05，走 HTTP 传输绕开「本地安装」）：把连接器 connect + enable + 挂到会话之后，
+**发消息的请求体里 `connector_info_list` 仍然是空数组** —— 服务端根本没把工具下发给模型，
+豆包自己的回答是「我没有名为 dsh_echo 的工具」。stdio 与 http 两条路因此一起断在客户端上报上。
+
 第一阶段仍按用户许可的兜底方案：豆包执行它自己的工具，我们拦截并展示；
 「豆包调 DSH 工具」作为独立后续任务（§8 给了三条补齐路径）。
 
@@ -208,3 +213,28 @@ DOM 选择器是这套方案最大的脆弱点（网页应用随时改版）。�
 - 不把豆包的 `app.asar`/网页产物搬进本仓库（抄协议事实，不抄代码）。
 - 不在第一阶段接管 DSH 工具执行（见 §3.5）。
 - 不在第一阶段支持多浏览器实例并行。
+
+## 10. 实现现状（2026-11-05）
+
+阶段一已落地并真机跑通：
+
+| 文件 | 职责 |
+|---|---|
+| `src/doubao/cdp.ts` | CDP 传输（零依赖，用 Node 自带 WebSocket；socket 可注入以便单测） |
+| `src/doubao/dom.ts` | 页面快照脚本与结果类型（行、是否在生成、会话 id） |
+| `src/doubao/parse.ts` | 纯解析：哪一行是提示、哪一段是正文、哪些是工具动作 |
+| `src/doubao/browser.ts` | 应用生命周期（必要时带端口启动）与页面操作（聚焦、输入、发送、停止） |
+| `src/doubao/agent.ts` | ACP 服务（stdio JSON-RPC）：一轮对话 → `agent_message_chunk` / `tool_call` |
+| `src/doubao/main.ts` | 独立进程入口（预置行的 `command` 指向它） |
+| `src/dialects/doubao.ts` | 方言（工具名留空：豆包的工具活动只有一行人话，没有函数名） |
+
+真机结果（消费版桌面端，2026-11-05）：普通问句一轮约 3.6 s，联网搜索那一轮约 5 s，
+工具活动以 `tool_call` 帧上报，正文逐块以 `agent_message_chunk` 流出。
+
+实现期踩到的三件事（已写进 `docs/agent-acp/doubao.md`）：
+
+1. **完成判据不是页面信号**：桌面端渲染不出可识别的「停止生成」控件，只能看答案是否停止变化
+   （连续 5 次轮询不变即算答完）。
+2. **提示词会被豆包改写**（`2026年` → `2026 年`），匹配必须去空白。
+3. **插件源码不能用构造函数参数属性**（`constructor(private readonly x: T)`）：宿主用 strip-only
+   擦除类型，这种写法擦不掉，整个模块会 import 失败。`tests/strip-only-syntax.spec.ts` 会抓到。

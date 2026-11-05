@@ -70,6 +70,7 @@ export const EXPECTED_ROWS: readonly RowExpectation[] = [
   { id: 'acp-agent-qoder-login', what: 'Qoder 国际版登录接口' },
   { id: 'acp-qoder-global', what: 'Qoder 国际版模型预置' },
   { id: 'acp-workbuddy', what: 'WorkBuddy 预置' },
+  { id: 'acp-doubao', what: '豆包桌面端预置' },
 ]
 
 /** 一行的核对结果。 */
