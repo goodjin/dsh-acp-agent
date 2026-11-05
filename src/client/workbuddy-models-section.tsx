@@ -181,7 +181,10 @@ export function workBuddyModelsView(props: WorkBuddyModelsViewProps): ReactNode 
   })
 
   return (
-    <div data-workbuddy-models="root">
+    <div
+      data-workbuddy-models="root"
+      style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}
+    >
       <h4 data-workbuddy-models-title={true}>{t('workbuddy.models.title')}</h4>
       <input
         type="search"
@@ -200,7 +203,10 @@ export function workBuddyModelsView(props: WorkBuddyModelsViewProps): ReactNode 
       {props.list.custom
         ? <span data-workbuddy-models-custom={true}>{t('workbuddy.models.custom')}</span>
         : <span data-workbuddy-models-default={true}>{t('workbuddy.models.defaultHint')}</span>}
-      <div data-workbuddy-models-list={true}>
+      <div
+        data-workbuddy-models-list={true}
+        style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}
+      >
         {rows.length === 0
           ? <p data-workbuddy-models-empty={true}>{t('workbuddy.models.empty')}</p>
           : rows}
