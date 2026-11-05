@@ -125,6 +125,19 @@ describe('领当天积分', () => {
     expect(result.message).toBe('今天已签到，请明天再来')
   })
 
+  it('站点用 400 回「今天已签到」也一样算「已经办完了」（真机就是这么回的）', async () => {
+    const fetchImpl: typeof fetch = async () => jsonResponse({ code: 10001, msg: '今天已签到，请明天再来' }, 400)
+    const result = await claimDailyCheckin({ credential, fetchImpl })
+    expect(result.claimed).toBe(false)
+    expect(result.alreadyClaimed).toBe(true)
+    expect(result.message).toBe('今天已签到，请明天再来')
+  })
+
+  it('状态接口用 400 回业务错误时照样是错误', async () => {
+    const fetchImpl: typeof fetch = async () => jsonResponse({ code: 12153, msg: 'token expired' }, 400)
+    await expect(fetchCheckinStatus({ credential, fetchImpl })).rejects.toThrow(/12153/)
+  })
+
   it('官方客户端那套码（1001）也认成「已经办完了」', async () => {
     const fetchImpl: typeof fetch = async () => jsonResponse({ code: 1001, msg: '已领取' })
     const result = await claimDailyCheckin({ credential, fetchImpl })

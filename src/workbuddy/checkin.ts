@@ -286,15 +286,19 @@ async function postJson(
     body: JSON.stringify({}),
   })
   const text = await response.text().catch(() => '')
-  if (!response.ok) {
-    throw new Error(`WorkBuddy 签到请求失败（${String(response.status)}）：${scrub(text.slice(0, 300), token)}`)
-  }
   let parsed: unknown
+  let isJson = true
   try {
     parsed = JSON.parse(text) as unknown
   } catch {
-    throw new Error('WorkBuddy 签到应答不是 JSON')
+    isJson = false
   }
+  // 站点用 400 回业务码是常态（「今天已签到」就是 400）：只要能读出业务码，就交给
+  // 上层按业务码判断，不当成传输失败。读不出业务码的才是真失败。
+  if (!response.ok && (!isJson || typeof (parsed as Record<string, unknown>)['code'] !== 'number')) {
+    throw new Error(`WorkBuddy 签到请求失败（${String(response.status)}）：${scrub(text.slice(0, 300), token)}`)
+  }
+  if (!isJson) throw new Error('WorkBuddy 签到应答不是 JSON')
   return recordOf(parsed)
 }
 
