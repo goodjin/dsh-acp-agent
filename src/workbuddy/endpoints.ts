@@ -82,6 +82,8 @@ export type WorkBuddyEndpoints = {
   readonly checkinStatusUrl: string
   /** 领当天积分：`{base}/v2/billing/meter/daily-checkin`。 */
   readonly dailyCheckinUrl: string
+  /** 套餐与积分：`{base}/billing/meter/get-user-resource-summary`（这一条不带 /v2）。 */
+  readonly creditsUrl: string
 }
 
 /**
@@ -107,5 +109,6 @@ export function resolveEndpoints(
     chatUrl: `${base}/v2/chat/completions`,
     checkinStatusUrl: `${base}/v2/billing/meter/checkin-activity-status`,
     dailyCheckinUrl: `${base}/v2/billing/meter/daily-checkin`,
+    creditsUrl: `${base}/billing/meter/get-user-resource-summary`,
   }
 }
