@@ -1,38 +1,38 @@
 /**
- * 用户勾选了哪些模型。
+ * 用户勾了哪些模型（按上游分开放）。
  *
- * 勾选结果存在本机（跟凭据放在一起）：`~/.dsh/workbuddy/selection.json`。
+ * 勾选结果存在本机：`~/.dsh/<范围>/selection.json`。有文件就以它为准（用户
+ * 在设置里勾的），没有就用挂载行里声明的那份——所以「装上就有默认的一套，用户
+ * 可以在设置里改」这条规矩成立。
  *
- * 有这个文件就以它为准（用户在设置里勾的），没有就用挂载行里声明的那份——所以
- * 「装上就有默认的一套，用户可以在设置里改」这条规矩成立。
+ * 一个上游一份文件：WorkBuddy 与 Qoder 国际版的清单互不相干，不该互相覆盖。
  */
 
 import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-/** 勾选结果文件相对 DSH 目录的位置。 */
-const SELECTION_RELATIVE_PATH = 'workbuddy/selection.json'
-
 /**
  * 勾选结果文件的位置。
+ * @param scope - 上游的名字（`workbuddy`、`qoder`…）。
  * @param env - 环境变量。
  * @returns 路径。
  */
-export function selectionFilePath(env: NodeJS.ProcessEnv = process.env): string {
+export function selectionFilePath(scope: string, env: NodeJS.ProcessEnv = process.env): string {
   const home = env['DSH_HOME'] !== undefined && env['DSH_HOME'] !== ''
     ? env['DSH_HOME']
     : join(homedir(), '.dsh')
-  return join(home, ...SELECTION_RELATIVE_PATH.split('/'))
+  return join(home, scope, 'selection.json')
 }
 
 /**
  * 读出勾选结果。
+ * @param scope - 上游的名字。
  * @param file - 文件；缺省用默认位置。
  * @returns 勾了的模型 id；没勾过（没有这个文件）是 `undefined`。
  */
-export async function readSelection(file?: string): Promise<readonly string[] | undefined> {
-  const path = file ?? selectionFilePath()
+export async function readSelection(scope: string, file?: string): Promise<readonly string[] | undefined> {
+  const path = file ?? selectionFilePath(scope)
   let text: string
   try {
     text = await readFile(path, 'utf8')
@@ -52,11 +52,12 @@ export async function readSelection(file?: string): Promise<readonly string[] | 
 
 /**
  * 把勾选结果写下来。
+ * @param scope - 上游的名字。
  * @param ids - 勾了的模型 id。
  * @param file - 文件；缺省用默认位置。
  */
-export async function writeSelection(ids: readonly string[], file?: string): Promise<void> {
-  const path = file ?? selectionFilePath()
+export async function writeSelection(scope: string, ids: readonly string[], file?: string): Promise<void> {
+  const path = file ?? selectionFilePath(scope)
   await mkdir(dirname(path), { recursive: true, mode: 0o700 })
   await chmod(dirname(path), 0o700).catch(() => {})
   await writeFile(path, JSON.stringify({ ids: [...ids] }), { encoding: 'utf8', mode: 0o600 })
@@ -65,10 +66,11 @@ export async function writeSelection(ids: readonly string[], file?: string): Pro
 
 /**
  * 清掉勾选结果（回到挂载行里声明的那份）。
+ * @param scope - 上游的名字。
  * @param file - 文件；缺省用默认位置。
  */
-export async function clearSelection(file?: string): Promise<void> {
-  const path = file ?? selectionFilePath()
+export async function clearSelection(scope: string, file?: string): Promise<void> {
+  const path = file ?? selectionFilePath(scope)
   await rm(path, { force: true }).catch(() => {})
 }
 

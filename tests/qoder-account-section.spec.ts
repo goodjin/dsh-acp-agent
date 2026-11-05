@@ -15,6 +15,7 @@ import {
   beginQoderLogin,
   pollUntilQoderSignedIn,
   qoderAccountView,
+  qoderSettingsView,
   readQoderSession,
   QODER_LOGIN_URL,
   QODER_SESSION_URL,
@@ -139,6 +140,29 @@ describe('授权之后', () => {
     })
     expect(state.authenticated).toBe(false)
     expect(calls.length).toBe(3)
+  })
+})
+
+describe('模型列表', () => {
+  const MODELS = {
+    models: [{ id: 'qwen3.8-max', name: 'Qwen 3.8 Max' }],
+    selected: ['qwen3.8-max'],
+    custom: false,
+    default: ['qwen3.8-max'],
+  }
+
+  it('模型列表在账号那部分下面', () => {
+    const view = qoderSettingsView({ state: SIGNED_IN, models: MODELS })
+    const children = (view as ReactElement & { props?: { children?: unknown } }).props?.children
+    const list = Array.isArray(children) ? children : [children]
+    expect((list[0] as ReactElement & { props?: Record<string, unknown> })?.props?.['data-qoder-account']).toBe('root')
+    expect((list[1] as ReactElement & { props?: Record<string, unknown> })?.props?.['data-model-checklist']).toBe('root')
+  })
+
+  it('账号与模型列表之间也留出间距', () => {
+    const view = qoderSettingsView({ state: SIGNED_IN, models: MODELS })
+    const root = (view as ReactElement & { props?: { style?: Record<string, unknown> } }).props
+    expect(root?.style?.['gap']).toBeDefined()
   })
 })
 

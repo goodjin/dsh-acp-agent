@@ -21,11 +21,11 @@ import {
   ACCOUNT_COLUMN_STYLE,
 } from './account-panel.tsx'
 import {
-  readWorkBuddyModels,
-  saveWorkBuddySelection,
-  workBuddyModelsView,
-} from './workbuddy-models-section.tsx'
-import type { WorkBuddyModelList } from './workbuddy-models-section.tsx'
+  readModelChecklist,
+  saveModelChecklist,
+  modelChecklistView,
+} from './model-checklist.tsx'
+import type { ModelChecklistState } from './model-checklist.tsx'
 
 /** 设置里的行 id。 */
 export const WORKBUDDY_ACCOUNT_SECTION_ID = 'acp-agent-workbuddy-account'
@@ -33,9 +33,10 @@ export const WORKBUDDY_ACCOUNT_SECTION_ID = 'acp-agent-workbuddy-account'
 /** 行在设置侧栏里的顺序。 */
 export const WORKBUDDY_ACCOUNT_SECTION_ORDER = 120
 
-/** 宿主路由路径（与宿主侧那两条一致）。 */
+/** 宿主路由路径（与宿主侧那几条一致）。 */
 export const WORKBUDDY_SESSION_URL = '/acp-agent/workbuddy/session'
 export const WORKBUDDY_LOGIN_URL = '/acp-agent/workbuddy/login'
+export const WORKBUDDY_MODELS_URL = '/acp-agent/workbuddy/models'
 
 /** 账号状态：只认「登了没」与「是谁」，没有令牌。 */
 export type WorkBuddyAccountState = {
@@ -58,7 +59,7 @@ export type WorkBuddyAccountViewProps = {
 
 /** 整段的视图要什么：账号那部分 + 模型列表那部分。 */
 export type WorkBuddySettingsViewProps = WorkBuddyAccountViewProps & {
-  readonly models?: WorkBuddyModelList | undefined
+  readonly models?: ModelChecklistState | undefined
   readonly query?: string | undefined
   readonly onQueryChange?: ((value: string) => void) | undefined
   readonly onToggle?: ((id: string, checked: boolean) => void) | undefined
@@ -236,7 +237,7 @@ export function workBuddySettingsView(props: WorkBuddySettingsViewProps): ReactN
       {workBuddyAccountView(props)}
       {props.models === undefined
         ? null
-        : workBuddyModelsView({
+        : modelChecklistView({
           list: props.models,
           ...(props.busy === undefined ? {} : { busy: props.busy }),
           ...(props.query === undefined ? {} : { query: props.query }),
@@ -252,7 +253,7 @@ export function workBuddySettingsView(props: WorkBuddySettingsViewProps): ReactN
 /** 组件：取一次状态，之后由两个动作驱动。 */
 export function WorkBuddyAccountSection(props: { readonly t?: WorkBuddyAccountT }): ReactNode {
   const [state, setState] = useState<WorkBuddyAccountState>({ authenticated: false })
-  const [models, setModels] = useState<WorkBuddyModelList | undefined>(undefined)
+  const [models, setModels] = useState<ModelChecklistState | undefined>(undefined)
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -269,7 +270,7 @@ export function WorkBuddyAccountSection(props: { readonly t?: WorkBuddyAccountT 
 
   const reloadModels = useCallback(async () => {
     try {
-      setModels(await readWorkBuddyModels({}))
+      setModels(await readModelChecklist(WORKBUDDY_MODELS_URL, {}))
     } catch {
       // 清单拿不到就只留账号那部分（模型列表空着，不挡着别的设置）。
       setModels(undefined)
@@ -302,12 +303,12 @@ export function WorkBuddyAccountSection(props: { readonly t?: WorkBuddyAccountT 
       ? [...current.filter(item => item !== id), id]
       : current.filter(item => item !== id)
     setModels(models === undefined ? undefined : { ...models, selected: next, custom: true })
-    void saveWorkBuddySelection(next).catch(() => undefined)
+    void saveModelChecklist(WORKBUDDY_MODELS_URL, next, {}).catch(() => undefined)
   }, [models])
 
   const restoreDefault = useCallback(() => {
     const defaults = models?.default ?? []
-    void saveWorkBuddySelection(defaults).catch(() => undefined)
+    void saveModelChecklist(WORKBUDDY_MODELS_URL, defaults, {}).catch(() => undefined)
   }, [models])
 
   return workBuddySettingsView({

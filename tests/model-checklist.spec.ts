@@ -9,11 +9,11 @@ import { describe, expect, it } from 'vitest'
 import type { ReactElement } from 'react'
 import {
   filterModels,
-  readWorkBuddyModels,
-  saveWorkBuddySelection,
-  workBuddyModelsView,
-} from '../src/client/workbuddy-models-section.tsx'
-import type { WorkBuddyModelList } from '../src/client/workbuddy-models-section.tsx'
+  modelChecklistView,
+  readModelChecklist,
+  saveModelChecklist,
+} from '../src/client/model-checklist.tsx'
+import type { ModelChecklistState } from '../src/client/model-checklist.tsx'
 
 /** 在元素树里找第一个满足条件的节点。 */
 function find(node: unknown, match: (props: Record<string, unknown>) => boolean): ReactElement | undefined {
@@ -38,7 +38,7 @@ function textOf(node: unknown): string {
   return textOf((node as { props?: { children?: unknown } }).props?.children)
 }
 
-const LIST: WorkBuddyModelList = {
+const LIST: ModelChecklistState = {
   models: [
     { id: 'glm-5.3', name: 'GLM-5.3', description: '旗舰（积分 x0.69）', credits: 'x0.69', supportsToolCall: true },
     { id: 'hy4free', name: 'Hy4', credits: 'x0.00', supportsToolCall: true },
@@ -62,7 +62,7 @@ describe('问宿主', () => {
       }), { status: 200 })
     }) as unknown as typeof fetch
 
-    const list = await readWorkBuddyModels({ fetchImpl })
+    const list = await readModelChecklist('/acp-agent/workbuddy/models', { fetchImpl })
     expect(calls[0]).toContain('/acp-agent/workbuddy/models')
     expect(list.models).toHaveLength(3)
     expect(list.selected).toEqual(['glm-5.3'])
@@ -76,46 +76,46 @@ describe('问宿主', () => {
       return new Response(JSON.stringify({ ok: true, selected: ['a'] }), { status: 200 })
     }) as unknown as typeof fetch
 
-    await saveWorkBuddySelection(['a', 'b'], { fetchImpl })
+    await saveModelChecklist('/acp-agent/workbuddy/models', ['a', 'b'], { fetchImpl })
     expect(bodies).toEqual([{ ids: ['a', 'b'] }])
   })
 })
 
 describe('勾选界面', () => {
   it('整份清单都列出来：勾掉的也看得见', () => {
-    const view = workBuddyModelsView({ list: LIST })
+    const view = modelChecklistView({ list: LIST })
     for (const id of ['glm-5.3', 'hy4free', 'kling-video-v3']) {
-      expect(find(view, props => props['data-workbuddy-model'] === id)).toBeDefined()
+      expect(find(view, props => props['data-model-check'] === id)).toBeDefined()
     }
   })
 
   it('勾选状态跟宿主给的一致', () => {
-    const view = workBuddyModelsView({ list: LIST })
-    const checked = find(view, props => props['data-workbuddy-model'] === 'glm-5.3')
+    const view = modelChecklistView({ list: LIST })
+    const checked = find(view, props => props['data-model-check'] === 'glm-5.3')
     expect(checked?.props?.checked).toBe(true)
-    const unchecked = find(view, props => props['data-workbuddy-model'] === 'hy4free')
+    const unchecked = find(view, props => props['data-model-check'] === 'hy4free')
     expect(unchecked?.props?.checked).toBe(false)
   })
 
   it('倍率与「不能带工具」都标出来', () => {
-    const view = workBuddyModelsView({ list: LIST })
-    expect(find(view, props => props['data-workbuddy-model-credits'] === true)).toBeDefined()
-    expect(find(view, props => props['data-workbuddy-model-notool'] === true)).toBeDefined()
+    const view = modelChecklistView({ list: LIST })
+    expect(find(view, props => props['data-model-credits'] === true)).toBeDefined()
+    expect(find(view, props => props['data-model-notool'] === true)).toBeDefined()
   })
 
   it('没自己勾过时说明「用的是默认那一份」，勾过就说明已自定义', () => {
-    expect(textOf(workBuddyModelsView({ list: LIST }))).toContain('默认')
-    const custom = workBuddyModelsView({ list: { ...LIST, custom: true } })
-    expect(find(custom, props => props['data-workbuddy-models-custom'] === true)).toBeDefined()
+    expect(textOf(modelChecklistView({ list: LIST }))).toContain('默认')
+    const custom = modelChecklistView({ list: { ...LIST, custom: true } })
+    expect(find(custom, props => props['data-model-custom'] === true)).toBeDefined()
   })
 
   it('勾一下把新的勾选发出去', () => {
     const toggled: { id: string; checked: boolean }[] = []
-    const view = workBuddyModelsView({
+    const view = modelChecklistView({
       list: LIST,
       onToggle: (id, checked) => { toggled.push({ id, checked }) },
     })
-    const box = find(view, props => props['data-workbuddy-model'] === 'hy4free')
+    const box = find(view, props => props['data-model-check'] === 'hy4free')
     const onChange = box?.props?.onChange as ((event: { target: { checked: boolean } }) => void) | undefined
     onChange?.({ target: { checked: true } })
     expect(toggled).toEqual([{ id: 'hy4free', checked: true }])
@@ -123,11 +123,11 @@ describe('勾选界面', () => {
 
   it('有搜索框：输入的词传给外面', () => {
     const queries: string[] = []
-    const view = workBuddyModelsView({
+    const view = modelChecklistView({
       list: LIST,
       onQueryChange: (value: string) => { queries.push(value) },
     })
-    const box = find(view, props => props['data-workbuddy-models-search'] === true)
+    const box = find(view, props => props['data-model-search'] === true)
     expect(box).toBeDefined()
     const onChange = box?.props?.onChange as ((event: { target: { value: string } }) => void) | undefined
     onChange?.({ target: { value: 'glm' } })
@@ -143,14 +143,14 @@ describe('勾选界面', () => {
   })
 
   it('搜索时列表里只剩匹配的那些', () => {
-    const view = workBuddyModelsView({ list: LIST, query: 'hy4' })
-    expect(find(view, props => props['data-workbuddy-model'] === 'hy4free')).toBeDefined()
-    expect(find(view, props => props['data-workbuddy-model'] === 'glm-5.3')).toBeUndefined()
+    const view = modelChecklistView({ list: LIST, query: 'hy4' })
+    expect(find(view, props => props['data-model-check'] === 'hy4free')).toBeDefined()
+    expect(find(view, props => props['data-model-check'] === 'glm-5.3')).toBeUndefined()
   })
 
   it('倍率是胶囊：圆角、小间距、数字等宽', () => {
-    const view = workBuddyModelsView({ list: LIST })
-    const pill = find(view, props => props['data-workbuddy-model-credits'] === true)
+    const view = modelChecklistView({ list: LIST })
+    const pill = find(view, props => props['data-model-credits'] === true)
     const style = pill?.props?.style as Record<string, unknown> | undefined
     expect(style?.['borderRadius']).toBe('999px')
     expect(style?.['fontVariantNumeric']).toBe('tabular-nums')

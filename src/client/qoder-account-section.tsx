@@ -16,6 +16,12 @@ import {
   ACCOUNT_BUTTON_STYLE,
   ACCOUNT_COLUMN_STYLE,
 } from './account-panel.tsx'
+import {
+  modelChecklistView,
+  readModelChecklist,
+  saveModelChecklist,
+} from './model-checklist.tsx'
+import type { ModelChecklistState } from './model-checklist.tsx'
 import type { WorkBuddyAccountSlotHost } from './workbuddy-account-section.tsx'
 
 /** 设置里的行 id。 */
@@ -24,9 +30,10 @@ export const QODER_ACCOUNT_SECTION_ID = 'acp-agent-qoder-account'
 /** 行在设置侧栏里的顺序。 */
 export const QODER_ACCOUNT_SECTION_ORDER = 121
 
-/** 宿主路由路径（与宿主侧那两条一致）。 */
+/** 宿主路由路径（与宿主侧那几条一致）。 */
 export const QODER_SESSION_URL = '/acp-agent/qoder-global/session'
 export const QODER_LOGIN_URL = '/acp-agent/qoder-global/login'
+export const QODER_MODELS_URL = '/acp-agent/qoder-global/models'
 
 /** 账号状态：只认「登了没」与「是谁」，没有令牌。 */
 export type QoderAccountState = {
@@ -45,6 +52,15 @@ export type QoderAccountViewProps = {
   readonly onLogin?: (() => void) | undefined
   readonly onRefresh?: (() => void) | undefined
   readonly t?: QoderAccountT | undefined
+}
+
+/** 整段的视图要什么：账号那部分 + 模型列表那部分。 */
+export type QoderSettingsViewProps = QoderAccountViewProps & {
+  readonly models?: ModelChecklistState | undefined
+  readonly query?: string | undefined
+  readonly onQueryChange?: ((value: string) => void) | undefined
+  readonly onToggle?: ((id: string, checked: boolean) => void) | undefined
+  readonly onRestoreDefault?: (() => void) | undefined
 }
 
 /**
@@ -189,9 +205,38 @@ export function qoderAccountView(props: QoderAccountViewProps): ReactNode {
   )
 }
 
+/**
+ * 整段的视图：账号那部分在上，模型列表在下。
+ * @param props - 账号状态、模型清单与各个动作。
+ * @returns 元素树。
+ */
+export function qoderSettingsView(props: QoderSettingsViewProps): ReactNode {
+  return (
+    <div
+      data-qoder-settings="root"
+      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+    >
+      {qoderAccountView(props)}
+      {props.models === undefined
+        ? null
+        : modelChecklistView({
+          list: props.models,
+          ...(props.busy === undefined ? {} : { busy: props.busy }),
+          ...(props.query === undefined ? {} : { query: props.query }),
+          ...(props.onQueryChange === undefined ? {} : { onQueryChange: props.onQueryChange }),
+          ...(props.onToggle === undefined ? {} : { onToggle: props.onToggle }),
+          ...(props.onRestoreDefault === undefined ? {} : { onRestoreDefault: props.onRestoreDefault }),
+          ...(props.t === undefined ? {} : { t: props.t }),
+        })}
+    </div>
+  )
+}
+
 /** 组件：取一次状态，之后由两个动作驱动。 */
 export function QoderAccountSection(props: { readonly t?: QoderAccountT }): ReactNode {
   const [state, setState] = useState<QoderAccountState>({ authenticated: false })
+  const [models, setModels] = useState<ModelChecklistState | undefined>(undefined)
+  const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
 
   const refresh = useCallback(async () => {
@@ -205,7 +250,16 @@ export function QoderAccountSection(props: { readonly t?: QoderAccountT }): Reac
     }
   }, [])
 
-  useEffect(() => { void refresh() }, [refresh])
+  const reloadModels = useCallback(async () => {
+    try {
+      setModels(await readModelChecklist(QODER_MODELS_URL, {}))
+    } catch {
+      // 清单拿不到就只留账号那部分（模型列表空着，不挡着别的设置）。
+      setModels(undefined)
+    }
+  }, [])
+
+  useEffect(() => { void refresh(); void reloadModels() }, [refresh, reloadModels])
 
   const login = useCallback(async () => {
     setBusy(true)
@@ -225,9 +279,28 @@ export function QoderAccountSection(props: { readonly t?: QoderAccountT }): Reac
     }
   }, [refresh])
 
-  return qoderAccountView({
+  const toggle = useCallback((id: string, checked: boolean) => {
+    const current = models?.selected ?? []
+    const next = checked
+      ? [...current.filter(item => item !== id), id]
+      : current.filter(item => item !== id)
+    setModels(models === undefined ? undefined : { ...models, selected: next, custom: true })
+    void saveModelChecklist(QODER_MODELS_URL, next, {}).catch(() => undefined)
+  }, [models])
+
+  const restoreDefault = useCallback(() => {
+    const defaults = models?.default ?? []
+    void saveModelChecklist(QODER_MODELS_URL, defaults, {}).catch(() => undefined)
+  }, [models])
+
+  return qoderSettingsView({
     state,
     busy,
+    ...(models === undefined ? {} : { models }),
+    query,
+    onQueryChange: (value: string) => { setQuery(value) },
+    onToggle: (id, checked) => { toggle(id, checked) },
+    onRestoreDefault: () => { restoreDefault() },
     onLogin: () => { void login() },
     onRefresh: () => { void refresh() },
     ...(props.t === undefined ? {} : { t: props.t }),

@@ -15,6 +15,7 @@
 
 import type { CatalogTurnRequest } from './catalog.ts'
 import type { PresetConfig } from './registry.ts'
+import { readSelection } from './model-selection.ts'
 import { BUILTIN_MODELS, fetchModels, resolveCredential, streamQoder } from './qoder/index.ts'
 import type { QoderCredential, QoderModel } from './qoder/index.ts'
 import type { WorkBuddyStreamChunk } from './workbuddy/sse.ts'
@@ -38,11 +39,83 @@ const modelListAt = new Map<string, { at: number; ok: boolean }>()
 /** 每个模型支持哪些档位（按模型 id 记，跨 preset 共用）。 */
 const modelEfforts = new Map<string, readonly string[]>()
 
+/** 每一行声明了哪些模型（按 preset 记，跨 preset 共用）。 */
+const declaredIds = new Map<string, readonly string[]>()
+
+/** 每一行的清单发布口（写进目录的运行时账本）。 */
+const publishers = new Map<string, {
+  readonly declared: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[]
+  readonly publish: (models: readonly QoderReportedModel[]) => void
+}>()
+
 /** 每个模型的最大 token 字段名（按模型 id 记，跨 preset 共用）。 */
 const modelMaxTokensField = new Map<string, 'max_tokens' | 'max_completion_tokens'>()
 
 // 清单没到手时，内置模型的字段名也得是对的。
 for (const [id, model] of Object.entries(BUILTIN_MODELS)) modelMaxTokensField.set(id, model.maxTokensField)
+
+/**
+ * 默认勾了哪些模型（挂载行里声明的那份）。
+ *
+ * 设置界面要显示「当前生效的是哪些」——用户还没自己勾过时，生效的就是这一份。
+ */
+export function qoderDeclaredModelIds(): readonly string[] {
+  const first = [...declaredIds.values()][0]
+  return first === undefined ? [] : [...first]
+}
+
+/**
+ * 把清单缓存丢掉，下次重新拉。
+ *
+ * 登录成功、勾选变了之后要用：新的状态可能拿到更大的清单，旧的缓存别再挡着。
+ */
+export function invalidateQoderCatalog(): void {
+  modelListAt.clear()
+}
+
+/**
+ * 重新拉一次清单并写进目录账本。
+ *
+ * 勾选完立刻调用：选择器下一次打开就是新的那份。
+ */
+export async function refreshQoderModels(): Promise<void> {
+  if (publishers.size === 0) return
+  let credential: QoderCredential
+  try {
+    credential = await resolveCredential()
+  } catch {
+    return
+  }
+  const models = await fetchModels({ credential }).catch(() => undefined)
+  if (models === undefined || models.length === 0) return
+  modelListAt.set([...publishers.keys()][0] ?? '', { at: Date.now(), ok: true })
+  rememberEfforts(models)
+  const byId = new Map(models.map(model => [model.id, model]))
+  for (const publisher of publishers.values()) {
+    publisher.publish(publisher.declared.map(entry => {
+      const found = byId.get(entry.id)
+      const description = found?.description ?? entry.description
+      return {
+        id: entry.id,
+        name: found?.name ?? entry.name,
+        ...(description === undefined ? {} : { description }),
+      }
+    }))
+  }
+}
+
+/**
+ * 这一行真正提供哪些模型。
+ *
+ * 用户在设置里勾过的优先（那是他的意思），没勾过就用挂载行里声明的那一份。
+ */
+async function effectiveDeclared(
+  declared: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[],
+): Promise<readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[]> {
+  const selected = await readSelection('qoder').catch(() => undefined)
+  if (selected === undefined) return declared
+  return selected.map(id => ({ id, name: id }))
+}
 
 /**
  * 认下 Qoder 国际版那一行，并把它变成模型插件。
@@ -56,10 +129,19 @@ export function qoderModelStream(
     readonly onRuntimeModels?: ((presetId: string, models: readonly QoderReportedModel[]) => void) | undefined
   },
 ): (presetId: string, request: CatalogTurnRequest) => AsyncGenerator<WorkBuddyStreamChunk> | undefined {
+  // 登记默认清单与发布口：设置界面要显示「默认勾了哪些」，勾完要立刻重发清单。
+  for (const [presetId, preset] of Object.entries(config.presets)) {
+    if (preset.agent !== 'qoder-global') continue
+    declaredIds.set(presetId, (preset.models ?? []).map(model => model.id))
+    publishers.set(presetId, {
+      declared: preset.models ?? [],
+      publish: models => { deps?.onRuntimeModels?.(presetId, models) },
+    })
+  }
   return (presetId, request) => {
     const preset = config.presets[presetId]
     if (preset?.agent !== 'qoder-global') return undefined
-    return answer(presetId, request, deps)
+    return answer(presetId, request, deps, preset.models ?? [])
   }
 }
 
@@ -69,9 +151,10 @@ async function* answer(
   deps: {
     readonly onRuntimeModels?: ((presetId: string, models: readonly QoderReportedModel[]) => void) | undefined
   } | undefined,
+  declared: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[],
 ): AsyncGenerator<WorkBuddyStreamChunk> {
   const credential = await resolveCredential()
-  await publishModels(presetId, credential, deps)
+  await publishModels(presetId, credential, deps, await effectiveDeclared(declared))
   yield* streamQoder(requestWithKnownEffort(request), {
     credential: (rejectedToken?: string) => resolveCredential({ rejectedToken }),
     maxTokensField: modelMaxTokensField.get(request.model),
@@ -103,6 +186,7 @@ async function publishModels(
   deps: {
     readonly onRuntimeModels?: ((presetId: string, models: readonly QoderReportedModel[]) => void) | undefined
   } | undefined,
+  declared: readonly { readonly id: string; readonly name: string; readonly description?: string | undefined }[],
 ): Promise<void> {
   const last = modelListAt.get(presetId)
   if (last !== undefined) {
@@ -117,11 +201,18 @@ async function publishModels(
   }
   modelListAt.set(presetId, { at: Date.now(), ok: true })
   rememberEfforts(models)
-  deps?.onRuntimeModels?.(presetId, models.map(model => ({
-    id: model.id,
-    name: model.name,
-    ...(model.description === undefined ? {} : { description: model.description }),
-  })))
+  // 声明的清单说了算（白名单）：站点给的清单只用来补名字与描述。
+  const byId = new Map(models.map(model => [model.id, model]))
+  const merged = declared.map(entry => {
+    const found = byId.get(entry.id)
+    const description = found?.description ?? entry.description
+    return {
+      id: entry.id,
+      name: found?.name ?? entry.name,
+      ...(description === undefined ? {} : { description }),
+    }
+  })
+  deps?.onRuntimeModels?.(presetId, merged)
 }
 
 /** 记住每个模型支持哪些档位。 */

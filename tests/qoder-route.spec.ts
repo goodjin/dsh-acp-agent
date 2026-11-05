@@ -6,21 +6,27 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { LOGIN_PATH, SESSION_PATH, registerQoderRoutes } from '../src/qoder-route.ts'
+import { LOGIN_PATH, MODELS_PATH, SESSION_PATH, registerQoderRoutes } from '../src/qoder-route.ts'
 import type { WorkBuddyRouteContext } from '../src/workbuddy-route.ts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 const credential = { accessToken: 'secret-access', refreshToken: 'secret-refresh', machineId: 'machine', expiresAt: Date.now() + 3600_000 }
 
 interface Harness {
-  readonly call: (path: string, method: string, authorized?: boolean) => Promise<{ status: number; body: string }>
+  readonly call: (path: string, method: string, authorized?: boolean, body?: unknown) => Promise<{ status: number; body: string }>
   readonly poll: ReturnType<typeof vi.fn>
   readonly routes: Map<string, (req: IncomingMessage, res: ServerResponse) => unknown>
   readonly box: { signal?: AbortSignal }
   dispose: () => void
 }
 
-function harness(options: { credential?: typeof credential | undefined; poll?: ReturnType<typeof vi.fn> } = {}): Harness {
+function harness(options: {
+  credential?: typeof credential | undefined
+  poll?: ReturnType<typeof vi.fn>
+  models?: { id: string; name: string; description?: string }[]
+  selection?: readonly string[]
+  saved?: string[][]
+} = {}): Harness {
   const routes = new Map<string, (req: IncomingMessage, res: ServerResponse) => unknown>()
   const box: { signal?: AbortSignal } = {}
   const poll = options.poll ?? vi.fn((_login, opts) => { box.signal = opts.signal; return new Promise<never>(() => {}) })
@@ -35,15 +41,57 @@ function harness(options: { credential?: typeof credential | undefined; poll?: R
     pollForToken: poll,
     readCredential: async () => options.credential ?? credential,
     writeCredential: vi.fn(),
+    fetchModels: async () => options.models ?? [{ id: 'qwen3.8-max', name: 'Qwen 3.8 Max' }],
+    readSelection: async () => options.selection,
+    writeSelection: async (ids) => { options.saved?.push([...ids]) },
   })
-  const call = async (path: string, method: string, authorized = true): Promise<{ status: number; body: string }> => {
+  const call = async (
+    path: string,
+    method: string,
+    authorized = true,
+    body?: unknown,
+  ): Promise<{ status: number; body: string }> => {
     const result = { status: 0, body: '' }
-    await routes.get(path)?.({ method, headers: { cookie: authorized ? 'yes' : '' } } as IncomingMessage,
+    const payload = body === undefined ? '' : JSON.stringify(body)
+    const request = Object.assign(
+      { method, headers: { cookie: authorized ? 'yes' : '' } },
+      { [Symbol.asyncIterator]: async function* () { if (payload !== '') yield Buffer.from(payload) } },
+    ) as unknown as IncomingMessage
+    await routes.get(path)?.(request,
       { writeHead: (status: number) => { result.status = status }, end: (body: string) => { result.body = body } } as unknown as ServerResponse)
     return result
   }
   return { call, poll, routes, box, dispose: () => dispose?.() }
 }
+
+describe('Qoder 国际版的模型清单路由', () => {
+  it('给的是整份清单与当前勾选', async () => {
+    const h = harness({ models: [{ id: 'qwen3.8-max', name: 'Qwen 3.8 Max' }], selection: ['qwen3.8-max'] })
+    const body = JSON.parse((await h.call(MODELS_PATH, 'GET')).body)
+    expect(body.ok).toBe(true)
+    expect(body.models).toHaveLength(1)
+    expect(body.selected).toEqual(['qwen3.8-max'])
+    expect(body.custom).toBe(true)
+  })
+
+  it('勾完存下来', async () => {
+    const saved: string[][] = []
+    const h = harness({ saved })
+    const result = await h.call(MODELS_PATH, 'POST', true, { ids: ['qwen3.8-max'] })
+    expect(JSON.parse(result.body)).toEqual({ ok: true, selected: ['qwen3.8-max'] })
+    expect(saved).toEqual([['qwen3.8-max']])
+  })
+
+  it('未授权的请求被挡在门外', async () => {
+    const h = harness()
+    expect((await h.call(MODELS_PATH, 'GET', false)).status).toBe(401)
+  })
+
+  it('方法不对就是 405', async () => {
+    const h = harness()
+    expect((await h.call(MODELS_PATH, 'PUT')).status).toBe(405)
+  })
+})
 
 describe('Qoder 国际版的登录路由', () => {
   it('未授权的请求被挡在门外', async () => {
