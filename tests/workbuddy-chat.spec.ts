@@ -102,6 +102,27 @@ describe('请求的形状', () => {
     expect(headers['x-enterprise-id']).toBeUndefined()
   })
 
+  it('请求带客户端标识：站点按 UA 里的产品名认客户端，不带就是 400', async () => {
+    const calls: { init: RequestInit }[] = []
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      calls.push({ init: init ?? {} })
+      return sseResponse()
+    }
+    await collect(streamWorkBuddy(request({ fetchImpl })))
+    const headers = calls[0]?.init.headers as Record<string, string>
+    expect(headers['user-agent']).toMatch(/^WorkBuddy\//)
+  })
+
+  it('站点给的端点可以用：清单与模型请求要打同一个地方', async () => {
+    const calls: { url: string }[] = []
+    const fetchImpl: typeof fetch = async (url) => {
+      calls.push({ url: String(url) })
+      return sseResponse()
+    }
+    await collect(streamWorkBuddy(request({ fetchImpl, baseUrl: 'https://wb.example.com' })))
+    expect(calls[0]?.url).toBe('https://wb.example.com/v2/chat/completions')
+  })
+
   it('响应里的内容翻译成块', async () => {
     const fetchImpl: typeof fetch = async () => sseResponse()
     const chunks = await collect(streamWorkBuddy(request({ fetchImpl })))

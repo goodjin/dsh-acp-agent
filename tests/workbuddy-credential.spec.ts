@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  attachAccount,
   clearStoredCredential,
   credentialFilePath,
   credentialResolver,
@@ -81,6 +82,20 @@ describe('存放位置', () => {
     }
     await writeStoredCredential(credential, file)
     expect(await readStoredCredential(file)).toEqual(credential)
+  })
+
+  it('补上账户信息后存回去：模型请求要带 X-User-Id，界面要显示是谁', async () => {
+    const file = join(dir, 'credentials.json')
+    await writeStoredCredential({ accessToken: 'ACCESS' }, file)
+    const updated = await attachAccount({ uid: 'uid-1', nickname: '某人' }, file)
+    expect(updated?.account).toEqual({ uid: 'uid-1', nickname: '某人' })
+    const stored = await readStoredCredential(file)
+    expect(stored?.account?.uid).toBe('uid-1')
+    expect(stored?.accessToken).toBe('ACCESS')
+  })
+
+  it('没存过凭据时补账户是空，不凭空造一份', async () => {
+    expect(await attachAccount({ uid: 'uid-1' }, join(dir, 'none.json'))).toBeUndefined()
   })
 
   it('清掉之后就没有了', async () => {

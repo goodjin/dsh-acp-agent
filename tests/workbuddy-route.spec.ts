@@ -93,6 +93,37 @@ async function call(
   return calls[0] ?? { status: 0, body: '' }
 }
 
+describe('登录之后', () => {
+  it('把账户信息补上存回去：模型请求要带 X-User-Id，界面要显示是谁', async () => {
+    const { ctx, routes } = rig()
+    const stored: unknown[] = []
+    registerWorkBuddyRoutes(ctx, {
+      startLogin: async () => ({ state: 'st-1', url: 'https://www.workbuddy.cn/login?state=st-1' }),
+      pollForToken: async () => ({ accessToken: 'ACCESS' }),
+      writeCredential: async credential => { stored.push(credential) },
+      fetchAccount: async () => ({ uid: 'uid-1', nickname: '某人' }),
+    })
+    await call(routes, WORKBUDDY_LOGIN_ROUTE_PATH, 'POST')
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(stored).toEqual([{ accessToken: 'ACCESS', account: { uid: 'uid-1', nickname: '某人' } }])
+  })
+
+  it('登录成功后刷新模型清单：选择器要马上看到真实清单', async () => {
+    const { ctx, routes } = rig()
+    let refreshed = 0
+    registerWorkBuddyRoutes(ctx, {
+      startLogin: async () => ({ state: 'st-1', url: 'https://www.workbuddy.cn/login?state=st-1' }),
+      pollForToken: async () => ({ accessToken: 'ACCESS' }),
+      writeCredential: async () => {},
+      fetchAccount: async () => ({ uid: 'uid-1' }),
+      ensureModels: async () => { refreshed += 1 },
+    })
+    await call(routes, WORKBUDDY_LOGIN_ROUTE_PATH, 'POST')
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(refreshed).toBe(1)
+  })
+})
+
 describe('路由', () => {
   it('两条路由挂在约定的路径上', () => {
     const { ctx, routes } = rig()
@@ -124,6 +155,22 @@ describe('状态', () => {
     const result = await call(routes, WORKBUDDY_SESSION_ROUTE_PATH, 'GET')
     expect(result.status).toBe(200)
     expect(JSON.parse(result.body)).toEqual({ ok: true, authenticated: false, needsLogin: true })
+  })
+
+  it('令牌里没有账户信息时补一次，界面上要显示是谁', async () => {
+    const { ctx, routes } = rig()
+    registerWorkBuddyRoutes(ctx, {
+      credentialFile: '/tmp/workbuddy-session-fixture.json',
+      readCredential: async () => ({ accessToken: 'ACCESS' }),
+      fetchAccount: async () => ({ uid: 'uid-2', nickname: '补出来的' }),
+      attachAccount: async (who) => ({ accessToken: 'ACCESS', account: who }),
+    })
+    const result = await call(routes, WORKBUDDY_SESSION_ROUTE_PATH, 'GET')
+    expect(JSON.parse(result.body)).toEqual({
+      ok: true,
+      authenticated: true,
+      account: { uid: 'uid-2', nickname: '补出来的' },
+    })
   })
 
   it('登了就说清是谁', async () => {

@@ -14,9 +14,11 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { pollForToken, startLogin } from './workbuddy/auth.ts'
-import type { WorkBuddyCredential, WorkBuddyLoginStart } from './workbuddy/auth.ts'
-import { credentialFilePath, readStoredCredential, writeStoredCredential } from './workbuddy/credential.ts'
+import { fetchAccount, pollForToken, startLogin } from './workbuddy/auth.ts'
+import type { WorkBuddyAccount, WorkBuddyCredential, WorkBuddyLoginStart } from './workbuddy/auth.ts'
+import { attachAccount, credentialFilePath, readStoredCredential, writeStoredCredential } from './workbuddy/credential.ts'
+import { resolveEndpoints } from './workbuddy/endpoints.ts'
+import { ensureWorkBuddyModels, invalidateWorkBuddyCatalog } from './workbuddy-model.ts'
 
 export const name = 'acp-agent-workbuddy-login'
 
@@ -56,6 +58,12 @@ export interface WorkBuddyRouteDeps {
   readonly readCredential?: (() => Promise<WorkBuddyCredential | undefined>) | undefined
   /** 把拿到的凭据写下来。 */
   readonly writeCredential?: ((credential: WorkBuddyCredential) => Promise<void>) | undefined
+  /** 补账户信息（uid、昵称）。 */
+  readonly fetchAccount?: ((accessToken: string) => Promise<WorkBuddyAccount | undefined>) | undefined
+  /** 把账户信息写回凭据文件。 */
+  readonly attachAccount?: ((account: WorkBuddyAccount) => Promise<WorkBuddyCredential | undefined>) | undefined
+  /** 刷新模型清单（登录后选择器要马上看到真实清单）。 */
+  readonly ensureModels?: (() => Promise<void>) | undefined
 }
 
 /**
@@ -82,6 +90,13 @@ export function registerWorkBuddyRoutes(ctx: WorkBuddyRouteContext, deps: WorkBu
   const poll = deps.pollForToken ?? ((state: string) => pollForToken({ state }))
   const read = deps.readCredential ?? (() => readStoredCredential(file))
   const write = deps.writeCredential ?? ((credential: WorkBuddyCredential) => writeStoredCredential(credential, file))
+  // 名字别叫 account：会话处理器里有一个同名的局部变量会把它盖住。
+  const loadAccount = deps.fetchAccount ?? (async (accessToken: string) => {
+    const endpoints = resolveEndpoints()
+    return fetchAccount({ accessToken, endpoints }).catch(() => undefined)
+  })
+  const refreshModels = deps.ensureModels ?? (() => ensureWorkBuddyModels())
+  const saveAccount = deps.attachAccount ?? ((who: WorkBuddyAccount) => attachAccount(who, file))
 
   ctx.effect(() => {
     ctx.webServer.register({
@@ -99,6 +114,21 @@ export function registerWorkBuddyRoutes(ctx: WorkBuddyRouteContext, deps: WorkBu
           if (credential === undefined) {
             respondJson(res, 200, JSON.stringify({ ok: true, authenticated: false, needsLogin: true }))
             return
+          }
+          // 令牌里没有账户信息时补一次（界面上要显示是谁）。
+          if (credential.account === undefined) {
+            const who = await loadAccount(credential.accessToken).catch(() => undefined)
+            if (who !== undefined) {
+              const attached = await saveAccount(who).catch(() => undefined)
+              if (attached !== undefined) {
+                respondJson(res, 200, JSON.stringify({
+                  ok: true,
+                  authenticated: true,
+                  account: { uid: who.uid, ...(who.nickname === undefined ? {} : { nickname: who.nickname }) },
+                }))
+                return
+              }
+            }
           }
           const account = credential.account
           respondJson(res, 200, JSON.stringify({
@@ -132,7 +162,14 @@ export function registerWorkBuddyRoutes(ctx: WorkBuddyRouteContext, deps: WorkBu
           // 轮询在后台跑：用户还没在浏览器里点完，宿主这边先等着。
           void poll(start.state)
             .then(async credential => {
-              await write(credential)
+              // 令牌里没有账户信息（uid、昵称），模型请求要带 `X-User-Id`、
+              // 界面要显示是谁——补上再存。
+              const who = await loadAccount(credential.accessToken).catch(() => undefined)
+              const stored = who === undefined ? credential : { ...credential, account: who }
+              await write(stored)
+              // 新令牌可能能拿到更大的清单，旧的缓存别再挡着。
+              invalidateWorkBuddyCatalog()
+              await refreshModels().catch(() => undefined)
             })
             .catch(() => { /* 轮询失败就是没登录成，界面会再问一次状态 */ })
           respondJson(res, 200, JSON.stringify({ ok: true, url: start.url, pending: true }))

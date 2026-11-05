@@ -163,6 +163,27 @@ export function credentialResolver(options: CredentialStoreOptions = {}): () => 
 }
 
 /**
+ * 把账户信息补进存着的凭据。
+ *
+ * 登录拿到的令牌里没有账户信息（uid、企业 id），而模型请求要带 `X-User-Id`、
+ * 界面要显示是谁——所以登录之后补一次，补上就存回去。
+ * @param account - 账户信息。
+ * @param file - 凭据文件；缺省用默认位置。
+ * @returns 补好之后的凭据；没有存过凭据时是 `undefined`。
+ */
+export async function attachAccount(
+  account: WorkBuddyAccount,
+  file?: string,
+): Promise<WorkBuddyCredential | undefined> {
+  const path = file ?? credentialFilePath()
+  const stored = await readStoredCredential(path)
+  if (stored === undefined) return undefined
+  const credential: WorkBuddyCredential = { ...stored, account }
+  await writeStoredCredential(credential, path)
+  return credential
+}
+
+/**
  * 强制续期一次。
  *
  * 令牌被服务端作废（401）时用：不等它自然过期，直接拿刷新令牌换一对新的。成功

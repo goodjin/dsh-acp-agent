@@ -1,3 +1,6 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
 /**
  * WorkBuddy 的端点。
  *
@@ -21,6 +24,43 @@ export const WORKBUDDY_AUTH_PREFIX = '/plugin'
 
 /** 平台标识：登录 state 接口按它区分站点。 */
 export const WORKBUDDY_PLATFORM = 'workbuddy'
+
+/**
+ * 客户端标识（User-Agent）。
+ *
+ * 站点**按 UA 里的产品名认客户端**：形状不是 `WorkBuddy/版本` 的 UA 一律 400
+ * 「check ua, get coding copilot version error」——清单与模型请求都过不去。
+ * 版本号是我们这个适配器的协议版本（不是插件发版号）；后缀标出请求来自哪个客户端，
+ * 站点日志里能认出来。
+ */
+export const WORKBUDDY_UA = 'WorkBuddy/1.0.0-dsh-acp-agent'
+
+/** 桌面版本地状态的根目录（清单缓存、凭据等）。 */
+export const WORKBUDDY_HOME_ENV = 'WORKBUDDY_HOME'
+
+/**
+ * 每发请求都带的头。
+ * @param extra - 这一发请求特有的头。
+ * @returns 头表。
+ */
+export function workBuddyHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return { 'user-agent': WORKBUDDY_UA, ...extra }
+}
+
+/**
+ * 桌面版那份产品配置的缓存目录。
+ *
+ * 桌面版登录后会把站点下发的完整配置（模型清单、积分倍率、端点）缓存在这里；
+ * 我们借用它——它带着**官方倍率**，而我们自己去问站点拿到的是缩水版清单。
+ * @param env - 环境变量。
+ * @returns 目录路径。
+ */
+export function desktopCatalogDir(env: NodeJS.ProcessEnv = process.env): string {
+  const home = env[WORKBUDDY_HOME_ENV] !== undefined && env[WORKBUDDY_HOME_ENV] !== ''
+    ? env[WORKBUDDY_HOME_ENV]
+    : join(homedir(), '.workbuddy')
+  return join(home, 'local_storage')
+}
 
 /** 一个基址派生出来的全部地址。 */
 export type WorkBuddyEndpoints = {

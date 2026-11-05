@@ -14,7 +14,7 @@
  * 少读一层就全是 undefined。
  */
 
-import { resolveEndpoints, WORKBUDDY_PLATFORM } from './endpoints.ts'
+import { resolveEndpoints, workBuddyHeaders, WORKBUDDY_PLATFORM } from './endpoints.ts'
 import type { WorkBuddyEndpoints } from './endpoints.ts'
 
 /** 「还在登录中」的业务码。 */
@@ -164,7 +164,7 @@ function authHeaders(endpoints: WorkBuddyEndpoints, extra: Record<string, string
   } catch {
     host = ''
   }
-  return {
+  return workBuddyHeaders({
     'content-type': 'application/json',
     'x-no-authorization': 'true',
     'x-no-user-id': 'true',
@@ -172,7 +172,7 @@ function authHeaders(endpoints: WorkBuddyEndpoints, extra: Record<string, string
     'x-no-department-info': 'true',
     ...(host === '' ? {} : { 'x-domain': host }),
     ...extra,
-  }
+  })
 }
 
 async function postJson(
