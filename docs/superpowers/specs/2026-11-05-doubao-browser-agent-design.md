@@ -75,12 +75,48 @@ POST https://www.doubao.com/chat/completion
 - 发送：网页版有 `#flow-end-msg-send`；桌面端没有这个 id，靠「输入行最右的图标按钮」定位（脆弱，见 §7）。
 - 实机结果：桌面端发「测试一下：今天是星期几？」→ 建立会话 `chrome://doubao-chat/chat/38451492012724226` → 豆包联网搜索（「搜索 1 个关键词，参考 5 篇资料」）→ 回答「今天是星期四。日期：2026 年 11 月 05 日，农历丙午年九月廿七。」**全文与工具卡片都在 DOM 里可读**。
 
-### 3.5 工具：为什么第一阶段不接管
+### 3.5 工具：官方机制已探明，缺客户端触发
 
-- 桌面端「技能 · 连接器 · 伙伴 → 连接器」是**厂商预置市场**（飞书企业号、企业微信、钉钉、腾讯会议、Notion、百度网盘、天眼查 MCP…），**没有让用户挂任意 MCP 服务器的通用入口**。
-- 网页端「管理 → 连接器」同样只能搜索预置项，搜 MCP 无结果。
-- 代码里有 `personal_mcp` / `local_mcp` / 技能中心「个人 MCP 授权」等文案，说明存在灰度中的个人 MCP 能力，但**本机账号看不到入口**。
-- 结论：**「豆包主动调用 DSH 工具」这条路暂时走不通**。因此第一阶段按用户许可的兜底方案：豆包执行它自己的工具，我们拦截并展示；DSH 工具暂不入模型决策。后续再评估（§8）。
+**服务端整条链路已跑通**（2026-11-05 实测）：
+
+- 注册个人 MCP 连接器：
+  `POST /alice/office/skills/manage/connector/create_personal`
+  `mcp_config` 的形状是服务端形状（不是 UI 形状）：
+
+  | 字段 | 取值 |
+  |---|---|
+  | `transport_type` | `1` = STREAMABLE_HTTP，`2` = SSE_HTTP，`3` = STDIO |
+  | `stdio_config` | `{ command, params[], env{} }`（STDIO 时必填） |
+  | `endpoint` / `headers` | HTTP/SSE 时必填 |
+
+  配套接口：`update_personal`、`connect`、`disconnect`、`set_enabled`、
+  `set_conversation_enabled`、`oauth/authorize_url`、`oauth/finish`、`oauth/status`、
+  `list_by_user`、`get_detail`、`delete_by_identity`。
+- 服务端会把 `stdio_config.command` **原样保存**（我们上传的本机 node 路径被完整存回），
+  连接器标记为 `skill_type: 1 (MCP)`、`runtime_types: [2] (本机 PC)`、`enabled: true`，
+  `connect` 返回 `connected: true`。
+- 预置连接器是 `skill_type: 2 (CLI)`，所以网页端「管理 → 连接器」列表（筛 CLI）里
+  **看不到个人 MCP**——这是筛选口径，不是没注册上。
+
+**客户端执行链路也具备，但触发入口在灰度里**：
+
+- 桌面端 `libmcp_helper.dylib` 是 Rust 写的 MCP 客户端（rmcp 3.0），
+  连接参数含 `command / args / env / workingDirectory / stdio` 与
+  `url / bearerToken / headers / oauthCredentials`——与上面注册的配置一一对应。
+- 桌面端原生任务接口：
+  `neotix::taskMode::connector::{queryLocalConnectors, authorizeConnector,
+  authorizeLocalHttpConnector, cancelAuthorizeConnector, cancelAuthorizeLocalHttpConnector, retryConnector}`，
+  以及 `neotix::mcp::{callTool, getAllTools}`。
+- 但**公开网页构建里本地运行时客户端是空壳**：`supported: false`、
+  `queryLocalConnectors()` 直接返回空数组、`authorize*` 直接 reject；
+  真实现只在桌面端专属构建里，而桌面端 UI 没有「我的连接器 / 安装」入口。
+  重启桌面端也不会自动认领已启用的连接器。
+- 从页面调 JSBridge 的各种调用约定均无响应（超时），这些 native task API
+  不对普通 webview 暴露，或需要 appId/白名单。
+
+**结论**：官方 MCP 路径方向正确、服务端完全支持，**唯一缺口是客户端的安装/授权触发**。
+第一阶段仍按用户许可的兜底方案：豆包执行它自己的工具，我们拦截并展示；
+「豆包调 DSH 工具」作为独立后续任务（§8 给了三条补齐路径）。
 
 ## 4. 架构
 
@@ -153,13 +189,18 @@ DOM 选择器是这套方案最大的脆弱点（网页应用随时改版）。�
 
 ## 8. 后续（A 路线）怎么再试
 
-「让豆包调用 DSH 的工具」按可能性排序：
+服务端已经支持，**只差客户端触发**（见 §3.5）。按代价排序：
 
-1. 找**个人 MCP** 的真实入口（灰度账号 / 特定入口 / 桌面端配置）——代码里确有这套机制；
-2. 查连接器注册接口（预置连接器背后应有「添加自定义连接器」的服务端接口），若能自注册，就把 DSH 工具桥注册成一个连接器；
-3. 兜底：在提示里与豆包约定一套文本协议（DSH 注入提示 → 豆包输出 `<<DSH_TOOL>>{...}` → 我们解析执行 → 回注），脆弱但零依赖。
+1. **挖桌面端专属构建里的本地运行时客户端**（公开网页构建里是空壳）：
+   从桌面端加载的 chunk 或 pak 里找到真实现，看它用什么方式调
+   `neotix::taskMode::connector::*`，我们在注入脚本里照抄调用 → 触发安装 + 授权。
+2. **改用 HTTP 传输型连接器**（`transport_type: 1`），把 MCP 服务器跑在本机
+   `127.0.0.1:<port>`，客户端只需「连接」而不必「本地安装」；副作用是 MCP 服务器
+   必须对客户端可达（本机可以，远程不行）。
+3. **兜底：在提示里与豆包约定一套文本协议**（DSH 注入提示 → 豆包输出
+   `<<DSH_TOOL>>{...}` → 我们解析执行 → 回注），脆弱但零依赖。
 
-三条都还没验证，留作独立任务；第一阶段不依赖它们。
+第一阶段不依赖它们；另起独立任务推进 1 或 2。
 
 ## 9. 不做什么
 
