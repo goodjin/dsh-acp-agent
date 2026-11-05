@@ -36,12 +36,13 @@
 
 - **假宿主**：测试进程内用 `node:http` 起一条回调路由，形状与生产（`src/delegation-route.ts`）一致——只认 `POST /acp-agent/delegation`，验 `x-dsh-delegation-token` 头后回一份 `DelegationResult{output, model, childId}`。断言到「桥接 ↔ 假宿主」为止；真委派实现（superpowers 仓）与真宿主的联调属 Task 10。
 - **观测垫片（tee）**：挂载条目的 `args[0]` 是垫片而非桥接路径——垫片拉起真桥接（`bridge/dsh-acp-mcp-bridge.mjs`，一字不改），双向帧记账后原样转发。这是「桥接收到了哪些方法」与「发没发 ping」的唯一观测位；env 与命令形状照抄生产挂载（`tests/mcp-attach.spec.ts` 钉死的那份，stdio 变体不带 `type`）。控制者手工探针已验证过 args[0] 直挂桥接的形态。
-- **复跑**（注意：`vitest.config.ts` 把 `tests/live.spec.ts` 排除在默认套件外，`npx vitest run tests/live.spec.ts` 会报 "No test files found"；CLI 的 `--exclude` 只能追加删不掉，须用去掉 exclude 行的临时配置）：
+- **复跑**：`vitest.config.ts` 把 `tests/live.spec.ts` 排除在默认套件外（`npx vitest run tests/live.spec.ts` 会报 "No test files found"；CLI 的 `--exclude` 只能追加、删不掉那条）。仓根备了 `vitest.live.config.ts`：包含规则与测试别名都从主配置取，只去掉排除那一条。
 
   ```bash
-  sed '/exclude/d' vitest.config.ts > /tmp/vitest.live.config.ts
-  ACP_AGENT_LIVE_ACP=1 npx vitest run tests/live.spec.ts --config /tmp/vitest.live.config.ts
+  ACP_AGENT_LIVE_ACP=1 npx vitest run tests/live.spec.ts --config vitest.live.config.ts
   ```
+
+  早先的复跑方法是现场 `sed '/exclude/d' vitest.config.ts` 拼一份临时配置，那会连带删掉将来任何含 exclude 的行，已换成上面这个固定文件。
 
 - **二进制可用环境变量覆盖**：`THREADHARBOR_CODEX_ACP` / `THREADHARBOR_CURSOR_ACP` / `THREADHARBOR_CLAUDE_ACP` / `THREADHARBOR_QODER_ACP` / `THREADHARBOR_GROK_ACP`。
 

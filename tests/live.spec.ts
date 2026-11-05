@@ -34,7 +34,7 @@ import { grokDialect } from '../src/index.ts'
 import { bridgePermissions } from '../src/index.ts'
 import { DELEGATION_ROUTE_PATH } from '../src/delegation-route.ts'
 import type { StepEndReason, TurnContext } from '../src/dispatch.ts'
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -674,7 +674,16 @@ async function startProbeHost(): Promise<ProbeHost> {
         return
       }
       const raw = Buffer.concat(chunks).toString('utf8')
-      hits.push({ body: raw === '' ? {} : JSON.parse(raw) as Record<string, unknown> })
+      // 坏载荷回 400（与生产路由同一处置）。裸 JSON.parse 在请求回调里抛出去
+      // 会掀掉整个测试进程，报错就变成「vitest 炸了」，看不出是哪一家的载荷不对
+      let body: Record<string, unknown>
+      try {
+        body = raw === '' ? {} : JSON.parse(raw) as Record<string, unknown>
+      } catch {
+        res.writeHead(400, { 'content-type': 'text/plain' }).end('bad json')
+        return
+      }
+      hits.push({ body })
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(JSON.stringify({
         output: `子代理答：17 + 25 = 42（探针标记 ${nonce}）`,
@@ -771,9 +780,12 @@ type ProbeOutcome = {
 async function runMcpProbe(agent: ProbeAgent): Promise<ProbeOutcome> {
   const host = await startProbeHost()
   const cwd = await mkdtemp(join(tmpdir(), 'th-acp-mcp-probe-'))
-  const teePath = join(cwd, 'mcp-tee.mjs')
+  // 垫片与帧记录放在 agent 工作目录之外：agent 自己的 workspace 里不该多出
+  // 我们为观测塞进去的文件（它可能被列目录、被当成项目内容读进去）
+  const teeDir = await mkdtemp(join(tmpdir(), 'th-acp-mcp-tee-'))
+  const teePath = join(teeDir, 'mcp-tee.mjs')
   await writeFile(teePath, TEE_SOURCE)
-  const logPath = join(cwd, 'mcp-tee.jsonl')
+  const logPath = join(teeDir, 'mcp-tee.jsonl')
   // 条目形状照抄 factory 的挂载（stdio 变体不带 type；command 是当前 node；
   // env 三项）。args[0] 是垫片——探针要看桥接收到了什么，垫片只记账转发。
   const server: StdioMcpServer = {
@@ -854,6 +866,7 @@ async function runMcpProbe(agent: ProbeAgent): Promise<ProbeOutcome> {
   } finally {
     client.close()
     await host.close()
+    await rm(teeDir, { recursive: true, force: true })
   }
 }
 
