@@ -80,6 +80,13 @@ describe('账号状态', () => {
     expect(JSON.stringify(state)).not.toContain('secret')
   })
 
+  it('宿主说登录没成时，把那句话带出来', async () => {
+    const state = await readQoderSession({
+      fetchImpl: fakeFetch([{ ok: true, authenticated: false, reason: '登录未完成或失败，请重试' }]),
+    })
+    expect(state).toEqual({ authenticated: false, reason: '登录未完成或失败，请重试' })
+  })
+
   it('问不到宿主时说清楚', async () => {
     const state = await readQoderSession({ fetchImpl: fakeFetch([{ ok: false, reason: '没挂上' }]) })
     expect(state).toEqual({ authenticated: false, reason: '没挂上' })

@@ -56,7 +56,11 @@ export async function readQoderSession(options: {
     const reason = typeof body['reason'] === 'string' ? body['reason'] : '问不到宿主'
     return { authenticated: false, reason }
   }
-  if (body['authenticated'] !== true) return { authenticated: false }
+  if (body['authenticated'] !== true) {
+    // 宿主说「登录没成」时把那句话带出来——只显示「未登录」会让人以为没试过。
+    const reason = typeof body['reason'] === 'string' ? body['reason'] : undefined
+    return { authenticated: false, ...(reason === undefined ? {} : { reason }) }
+  }
   const account = body['account']
   const record = typeof account === 'object' && account !== null ? account as Record<string, unknown> : undefined
   const uid = typeof record?.['uid'] === 'string' ? record['uid'] : ''

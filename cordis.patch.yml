@@ -602,6 +602,9 @@
               presetId: acp-qoder-global
               agent: qoder-global
               hideFromRoster: true
+              # 静默看门狗放宽到 5 分钟（默认 120 秒）：模型长时间思考时可能几十秒
+              # 不出帧，120 秒会把这一轮杀掉。
+              stallMs: 300000
               # 独立浏览器登录；DSH 执行工具。保留国内版 acp-qoder。
               # 兜底清单：登录后由宿主从 Qoder 国际版拉运行时清单，选择器以那份
               # 为准；这里声明的是「没登录、或清单拉不到」时显示的那一项——worker

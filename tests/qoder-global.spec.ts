@@ -23,6 +23,12 @@ describe('Qoder 国际版的接线', () => {
     expect(patch).toContain('@goodjin2/dsh-acp-agent/qoder-login')
   })
 
+  it('这一行把静默看门狗放宽到 5 分钟', () => {
+    // 模型请求在长时间思考时可能几十秒不出帧；默认的 120 秒会把这一轮杀掉。
+    const row = patch.slice(patch.indexOf('id: acp-qoder-global'), patch.indexOf('id: acp-qoder-global') + 1500)
+    expect(row).toContain('stallMs: 300000')
+  })
+
   it('两行都在自报健康的期望清单里', () => {
     const ids = EXPECTED_ROWS.map(row => row.id)
     expect(ids).toContain('acp-qoder-global')
