@@ -481,6 +481,24 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
       model: await adapter.resolveModel(provider, model),
       stream: (options: Parameters<CatalogAdapterLike['stream']>[0]) => adapter.stream(options),
     }),
+
+    // The host asks every registered adapter for two more things, and it does
+    // not check whether they exist: the image pricing of a route, while it
+    // measures a session's tokens, and the image projection of a route, when a
+    // request carries an image. A class-based adapter inherits the host's
+    // defaults for those — no pricing declared, the normalized image kept as
+    // it is — but the runtime packages cannot be imported here (see
+    // `dispatch.ts` for why), so an object adapter has to state them itself.
+    // Omitting either one does not cost that one route: the host measures
+    // every route it knows, so the TypeError takes down all of them — a model
+    // switch died exactly like that on 2026-11-06, before the switch chain
+    // behind it could run at all.
+    imageRequestPricing: (): undefined => undefined,
+    imageRequestTarget: (_provider: string, _model: string, image: CatalogImageProjection) => ({
+      width: image.width,
+      height: image.height,
+      maxBytes: image.bytes,
+    }),
   }
   return adapter
 }
@@ -514,6 +532,28 @@ export type CatalogAdapterLike = {
    * own. Undefined means "use the normal defaults", which is what we mean.
    */
   providerRetryPolicy(provider: string): undefined
-  /** Same deal: consumed unconditionally, so it has to be present. */
-  requestImagePricing?(options: unknown): undefined
+  /**
+   * The runtime resolves a route's image pricing while it measures a session's
+   * tokens, again without checking that the method exists. Undefined means
+   * "this route declares no pricing", which is what we mean: our routes price
+   * their images nowhere, and the runtime falls back to its neutral estimate.
+   */
+  imageRequestPricing(provider: string, model: string): undefined
+  /**
+   * The runtime resolves a route's image projection when a request carries an
+   * image, also unconditionally. The host's default keeps the normalized image
+   * as it is; ours does the same.
+   */
+  imageRequestTarget(provider: string, model: string, image: CatalogImageProjection): {
+    width: number | undefined
+    height: number | undefined
+    maxBytes: number | undefined
+  }
+}
+
+/** The normalized image the runtime hands to an adapter's projection. */
+export type CatalogImageProjection = {
+  readonly width?: number
+  readonly height?: number
+  readonly bytes?: number
 }

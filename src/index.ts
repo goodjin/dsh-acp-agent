@@ -30,8 +30,12 @@ export type { MessageEvent, ReasoningBlock, TextBlock, ToolCallBlock } from './m
 export {
   decryptCredential,
   deriveKey,
+  findApiKey,
   loadApiKey,
+  zcodeDataDir,
 } from './zcode/credential.ts'
+export { planBase, readPlanProviderKey } from './zcode/provider-config.ts'
+export type { PlanProviderKey } from './zcode/provider-config.ts'
 export {
   BIGMODEL_CODING_PLAN_BASE,
   ZAI_CODING_PLAN_BASE,

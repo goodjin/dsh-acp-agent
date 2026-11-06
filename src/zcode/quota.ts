@@ -47,6 +47,8 @@ export type GlmQuotaRequest = {
   readonly apiKey?: string
   /** Overrides `ZCODE_ACP_CREDENTIALS_FILE` and `~/.zcode/v2/credentials.json`. */
   readonly credentialsFile?: string
+  /** Overrides `ZCODE_ACP_CONFIG_FILE` and `~/.zcode/v2/config.json`. */
+  readonly configFile?: string
   /** Coding-plan base or messages URL; the quota address derives from its origin. */
   readonly endpoint?: string
   readonly fetchImpl?: typeof fetch

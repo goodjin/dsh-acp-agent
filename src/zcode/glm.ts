@@ -1,17 +1,18 @@
 /**
  * One GLM Coding Plan call.
  *
- * The key is the desktop app's coding-plan credential, decrypted in memory.
- * The request goes to the anthropic messages URL with both `x-api-key` and
- * `Authorization: Bearer`, which is how ZCode's adapter authenticates that
- * gateway. Nothing here writes the key, and a failure message has it stripped
- * before it can reach a log.
+ * The key is the desktop app's coding-plan credential, read from the app's own
+ * files and kept in memory only. The request goes to the anthropic messages
+ * URL with both `x-api-key` and `Authorization: Bearer`, which is how ZCode's
+ * adapter authenticates that gateway. Nothing here writes the key, and a
+ * failure message has it stripped before it can reach a log.
  */
 
-import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { BIGMODEL_CODING_PLAN_BASE, buildAnthropicBody, messagesUrl } from './anthropic.ts'
 import type { PromptInput } from './anthropic.ts'
-import { loadApiKey } from './credential.ts'
+import { findApiKey, zcodeDataDir } from './credential.ts'
+import { planBase, readPlanProviderKey } from './provider-config.ts'
 import { chunksFromEvents, readSseEvents } from './sse.ts'
 import type { GlmStreamChunk } from './sse.ts'
 
@@ -21,6 +22,8 @@ export type GlmRequest = PromptInput & {
   readonly apiKey?: string
   /** Overrides `ZCODE_ACP_CREDENTIALS_FILE` and `~/.zcode/v2/credentials.json`. */
   readonly credentialsFile?: string
+  /** Overrides `ZCODE_ACP_CONFIG_FILE` and `~/.zcode/v2/config.json`. */
+  readonly configFile?: string
   /** Full messages URL, or a coding-plan base (`…/api/anthropic`). */
   readonly endpoint?: string
   readonly fetchImpl?: typeof fetch
@@ -30,10 +33,12 @@ export type GlmRequest = PromptInput & {
 export type GlmKeyedRequest = {
   readonly apiKey?: string
   readonly credentialsFile?: string
+  readonly configFile?: string
   readonly endpoint?: string
 }
 
 const CREDENTIALS_ENV = 'ZCODE_ACP_CREDENTIALS_FILE'
+const CONFIG_ENV = 'ZCODE_ACP_CONFIG_FILE'
 const ENDPOINT_ENV = 'ZCODE_GLM_BASE_URL'
 
 /** Stream one turn. Cancellation rejects the iterator; the loop keeps the text already sent. */
@@ -122,14 +127,37 @@ function describeTransportFailure(error: unknown): string {
   return detail === '' ? base : detail
 }
 
-/** The decrypted coding-plan key of a request's overrides (exported for the quota call). */
+/**
+ * The coding-plan key of a request's overrides.
+ *
+ * Two places hold it, and the newer one wins:
+ *
+ * 1. ZCode's own provider configuration — `…/config.json`, plain text, the
+ *    coding-plan provider's `options.apiKey`. That is where the current
+ *    desktop app (3.17.2) keeps it.
+ * 2. The encrypted credential file — `…/credentials.json`, the entry
+ *    `account-provider:coding-plan:…:api-key`. The older app wrote it there;
+ *    the current app writes that entry no more.
+ *
+ * Both are read per call, never cached: the desktop app rewrites them when
+ * the user signs in again or switches plans, and a key from before that is a
+ * key that no longer works.
+ *
+ * The key never leaves this function except in memory, and nothing here logs
+ * it — the failure message names the files it looked in, never their content.
+ */
 export async function resolveApiKey(request: GlmKeyedRequest): Promise<string> {
   if (request.apiKey !== undefined && request.apiKey !== '') return request.apiKey
-  const configured = request.credentialsFile ?? process.env[CREDENTIALS_ENV]
-  const file = configured !== undefined && configured !== ''
-    ? configured
-    : `${homedir()}/.zcode/v2/credentials.json`
-  return loadApiKey(file)
+  const base = planBase(resolveEndpoint(request.endpoint))
+  const configFile = request.configFile ?? process.env[CONFIG_ENV] ?? join(zcodeDataDir(), 'config.json')
+  const fromConfig = await readPlanProviderKey(configFile, base)
+  if (fromConfig !== undefined) return fromConfig.key
+  const credentialsFile = request.credentialsFile ?? process.env[CREDENTIALS_ENV] ?? join(zcodeDataDir(), 'credentials.json')
+  const legacy = await findApiKey(credentialsFile)
+  if (legacy !== undefined) return legacy
+  throw new Error(
+    `no coding-plan api key for ${base} — looked in ZCode's provider configuration (${configFile}) and in ZCode's credentials (${credentialsFile}). Sign in to ZCode, or point ${CONFIG_ENV} / ${CREDENTIALS_ENV} at the files that hold it.`,
+  )
 }
 
 /** The messages URL of a request's endpoint override, or the configured default. */

@@ -1,4 +1,6 @@
-export { decryptCredential, deriveKey, loadApiKey } from './credential.ts'
+export { decryptCredential, deriveKey, findApiKey, loadApiKey, zcodeDataDir } from './credential.ts'
+export { planBase, readPlanProviderKey } from './provider-config.ts'
+export type { PlanProviderKey } from './provider-config.ts'
 export { BIGMODEL_CODING_PLAN_BASE, ZAI_CODING_PLAN_BASE, buildAnthropicBody, messagesUrl, reasoningFields } from './anthropic.ts'
 export type { AnthropicBody, PromptInput, PromptTool } from './anthropic.ts'
 export { streamGlm, scrub } from './glm.ts'

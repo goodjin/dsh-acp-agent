@@ -16,7 +16,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { fetchCodingPlanQuota } from './zcode/index.ts'
-import type { GlmCodingPlanQuota } from './zcode/index.ts'
+import type { GlmCodingPlanQuota, GlmQuotaRequest } from './zcode/index.ts'
 
 export const name = 'acp-agent-zcode-quota'
 
@@ -29,8 +29,12 @@ export const QUOTA_ROUTE_PATH = '/acp-agent/zcode/quota'
 /** 成功应答的缓存时长；换算成上游被问的频率上限（两个标签页也不翻倍）。 */
 const CACHE_TTL_MS = 30_000
 
-/** 取一次配额的最小面：无参进去，配额或 null 出来，失败抛错（消息已脱敏）。 */
-export type ZcodeQuotaFetch = () => Promise<GlmCodingPlanQuota | null>
+/**
+ * 取一次配额的最小面：无参进去，配额或 null 出来，失败抛错（消息已脱敏）。
+ *
+ * 可选的覆盖面（密钥、文件位置、地址）给测试用：生产不传，走真密钥真网络。
+ */
+export type ZcodeQuotaFetch = (overrides?: GlmQuotaRequest) => Promise<GlmCodingPlanQuota | null>
 
 /** 模块级可替换的取数器：生产走真密钥真网络，测试换假件。 */
 let quotaFetch: ZcodeQuotaFetch | undefined
@@ -132,8 +136,16 @@ export function registerZcodeQuotaRoute(ctx: ZcodeQuotaContext, deps: ZcodeQuota
 /** 上游取数超时：挂住的上游不该把这一路接口一起挂住（2026-10-16 审计补漏）。 */
 export const QUOTA_UPSTREAM_TIMEOUT_MS = 15_000
 
-/** 生产取数器：密钥、地址、环境变量全在 quota 模块内解析；自带超时信号。 */
-export const defaultQuotaFetch: ZcodeQuotaFetch = () => fetchCodingPlanQuota({ signal: AbortSignal.timeout(QUOTA_UPSTREAM_TIMEOUT_MS) })
+/**
+ * 生产取数器：密钥、地址、环境变量全在 quota 模块内解析；自带超时信号。
+ *
+ * 覆盖面（密钥/文件/地址）是给测试的：生产不传，于是这一路读的是本机
+ * ZCode 真的那把 key。
+ */
+export const defaultQuotaFetch: ZcodeQuotaFetch = (overrides) => fetchCodingPlanQuota({
+  signal: AbortSignal.timeout(QUOTA_UPSTREAM_TIMEOUT_MS),
+  ...overrides,
+})
 
 /** JSON 应答：no-store（缓存归宿主管，不许任何一环替我们缓存）+ 固定长度。 */
 function respondJson(res: ServerResponse, status: number, body: string): void {
