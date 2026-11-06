@@ -114,13 +114,79 @@ function finishedTurns(events: readonly LoggedEvent[]): ReplayStep[][] {
   return turns
 }
 
+import { pairToolResults } from './tool-pairing.ts'
+
 /**
  * The conversation to copy, as events ready to write.
  * @param events - the source session's log, in order; anything after the last completed turn is ignored.
  */
 export function planReplay(events: readonly LoggedEvent[]): ReplayPlan {
   const turns = finishedTurns(events)
-  return { steps: turns.flat(), turns: turns.length }
+  return { steps: pairTurns(turns.flat()), turns: turns.length }
+}
+
+/**
+ * Re-pair the copied steps so every tool call is answered by the result right
+ * after it.
+ *
+ * The log is faithful to what happened, and what happened includes results
+ * recorded away from their calls: a background subagent's outcome lands at the
+ * tail of the log when a turn ends interrupted. The view renders that fine,
+ * but a native DeepSeek request built from the copy demands each call answered
+ * immediately, or the turn dies as "tool calls need immediate results". The
+ * request path already re-pairs with `pairToolResults` (model-plugins.ts);
+ * this runs the same repair on the log-copy path, so both exits from this
+ * plugin hand over a paired history.
+ *
+ * Steps go in as the message shape `pairToolResults` reads (role, content,
+ * toolCallId at the top level), each carrying its source step for the way
+ * back; results the pairing itself inserts (the "outcome unknown" answers)
+ * have no source and become tool/result steps of their own.
+ */
+function pairTurns(steps: readonly ReplayStep[]): ReplayStep[] {
+  const sourceOf = new Map<Message & { source?: ReplayStep }, ReplayStep | undefined>()
+  const messages = steps.map(step => {
+    const message = stepAsMessage(step)
+    sourceOf.set(message, step)
+    return message
+  })
+  return pairToolResults(messages).map(message => {
+    const source = sourceOf.get(message as Message & { source?: ReplayStep })
+    if (source !== undefined) return source
+    const record = message as { toolCallId?: unknown; isError?: unknown; content?: unknown }
+    return {
+      type: 'tool/result',
+      data: { message: { role: 'tool', toolCallId: record.toolCallId, isError: record.isError === true, content: Array.isArray(record.content) ? record.content : [] } },
+      surface: true,
+    }
+  })
+}
+
+type Message = Record<string, unknown>
+
+/** Read one step as the message shape `pairToolResults` consumes. */
+function stepAsMessage(step: ReplayStep): Message & { source?: ReplayStep } {
+  if (step.type === 'tool/result') {
+    const message = (step.data as { message?: Record<string, unknown> } | undefined)?.message
+    return message !== undefined && typeof message === 'object'
+      ? { ...message, source: step }
+      : { role: 'tool', source: step }
+  }
+  if (step.type === 'tool/call') {
+    // A call step renders as the assistant turn that carries the tool-use block.
+    const data = (step.data ?? {}) as { callId?: unknown; name?: unknown }
+    return {
+      role: 'assistant',
+      content: [typeof data.callId === 'string' ? { type: 'tool-call', id: data.callId, name: data.name ?? '' } : { type: 'text', text: '' }],
+      source: step,
+    }
+  }
+  if (step.type === 'user/message' || step.type === 'assistant/message') {
+    const message = (step.data as { message?: Record<string, unknown> } | undefined)?.message
+    return message !== undefined && typeof message === 'object' ? { ...message, source: step } : { source: step }
+  }
+  // Boundary events (turn/start, step/end, …): not messages; pass through.
+  return { role: 'boundary', source: step }
 }
 
 /** The session log's append, if this session has one. */
