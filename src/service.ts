@@ -19,7 +19,7 @@ import type { AgentLike } from './dispatch.ts'
 import type { ContentEvent } from './dispatch.ts'
 import { makeSessionFactory } from './factory.ts'
 import type { FactoryDeps } from './factory.ts'
-import { modelsOfPreset, registerCatalog, runtimeModels } from './catalog-registration.ts'
+import { modelsOfPreset, registerCatalog, runtimeModels, runtimeModelsWithDeclaredWindows } from './catalog-registration.ts'
 import { modelPluginStream } from './model-plugins.ts'
 import { buildPresetTable, sessionsRegistry } from './registry.ts'
 import type { PresetConfig } from './registry.ts'
@@ -62,7 +62,9 @@ export function attachAcpDispatch(
   // The agent's own `session/new` reports, per preset, shared by the factory
   // seam and the catalog registration below, so the picker and the sessions
   // read the same source.
-  const runtimeModelReports = runtimeModels()
+  const runtimeModelReports = runtimeModelsWithDeclaredWindows(
+    reportedPresetId => (reportedPresetId in config.presets ? config.presets[reportedPresetId]?.models : undefined),
+  )
   const factory = makeSessionFactory(config, {
     ...options,
     // No catalog-owning caller supplied a report sink: record into the shared

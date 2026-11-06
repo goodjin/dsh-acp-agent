@@ -30,7 +30,7 @@ import type { AcpPresetConfig, PresetConfig } from './registry.ts'
 import { makeSessionFactory } from './factory.ts'
 import type { DelegationMountSurface } from './factory.ts'
 import { forgetSession, stepPositionOfSession } from './step-position.ts'
-import { modelsOfPreset, registerCatalog, runtimeModels } from './catalog-registration.ts'
+import { modelsOfPreset, registerCatalog, runtimeModels, runtimeModelsWithDeclaredWindows } from './catalog-registration.ts'
 import { cwdOfSession, servicesOf } from './switch-mount.ts'
 import { GatewayConversations } from './gateway.ts'
 import type { GatewaySessionAppend } from './gateway.ts'
@@ -220,7 +220,8 @@ export function applyAcpPlugin(
   // and `listModels` would silently degrade to the configured list forever.
   // The entry may supply the ledger so its per-turn selection gate reads the
   // same reports the catalog serves.
-  const runtimeModelReports = deps.runtimeModels ?? runtimeModels()
+  const runtimeModelReports = deps.runtimeModels
+    ?? runtimeModelsWithDeclaredWindows(presetId => modelsOfPreset(presets, factory, presetId))
   // The external session id each DSH session of this row last opened, fresh or
   // reattached. Kept for the life of the host process: a manual restart or an
   // agent crash then reattaches server-side (`session/resume`, or cursor's

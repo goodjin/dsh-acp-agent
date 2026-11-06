@@ -38,7 +38,7 @@ import { makeContentWriter } from './content-writer.ts'
 import type { SessionAppend } from './content-writer.ts'
 import type { GatewaySessionAppend } from './gateway.ts'
 import { decideSelection, pendingSelectionOf, selectionModelsOf, selectionOf } from './selection.ts'
-import { runtimeModels } from './catalog-registration.ts'
+import { runtimeModels, runtimeModelsWithDeclaredWindows } from './catalog-registration.ts'
 import type { SelectionSource } from './selection.ts'
 import { switchDrivenSession } from './switch-mount.ts'
 import { switchShared } from './switch-shared.ts'
@@ -358,7 +358,11 @@ export function apply(ctx: unknown, config: Config): void {
   // The runner records each agent's live `session/new` model list here, and the
   // catalog serves the picker from it. The per-turn gate reads the same ledger:
   // judging against the configured list would refuse a model the picker shows.
-  const runtimeModelReports = runtimeModels()
+  // Declared windows ride along: the report stays authoritative, but a model
+  // the agent reports without a window keeps the declared one.
+  const runtimeModelReports = runtimeModelsWithDeclaredWindows(
+    reportedPresetId => (reportedPresetId === config.presetId ? preset.models : undefined),
+  )
   const turnModel = async (
     agent: AgentLike,
     decision: { readonly messages: readonly unknown[] },

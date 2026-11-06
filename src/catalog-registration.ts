@@ -20,7 +20,7 @@ import type { AcpPresetConfig, PresetConfig } from './registry.ts'
  * The same shape `AcpDialect.readModels` returns, keyed by preset so several
  * configured agents each keep their own report.
  */
-export type ReportedModel = { readonly id: string; readonly name: string; readonly description?: string }
+export type ReportedModel = { readonly id: string; readonly name: string; readonly description?: string; readonly contextWindow?: number }
 
 /**
  * The models the agents themselves reported, per preset.
@@ -37,6 +37,26 @@ export interface RuntimeModels {
   modelsOf(presetId: string): readonly ReportedModel[] | undefined
 }
 
+/**
+ * A ledger that joins the declared list's context windows into every report
+ * it records.
+ *
+ * See {@link mergeDeclaredWindows}: the runtime report stays authoritative,
+ * but a model the agent reports without a window keeps the declared one,
+ * so compaction keeps a capacity it had while only the declared list existed.
+ * @param declaredOf - the configured list per preset, as declared at attach time.
+ */
+export function runtimeModelsWithDeclaredWindows(
+  declaredOf: (presetId: string) => readonly ReportedModel[] | undefined,
+): RuntimeModels & { readonly inner: RuntimeModels } {
+  const inner = runtimeModels()
+  return {
+    inner,
+    record: (presetId, models) => inner.record(presetId, mergeDeclaredWindows(declaredOf(presetId), models)),
+    modelsOf: presetId => inner.modelsOf(presetId),
+  }
+}
+
 /** One in-memory report ledger, shared by the runner seam and the catalog adapter. */
 export function runtimeModels(): RuntimeModels {
   const byPreset = new Map<string, readonly ReportedModel[]>()
@@ -48,6 +68,31 @@ export function runtimeModels(): RuntimeModels {
     },
     modelsOf: presetId => byPreset.get(presetId),
   }
+}
+
+/**
+ * Merge the declared list's context windows into a runtime report.
+ *
+ * A runtime report replaces the declared list wholesale — the picker serves
+ * what the agent actually serves. But the window must not ride that replace
+ * out: agents that report no window for a model (most of them) would leave
+ * compaction without a capacity it had while only the declared list existed.
+ * Windows join per id — the runtime's when it reports one, the declared
+ * value as the fallback; every other field stays the runtime's. Models the
+ * agent no longer serves do not come back.
+ */
+export function mergeDeclaredWindows(
+  declared: readonly ReportedModel[] | undefined,
+  runtime: readonly ReportedModel[],
+): readonly ReportedModel[] {
+  const windows = new Map(declared === undefined ? [] : declared
+    .filter(model => model.contextWindow !== undefined)
+    .map(model => [model.id, model.contextWindow]))
+  return runtime.map(model => (
+    model.contextWindow !== undefined || !windows.has(model.id)
+      ? model
+      : { ...model, contextWindow: windows.get(model.id) }
+  ))
 }
 
 /**
