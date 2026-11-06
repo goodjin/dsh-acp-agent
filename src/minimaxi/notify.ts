@@ -11,7 +11,7 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 /** 收件人（金山 / AI 中台），与 ZCode 每日领取那套一致。 */
 export const FEISHU_USER_ID = 'ou_988714d586bf828e5a9642403924a690'
@@ -125,10 +125,34 @@ export function resolveCliPath(env: NodeJS.ProcessEnv = process.env): string {
   return 'lark-cli'
 }
 
+/**
+ * 子进程要用的 PATH。
+ *
+ * 图形界面启动的宿主进程只有最小 PATH，而 `lark-cli` 的 shebang 是
+ * `#!/usr/bin/env node`——找不到 node 就跑不起来。这里把宿主自己的可执行文件
+ * 所在目录、`~/bin` 与几个常见的 node 位置补进去。
+ * @param env - 当前环境。
+ * @returns 给子进程的 PATH。
+ */
+export function childPath(env: NodeJS.ProcessEnv = process.env): string {
+  const candidates = [
+    dirname(process.execPath),
+    join(homedir(), 'bin'),
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+  ]
+  const existing = env['PATH'] ?? ''
+  return [...new Set([...candidates, existing])].filter(part => part !== '').join(':')
+}
+
 /** 真的子进程调用。 */
 async function runCommand(command: string, args: string[], timeoutMs: number): Promise<CommandResult> {
   return await new Promise(resolve => {
-    execFile(command, args, { timeout: timeoutMs, encoding: 'utf8' }, (error, stdout, stderr) => {
+    execFile(command, args, {
+      timeout: timeoutMs,
+      encoding: 'utf8',
+      env: { ...process.env, PATH: childPath(process.env) },
+    }, (error, stdout, stderr) => {
       const code = error === null ? 0 : typeof (error as { code?: unknown }).code === 'number'
         ? (error as { code: number }).code
         : 1
