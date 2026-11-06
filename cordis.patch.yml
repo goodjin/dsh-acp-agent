@@ -409,12 +409,18 @@
                 - id: GLM-5.3
                   name: GLM 5.3
                   description: GLM Coding Plan
+                  # 窗口来自 Z.AI 官方模型页（docs.z.ai/guides/llm/glm-5.3 等），
+                  # 三条都是 1M；宿主的上下文压缩要靠它，不写压缩会报
+                  # "no context capacity"（2026-11-07 现场）。
+                  contextWindow: 1000000
                 - id: GLM-5.3-Flash
                   name: GLM 5.3-Flash
                   description: GLM Coding Plan
+                  contextWindow: 1000000
                 - id: GLM-5.2
                   name: GLM 5.2
                   description: GLM Coding Plan
+                  contextWindow: 1000000
     - id: acp-minimax
       name: '@deepseek-ai/dsh-agent-preset'
       config:
