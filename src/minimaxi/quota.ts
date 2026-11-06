@@ -23,14 +23,19 @@
  * The token lives in memory only and is stripped from every thrown message.
  */
 
-import { createHash } from 'node:crypto'
-import { matrixOrigin, openPlatformBaseUrl } from './vendor/mcode-runtime/endpoints.ts'
+import { openPlatformBaseUrl } from './vendor/mcode-runtime/endpoints.ts'
 import type { CredentialOverrides, MiniMaxCredential } from './credential.ts'
 import { resolveCredential } from './credential.ts'
-
-/** The desktop app's signing secret and salt, copied verbatim (see header). */
-const SIGNING_SECRET = 'I*7Cf%WZ#S&%1RlZJ&C2'
-const SIGNING_SALT = 'ooui'
+import {
+  dataOf,
+  field,
+  isAbortError,
+  record,
+  resolveRealUserID,
+  scrub,
+  signedMatrixGet,
+  signedMatrixPost,
+} from './gateway.ts'
 
 /** The coding-plan remains path on the open-platform origin. */
 const REMAINS_PATH = '/v1/api/openplatform/coding_plan/remains'
@@ -112,24 +117,6 @@ type Membership = {
   groupId?: string
   level?: string
   credit?: MiniMaxCredit
-}
-
-/**
- * The login's real user id, via the signed `/v1/api/user/info`. The gateway
- * refuses requests that name a user it cannot reconcile, so every later `/matrix/`
- * call carries this id.
- */
-async function resolveRealUserID(
-  credential: MiniMaxCredential,
-  fetchImpl: typeof fetch,
-  signal: AbortSignal | undefined,
-): Promise<string> {
-  const body = await signedMatrixGet(credential, '/v1/api/user/info', {}, fetchImpl, signal)
-  const data = dataOf(body)
-  const user = record(data['userInfo']) ?? record(data['user_info'])
-  const realUserID = field(user, 'realUserID', 'real_user_id')
-  if (realUserID === undefined) throw new Error('MiniMax user-info answer carried no real user id')
-  return realUserID
 }
 
 /**
@@ -224,7 +211,7 @@ async function readRemains(
       ...(signal === undefined ? {} : { signal }),
     })
   } catch (error) {
-    if (isAbort(error) || signal?.aborted === true) throw error
+    if (isAbortError(error) || signal?.aborted === true) throw error
     throw new Error(scrub(error instanceof Error ? error.message : String(error), credential.accessToken))
   }
   if (!response.ok) {
@@ -281,104 +268,6 @@ function quotaWindow(row: Record<string, unknown>, kind: string): MiniMaxQuotaWi
   }
 }
 
-/** A signed GET to the managed gateway (`/v1/api/user/info`). */
-async function signedMatrixGet(
-  credential: MiniMaxCredential,
-  path: string,
-  query: Record<string, string>,
-  fetchImpl: typeof fetch,
-  signal: AbortSignal | undefined,
-): Promise<unknown> {
-  return signedMatrix(credential, path, query, undefined, fetchImpl, signal)
-}
-
-/** A signed POST to the managed gateway with a JSON body. */
-async function signedMatrixPost(
-  credential: MiniMaxCredential,
-  path: string,
-  payload: Record<string, unknown>,
-  realUserID: string,
-  fetchImpl: typeof fetch,
-  signal: AbortSignal | undefined,
-): Promise<unknown> {
-  return signedMatrix(credential, path, {}, payload, fetchImpl, signal, realUserID)
-}
-
-/**
- * One signed managed-gateway call. The signature is the desktop app's: an md5
- * over the encoded path+search, the body (or `{}`), a md5 of the timestamp, and
- * the salt — plus an `x-signature` md5 over the second, the secret, and the
- * body. The token never enters the signature; it rides the Bearer header.
- */
-async function signedMatrix(
-  credential: MiniMaxCredential,
-  path: string,
-  query: Record<string, string>,
-  payload: Record<string, unknown> | undefined,
-  fetchImpl: typeof fetch,
-  signal: AbortSignal | undefined,
-  realUserID?: string,
-): Promise<unknown> {
-  const now = Date.now()
-  const url = new URL(path, matrixOrigin(credential.baseUrl))
-  const language = credential.region === 'cn' ? 'zh' : 'en'
-  url.search = new URLSearchParams({
-    device_platform: 'web',
-    biz_id: '3',
-    app_id: '3001',
-    version_code: '22201',
-    unix: String(now),
-    timezone_offset: String(new Date(now).getTimezoneOffset() * -1),
-    sys_language: language,
-    lang: language,
-    device_id: '0',
-    user_id: realUserID ?? '0',
-    client: 'desktop',
-    region: credential.region,
-    is_desktop: '1',
-    ...query,
-  }).toString()
-  const body = payload === undefined ? '' : JSON.stringify(payload)
-  const second = Math.floor(now / 1000)
-  let response: Response
-  try {
-    response = await fetchImpl(url, {
-      method: payload === undefined ? 'GET' : 'POST',
-      headers: {
-        accept: 'application/json',
-        'content-type': 'application/json',
-        authorization: `Bearer ${credential.accessToken}`,
-        yy: md5(`${encodeURIComponent(`${url.pathname}${url.search}`)}_${body || '{}'}${md5(String(now))}${SIGNING_SALT}`),
-        'x-timestamp': String(second),
-        'x-signature': md5(`${second}${SIGNING_SECRET}${body}`),
-      },
-      ...(body === '' ? {} : { body }),
-      ...(signal === undefined ? {} : { signal }),
-    })
-  } catch (error) {
-    if (isAbort(error) || signal?.aborted === true) throw error
-    throw new Error(scrub(error instanceof Error ? error.message : String(error), credential.accessToken))
-  }
-  if (!response.ok) {
-    const detail = scrub(await response.text().catch(() => ''), credential.accessToken).slice(0, 500)
-    throw new Error(`MiniMax quota request failed (${String(response.status)})${detail === '' ? '' : `: ${detail}`}`)
-  }
-  try {
-    return await response.json()
-  } catch (error) {
-    throw new Error(scrub(`MiniMax quota answer was not JSON: ${error instanceof Error ? error.message : String(error)}`, credential.accessToken))
-  }
-}
-
-function md5(value: string): string {
-  return createHash('md5').update(value).digest('hex')
-}
-
-function scrub(text: string, secret: string): string {
-  if (secret.length < 8) return text
-  return text.split(secret).join('[redacted]')
-}
-
 function finite(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
@@ -402,24 +291,3 @@ function text(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined
 }
 
-function field(value: unknown, ...keys: string[]): string | undefined {
-  for (const key of keys) {
-    const candidate = record(value)?.[key]
-    if (typeof candidate === 'string' && candidate.trim() !== '') return candidate.trim()
-  }
-  return undefined
-}
-
-function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined
-}
-
-/** The answer's payload: the `data` envelope when present, else the body itself. */
-function dataOf(body: unknown): Record<string, unknown> {
-  const root = record(body) ?? {}
-  return record(root['data']) ?? root
-}
-
-function isAbort(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError'
-}

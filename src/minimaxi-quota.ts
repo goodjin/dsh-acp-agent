@@ -1,5 +1,5 @@
 /**
- * MiniMax Token Plan 限额与积分的宿主侧接口。
+ * MiniMax Token Plan 限额与积分的宿主侧接口，以及每天的签到。
  *
  * 浏览器画输入框下方的配额胶囊时要读这份限额，但登录令牌只住在宿主进程
  * *（minimaxi-acp 的约定：内存里用、不落盘、不进日志）。所以这一层只做转发：
@@ -11,11 +11,34 @@
  * 拒绝时状态码原样、短体固定；成功应答带 30 秒缓存；取数失败或应答形状
  * 不认识都不甩 500——200 + `ok:false` + 原因，浏览器侧据此把胶囊藏起来并在
  * 日志里留一行。
+ *
+ * 每日签到走同一条宿主侧的路（2026-11-07 起）：签到是 MiniMax Code 官方
+ * 自带的，连着签给积分。这里每天 10:00 自己领一次，宿主没开着的第二天
+ * 装载时补签；领到或失败都发一条飞书。签到路由 `GET/POST
+ * /acp-agent/minimax/checkin` 留给手工触发与以后的界面用。
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { fetchMiniMaxQuota, isMiniMaxLoginRequired } from './minimaxi/index.ts'
-import type { MiniMaxCodingPlanQuota, MiniMaxLoginRequiredError, MiniMaxQuotaRequest } from './minimaxi/index.ts'
+import {
+  SigninClaimResult,
+  claimSignin,
+  currentStreak,
+  fetchMiniMaxQuota,
+  fetchSigninPanel,
+  formatAlreadyClaimedMessage,
+  formatClaimedMessage,
+  formatFailureMessage,
+  isMiniMaxLoginRequired,
+  resolveCredential,
+  sendFeishuNotification,
+  startDailyCheckin,
+} from './minimaxi/index.ts'
+import type {
+  MiniMaxCheckinOutcome,
+  MiniMaxCodingPlanQuota,
+  MiniMaxLoginRequiredError,
+  MiniMaxQuotaRequest,
+} from './minimaxi/index.ts'
 import { beginDeviceLogin, cachedLoginPrompt, createLoginManager, loginUrlHint, promptUrl } from './minimaxi/login.ts'
 
 export const name = 'acp-agent-minimaxi-quota'
@@ -25,6 +48,9 @@ export const inject = ['webServer', 'connection']
 
 /** exact 路由路径；浏览器侧的胶囊按这个常量取数。 */
 export const QUOTA_ROUTE_PATH = '/acp-agent/minimax/quota'
+
+/** 签到路由：GET 查面板，POST 领一次。 */
+export const CHECKIN_ROUTE_PATH = '/acp-agent/minimax/checkin'
 
 /** 成功应答的缓存时长；换算成上游被问的频率上限（多标签页也不翻倍）。 */
 const CACHE_TTL_MS = 30_000
@@ -80,11 +106,13 @@ export interface MiniMaxQuotaRouteDeps {
 }
 
 /**
- * 装载入口：挂上这条 exact 路由。
+ * 装载入口：挂上配额路由、签到路由，以及每天 10:00 的那个签到定时器。
  * @param ctx - 宿主上下文（effect / webServer / connection）。
  */
 export function apply(ctx: MiniMaxQuotaContext): void {
   registerMiniMaxQuotaRoute(ctx)
+  registerMiniMaxCheckinRoute(ctx)
+  startMiniMaxDailyCheckin(ctx)
 }
 
 /**
@@ -151,6 +179,127 @@ export function registerMiniMaxQuotaRoute(ctx: MiniMaxQuotaContext, deps: MiniMa
       }),
     'acp-agent-minimaxi-quota: quota route',
   )
+}
+
+/** 签到这条上游的超时：挂住的上游不该把这一路接口一起挂住。 */
+export const CHECKIN_UPSTREAM_TIMEOUT_MS = 15_000
+
+/**
+ * 注册签到路由：GET 查今天的签到面板，POST 领一次。
+ *
+ * 这一路现在没有界面在用（签到由下面的定时器做），留着是为了手工触发与以后
+ * 的界面用；形状与配额那条一致：准入原样、失败 200 + `ok:false` + 原因。
+ * @param ctx - 宿主上下文（effect / webServer / connection）。
+ */
+export function registerMiniMaxCheckinRoute(ctx: MiniMaxQuotaContext): void {
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: CHECKIN_ROUTE_PATH,
+        async handler(req, res) {
+          const admission = ctx.connection.admit(req)
+          if ('rejection' in admission) {
+            res.writeHead(admission.rejection)
+            res.end(admission.rejection === 401 ? 'unauthorized' : 'forbidden')
+            return
+          }
+          if (req.method !== 'GET' && req.method !== 'POST') {
+            res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8', allow: 'GET, POST' })
+            res.end('method not allowed')
+            return
+          }
+          try {
+            if (req.method === 'GET') {
+              const panel = await fetchSigninPanel({ signal: AbortSignal.timeout(CHECKIN_UPSTREAM_TIMEOUT_MS) })
+              respondJson(res, 200, JSON.stringify({ ok: true, panel }))
+              return
+            }
+            const result = await claimSignin({ signal: AbortSignal.timeout(CHECKIN_UPSTREAM_TIMEOUT_MS) })
+            respondJson(res, 200, JSON.stringify({
+              ok: true,
+              claimed: result.claim_result === SigninClaimResult.Claimed,
+              points: result.points,
+              dayNo: result.day_no,
+              streakDays: currentStreak(result.panel.days),
+              expiresAtMs: result.expire_at_ms,
+            }))
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            if (!isMiniMaxLoginRequired(error)) {
+              respondJson(res, 200, JSON.stringify({ ok: false, error: message }))
+              return
+            }
+            const login = await loginOfferOf(error)
+            respondJson(res, 200, JSON.stringify({
+              ok: false,
+              error: message,
+              needsLogin: true,
+              ...(login === undefined ? {} : { login }),
+            }))
+          }
+        },
+      }),
+    'acp-agent-minimaxi-quota: checkin route',
+  )
+}
+
+/**
+ * 每天 10:00 自动领一次积分：定时器挂在这个 effect 里，插件卸载时随之撤销。
+ *
+ * 没登录就安静跳过（一个请求都不发）；领到或失败都记一行日志并发一条飞书。
+ * @param ctx - 宿主上下文（这里只用 effect）。
+ */
+export function startMiniMaxDailyCheckin(ctx: MiniMaxQuotaContext): void {
+  ctx.effect(() => {
+    const stop = startDailyCheckin({
+      credential: async () => {
+        try {
+          return await resolveCredential()
+        } catch (error) {
+          // 没登录（或登录过期）：安静跳过，不吵。
+          if (isMiniMaxLoginRequired(error)) return undefined
+          throw error
+        }
+      },
+      onClaimed: outcome => { reportCheckin(outcome) },
+      onError: error => {
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn(`[acp-agent] MiniMax 每日签到没成功：${message}`)
+        notifyCheckin(formatFailureMessage(message))
+      },
+    })
+    return () => { stop() }
+  }, 'acp-agent-minimaxi-quota: daily checkin')
+}
+
+/** 一轮签到的结果：日志一行 + 飞书一条。 */
+function reportCheckin(outcome: MiniMaxCheckinOutcome): void {
+  if (outcome.claimed) {
+    const message = formatClaimedMessage(
+      outcome.points ?? 0,
+      outcome.dayNo ?? 0,
+      outcome.streakDays ?? 0,
+      outcome.expiresAtMs ?? Date.now(),
+    )
+    console.info(`[acp-agent] ${message}`)
+    notifyCheckin(message)
+    return
+  }
+  if (outcome.alreadyClaimed) {
+    console.info('[acp-agent] MiniMax 每日签到：今天已经领过了')
+    notifyCheckin(formatAlreadyClaimedMessage())
+    return
+  }
+  console.info('[acp-agent] MiniMax 每日签到：今天不可领')
+}
+
+/** 飞书通知：发不出去只记日志，不影响签到本身。 */
+function notifyCheckin(message: string): void {
+  void sendFeishuNotification(message).then(result => {
+    if (result.ok || result.skipped === true) return
+    console.warn(`[acp-agent] MiniMax 每日签到的飞书通知没发出去：${result.detail ?? '未知原因'}`)
+  })
 }
 
 /** 上游取数超时：挂住的上游不该把这一路接口一起挂住（2026-10-16 审计补漏）。 */
