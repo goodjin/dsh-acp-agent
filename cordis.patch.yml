@@ -455,9 +455,14 @@
                 - id: MiniMax-M3.1-Flash
                   name: M3.1 Flash
                   description: MiniMax Code 登录
+                  # 上下文窗口来自 MiniMax Code 自带清单（limit.context），
+                  # 宿主的上下文压缩要靠它；不写，切换模型在压缩这一步报
+                  # "no context capacity"（2026-11-07 现场）。
+                  contextWindow: 512000
                 - id: MiniMax-M3
                   name: MiniMax M3
                   description: MiniMax Code 登录
+                  contextWindow: 512000
     - id: acp-qoder
       name: '@deepseek-ai/dsh-agent-preset'
       config:

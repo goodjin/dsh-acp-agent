@@ -33,6 +33,13 @@ export type CatalogModel = {
    * effort into a separate axis instead of N duplicate rows.
    */
   readonly reasoning?: { readonly efforts: readonly { readonly id: string; readonly name: string }[] }
+  /**
+   * The model's context capacity, as the host's compaction (`dsh-compaction-basic`)
+   * reads through `resolveModel`. Absent means "capacity undeclared", which the
+   * compaction answers with "no context capacity" and a dead switch — so a
+   * declared window must reach this field, not stop at the config list.
+   */
+  readonly context?: { readonly contextWindow: number }
 }
 
 /**
@@ -64,6 +71,7 @@ function collapsedToCatalog(
     name: model.displayName,
     ...(model.description === undefined ? {} : { description: model.description }),
     ...(efforts === undefined || efforts.length === 0 ? {} : { reasoning: { efforts } }),
+    ...(model.contextWindow === undefined ? {} : { context: { contextWindow: model.contextWindow } }),
   }
 }
 
@@ -87,6 +95,8 @@ export type CollapsedModel = {
   readonly description?: string
   /** The efforts this model offers, or undefined when the agent publishes bare ids. */
   readonly efforts: readonly CatalogEffort[] | undefined
+  /** The declared context window, carried through to the catalog entry. */
+  readonly contextWindow?: number
 }
 
 /**
@@ -153,9 +163,9 @@ function splitEffort(id: string): { base: string; effort: string } | undefined {
  * @param models - The models one preset's agent offers, possibly with `[effort]` suffixes.
  * @returns One entry per base model, in first-seen order, efforts in first-seen order.
  */
-export function collapseEffortModels(models: readonly { id: string; name: string; description?: string }[]): CollapsedModel[] {
+export function collapseEffortModels(models: readonly { id: string; name: string; description?: string; contextWindow?: number }[]): CollapsedModel[] {
   const order: string[] = []
-  const byBase = new Map<string, { wireId?: string; displayName: string; description?: string; count: number; efforts: CatalogEffort[] }>()
+  const byBase = new Map<string, { wireId?: string; displayName: string; description?: string; count: number; efforts: CatalogEffort[]; contextWindow?: number }>()
   for (const model of models) {
     const split = splitEffort(model.id)
     if (split === undefined) {
@@ -167,29 +177,31 @@ export function collapseEffortModels(models: readonly { id: string; name: string
       const existing = byBase.get(model.name)
       if (existing === undefined) {
         order.push(model.name)
-        byBase.set(model.name, { wireId: model.id, displayName: model.name, count: 1, ...(model.description === undefined ? {} : { description: model.description }), efforts: undefined as unknown as CatalogEffort[] })
+        byBase.set(model.name, { wireId: model.id, displayName: model.name, count: 1, ...(model.description === undefined ? {} : { description: model.description }), ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }), efforts: undefined as unknown as CatalogEffort[] })
       } else {
         existing.count += 1
         if (existing.description === undefined && model.description !== undefined) existing.description = model.description
+        if (existing.contextWindow === undefined && model.contextWindow !== undefined) existing.contextWindow = model.contextWindow
       }
       continue
     }
     const existing = byBase.get(split.base)
     if (existing === undefined) {
       order.push(split.base)
-      byBase.set(split.base, { displayName: baseName(model.name, split.effort), ...(model.description === undefined ? {} : { description: model.description }), count: 1, efforts: [{ id: split.effort, name: effortLabelOf(split.effort), wireId: model.id }] })
+      byBase.set(split.base, { displayName: baseName(model.name, split.effort), ...(model.description === undefined ? {} : { description: model.description }), ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }), count: 1, efforts: [{ id: split.effort, name: effortLabelOf(split.effort), wireId: model.id }] })
       continue
     }
     existing.count += 1
     if (existing.description === undefined && model.description !== undefined) existing.description = model.description
+    if (existing.contextWindow === undefined && model.contextWindow !== undefined) existing.contextWindow = model.contextWindow
     if (existing.efforts !== undefined && !existing.efforts.some(effort => effort.id === split.effort)) {
       existing.efforts.push({ id: split.effort, name: effortLabelOf(split.effort), wireId: model.id })
     }
   }
   return order.map(base => {
-    const entry = byBase.get(base) as { wireId?: string; displayName: string; description?: string; count: number; efforts: CatalogEffort[] }
+    const entry = byBase.get(base) as { wireId?: string; displayName: string; description?: string; count: number; efforts: CatalogEffort[]; contextWindow?: number }
     // Bare-id rows carry the real wire id; suffixed rows use the stripped base id.
-    return { baseId: entry.wireId ?? base, displayName: entry.displayName, ...(entry.description === undefined ? {} : { description: entry.description }), efforts: entry.efforts }
+    return { baseId: entry.wireId ?? base, displayName: entry.displayName, ...(entry.description === undefined ? {} : { description: entry.description }), ...(entry.contextWindow === undefined ? {} : { contextWindow: entry.contextWindow }), efforts: entry.efforts }
   })
 }
 
@@ -208,7 +220,7 @@ function baseName(name: string, effort: string): string {
 /** What the adapter needs from the outside world. */
 export type CatalogDeps = {
   /** The models one preset's agent reports for itself. */
-  modelsOf(presetId: string): readonly { readonly id: string; readonly name: string; readonly description?: string }[]
+  modelsOf(presetId: string): readonly { readonly id: string; readonly name: string; readonly description?: string; readonly contextWindow?: number }[]
   /**
    * The models one preset's agent reported on its live `session/new` reply, or
    * `undefined` while none has arrived this host generation. Present wins over
@@ -338,7 +350,7 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
   // report once one has landed, the operator's configured list until then.
   // Resolving and routing must read the same list the picker advertised, or a
   // selection can advertise from one list and route against another.
-  const modelsFor = (presetId: string): readonly { readonly id: string; readonly name: string; readonly description?: string }[] =>
+  const modelsFor = (presetId: string): readonly { readonly id: string; readonly name: string; readonly description?: string; readonly contextWindow?: number }[] =>
     deps.runtimeModelsOf?.(presetId) ?? deps.modelsOf(presetId)
   const adapter: CatalogAdapterLike = {
     providerInfo: (provider: string) => {
@@ -388,6 +400,7 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
           id: declared.id,
           name: declared.name,
           ...(declared.description === undefined ? {} : { description: declared.description }),
+          ...(declared.contextWindow === undefined ? {} : { context: { contextWindow: declared.contextWindow } }),
         }
       }
       // The id may be a base the catalog collapsed (the picker selects the base
