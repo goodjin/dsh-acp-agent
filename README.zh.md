@@ -9,7 +9,7 @@
 **宿主侧**（加载进 DSH 进程）：
 
 - **ACP agent 框架** — 传输层（stdio、WebSocket）、各家帧方言、帧投影、终端与文件子协议
-- **GLM（ZCode）模型客户端** — 解密本机 ZCode 登录凭据、调用 GLM Coding Plan、流式响应
+- **GLM（ZCode）模型客户端** — 读取本机 ZCode 的 Coding Plan 密钥、调用 GLM Coding Plan、流式响应
 - **MiniMax 模型客户端** — 读取/刷新 MiniMax Code 凭据、调用托管网关
 - **Preset 分发** — 把外部 agent 注册为 DSH preset、接管会话、路由回合、处理模型切换
 - **配额接口** — 宿主侧 GLM/MiniMax/Codex/Claude/Grok 配额路由（凭据不出宿主进程）
@@ -47,6 +47,25 @@ dsh plugin --profile web add @goodjin2/dsh-acp-agent
 （`acp-agent-client`，只有恰好叫这个包名的行才会被当成客户端行），宿主侧的
 `roster-filter` / `zcode-quota` / `minimaxi-quota` / `codex-quota` / `claude-quota`
 挂载，以及下面这条自报行（2026-11 从 threadharbor 伞仓迁来）。
+
+## GLM（ZCode）的密钥从哪来
+
+GLM 客户端从 ZCode 桌面版自己的文件里取 Coding Plan 的密钥，并且**每次取数都重读**——
+不缓存：桌面版在用户重新登录、切换套餐时会重写这些文件，缓存住的密钥就是一把已经失效的密钥。
+
+密钥有两处存放，新的那处优先：
+
+1. `~/.zcode/v2/config.json` —— 桌面版的 provider 配置。coding-plan 那一项的
+   `options.apiKey` 里就是密钥（明文），旁边是它服务的 `options.baseURL`。
+   挑哪一项看的是**它服务哪个网关**，不是名字：同一份文件里还有 start-plan 那一项，
+   值是一枚会过期的 JWT，服务的是另一个网关。
+2. `~/.zcode/v2/credentials.json` —— 加密的凭据文件，键名
+   `account-provider:coding-plan:…:api-key`。老版本桌面版写在那里；当前的桌面版
+   （3.17.2，2026-11-06 核对）不再写这一项，密钥只留在 provider 配置里。
+
+`ZCODE_DATA_BASE_DIR` 挪动这两个文件；`ZCODE_ACP_CONFIG_FILE` 与
+`ZCODE_ACP_CREDENTIALS_FILE` 可以单独指到某一个文件。两处都没有密钥时，报错会把
+**看过的文件路径和网关**说出来——不会说出密钥本身。
 
 ## 不会静默消失：自报门面
 

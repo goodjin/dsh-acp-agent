@@ -9,7 +9,7 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin tha
 **Host side** (loads in the DSH process):
 
 - **ACP agent framework** — transports (stdio, WebSocket), per-agent dialects, frame projection, terminal & file sub-protocols
-- **GLM (ZCode) model client** — decrypts local ZCode login, calls GLM Coding Plan, streams responses
+- **GLM (ZCode) model client** — reads the local ZCode coding-plan key, calls GLM Coding Plan, streams responses
 - **MiniMax model client** — reads/refreshes MiniMax Code credentials, calls managed gateway
 - **Preset dispatch** — registers external agents as DSH presets, takes over sessions, routes turns, handles model switching
 - **Quota endpoints** — host-side GLM/MiniMax/Codex/Claude/Grok quota routes (credentials never leave the host process)
@@ -52,6 +52,28 @@ account origin, and the next poll (30 s later) the complete link with the user c
 the user authorizes, the official core writes the new credential back to the shared
 `auth.json` and the next call simply works. Tokens never enter these payloads, log lines
 or error strings.
+
+## Where the GLM (ZCode) key comes from
+
+The GLM client reads the coding-plan key from the ZCode desktop app's own files, and it
+reads them per request — never from a cache, because the app rewrites those files when the
+user signs in again or switches plans, and a cached key is a key that no longer works.
+
+Two places hold it, the newer one first:
+
+1. `~/.zcode/v2/config.json` — the app's provider configuration. The coding-plan provider
+   entry carries the key in plain text under `options.apiKey`, right next to the
+   `options.baseURL` that entry serves. The entry is picked by **the gateway it serves**,
+   not by its name: the same file also carries the start-plan entry, whose value is a
+   short-lived JWT for a different gateway.
+2. `~/.zcode/v2/credentials.json` — the encrypted credential file, entry
+   `account-provider:coding-plan:…:api-key`. Older apps wrote the key there. The current
+   app (3.17.2, checked 2026-11-06) writes that entry no more; the key lives only in the
+   provider configuration.
+
+`ZCODE_DATA_BASE_DIR` moves both files; `ZCODE_ACP_CONFIG_FILE` and
+`ZCODE_ACP_CREDENTIALS_FILE` point at them one by one. When neither place holds a key, the
+error names both files and the gateway — never the key itself.
 
 ## When a row doesn't mount: the self-report seam
 

@@ -235,7 +235,8 @@ describe('registerZcodeQuotaRoute（行为层）', () => {
     try {
       const { defaultQuotaFetch, QUOTA_UPSTREAM_TIMEOUT_MS } = await import('../src/zcode-quota.ts')
       expect(QUOTA_UPSTREAM_TIMEOUT_MS).toBeGreaterThan(0)
-      const answer = await defaultQuotaFetch()
+      // 密钥自己给：这台机器上有没有登录 ZCode，不该决定这条测试过不过。
+      const answer = await defaultQuotaFetch({ apiKey: 'test-key' })
       expect(seen).toHaveLength(1)
       expect(seen[0]?.signal).toBeInstanceOf(AbortSignal)
       expect(answer?.fiveHour?.kind).toBe('five-hour')
