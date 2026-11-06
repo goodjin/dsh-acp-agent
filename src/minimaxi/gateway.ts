@@ -143,7 +143,7 @@ export async function signedMatrix(
     'x-timestamp': String(second),
     'x-signature': md5(`${second}${SIGNING_SECRET}${body}`),
   }
-  return readAnswer(credential, await send(credential, url, 'POST', headers, body, fetchImpl, signal))
+  return readAnswer(credential, await send(credential, url, payload === undefined ? 'GET' : 'POST', headers, body, fetchImpl, signal))
 }
 
 /**
