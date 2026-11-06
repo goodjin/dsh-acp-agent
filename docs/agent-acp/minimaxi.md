@@ -60,6 +60,40 @@ Token Plan 额度，跟官方桌面版用量视图同源。来源拆在两个面
 令牌照旧不出宿主进程：宿主侧 `/acp-agent/minimax/quota`（本包）
 问一次上游、带 30 秒缓存，浏览器只画数字。
 
+## 每日签到（核对时间 2026-11-07）
+
+签到是 MiniMax Code **官方自带**的：连着签给积分，签到积分 30 天有效、只能在 MiniMax Code
+里用（桌面版有「每日签到」入口，CLI 有 `/checkin`）。这里做的是把同一条链路接进 DSH：
+**每天 10:00 自动领一次**；宿主没开着的第二天，装载时若已过 10:00 且今天还没领，就当场补签。
+
+| 要什么 | 从哪来 | 鉴权 |
+| --- | --- | --- |
+| 今天的签到面板 | 托管网关 `/minimax-cloud/api/v1/signin/status` | 登录令牌 + **md5 请求签名** |
+| 领一次 | 托管网关 `/minimax-cloud/api/v1/signin/claim`（空体） | 同上 |
+
+面板是 **7 天一轮**：每天一个条目（第几天、这天多少积分、是不是今天、什么状态），
+当天 400 积分，连签第 4、7 天是 1000。应答的形状与校验规则抄自上游
+`packages/shared/src/daily-signin.ts`，两条地址与请求头抄自
+`packages/tui/src/checkin/http-gateway.ts`（出处记在 `src/minimaxi/vendor/mcode-runtime/PROVENANCE.md`）。
+
+签名与读额度是**同一套**（同样两个写死的常量、同样的两个 md5 头），只有客户端标记不同：
+签到走官方那套 `mcode` 标记（带 MiniMax Code 版本号），额度走 `desktop` 标记。
+
+行为与失败处理：
+
+- 没登录 → **安静跳过**（一个请求都不发，不吵）；
+- 今天已经领过 → 一行日志 + 一条飞书「今天已经领过了」，不算失败；
+- 领到 → 一行日志 + 一条飞书（积分、第几天、连续几天、积分什么时候过期）；
+- 失败 → 一行 warn + 一条飞书写明原因。**通知发不出去只记日志**，不影响签到本身。
+
+飞书走本机既有的 `lark-cli`（bot 身份，与 ZCode 每日领取同一条命令）。图形界面启动的宿主
+进程拿不到 shell 的 PATH，所以插件先找 `LARK_CLI` 环境变量、再找 `~/bin/lark-cli`。
+收件人是金山（AI中台）；`MINIMAX_CHECKIN_FEISHU=0` 关掉通知，
+`MINIMAX_CHECKIN_FEISHU_USER_ID=ou_…` 换收件人。
+
+签到路由 `GET/POST /acp-agent/minimax/checkin`（GET 查面板、POST 领一次）留给手工触发，
+平时没有界面在用它。
+
 ## 稳定性
 
 托管网关地址 `agent.minimax.cn/mavis/api/v1/llm/v1` 是 MiniMax 的**产品内部路由，官方文档一个字都没承诺过**，随时可能改。我们把它抄过来是为了跟官方保持一致，不是因为它稳。真出问题时先查官方是否已经改了——`src/vendor/mcode-runtime/PROVENANCE.md` 记着同步自哪个提交。

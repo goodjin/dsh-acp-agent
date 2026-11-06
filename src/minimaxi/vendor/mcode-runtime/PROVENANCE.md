@@ -26,3 +26,20 @@
 ## 怎么跟着官方更新
 
 覆盖上游两个文件 → 保留上表的类型改动 → 更新本文件的日期与提交 → 跑本包测试。
+
+## 每日签到的契约（2026-11-07 核对）
+
+签到（daily check-in）的**契约**抄自上游两处，不在本目录的搬运范围内，但出处记在这里：
+
+| 抄的东西 | 上游路径 | 用在哪 |
+| --- | --- | --- |
+| 面板与领取应答的形状、校验规则、连续天数的算法 | `packages/shared/src/daily-signin.ts` | `src/minimaxi/checkin.ts` |
+| 两条地址（`/minimax-cloud/api/v1/signin/status` 与 `…/claim`）与请求头的形状 | `packages/tui/src/checkin/http-gateway.ts` | `src/minimaxi/checkin.ts` |
+
+上游的 `createPublicGatewayRequest`（`packages/tui/src/runtime/public-gateway.ts`）是那两枚
+md5 头的出处，与本目录 `src/minimaxi/gateway.ts` 里读额度用的那套**同一对常量**；
+签到那侧多带 `client=mcode` 与 `desktop_version` 两个客户端标记。
+
+核对时间 2026-11-07（cn/prod 登录）：状态接口返回 7 天一轮的面板，当天可领 400 积分
+（连签第 4、7 天是 1000）。
+
