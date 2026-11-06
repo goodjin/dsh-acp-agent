@@ -189,6 +189,8 @@ describe('查面板与领取', () => {
     expect(status?.headers['Authorization']).toBe('Bearer test-token-abcdefgh')
     expect(typeof status?.headers['yy']).toBe('string')
     expect(typeof status?.headers['x-signature']).toBe('string')
+    // 取用户 id 那一步是 GET——写成 POST 会被网关当成不存在的路由（404）。
+    expect(calls.find(call => call.url.includes('/v1/api/user/info'))?.method).toBe('GET')
   })
 
   it('领取接口：POST 同一条公开网关，空体', async () => {
