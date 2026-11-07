@@ -115,9 +115,9 @@ describe('auditRows', () => {
 
   it('apply 抛错的行：failed，并带上错误原文', async () => {
     const rows = await auditRows(withRows({
-      'acp-qoder': failedApply('acp-qoder', '@deepseek-ai/dsh-agent-preset', 'preset schema rejected'),
+      'acp-qoder-cn': failedApply('acp-qoder-cn', '@deepseek-ai/dsh-agent-preset', 'preset schema rejected'),
     }))
-    const row = rows.find(entry => entry.id === 'acp-qoder')
+    const row = rows.find(entry => entry.id === 'acp-qoder-cn')
     expect(row?.status).toBe('failed')
     expect(row?.detail).toContain('preset schema rejected')
   })

@@ -989,7 +989,7 @@ describe('GatewayConversations — 帧静默超时、提示与诊断包', () => 
       fake.diagnosticsState.toolDeadline = () => budgetEndsAt
       const gate = new GatewayConversations(async () => fake.session, undefined, undefined, undefined, () => ({ stallMs: 3_000 }))
       const chunks: GatewayChunk[] = []
-      const answering = gate.answer('s1', 'acp-qoder', { messages: [user('编译')], position }, { chunk: c => { chunks.push(c) } })
+      const answering = gate.answer('s1', 'acp-qoder-cn', { messages: [user('编译')], position }, { chunk: c => { chunks.push(c) } })
       // 静默期限过了，工具预算还剩：不收场（让路把定时器推到预算后 50ms）。
       const held = await Promise.race([
         answering.then(() => 'ended-early'),
@@ -1052,7 +1052,7 @@ describe('GatewayConversations — 帧静默超时、提示与诊断包', () => 
       const gate = new GatewayConversations(async () => fake.session, undefined, undefined, undefined, () => ({ stallMs: 3_000 }))
       const chunks: GatewayChunk[] = []
       const outcome = await Promise.race([
-        gate.answer('s1', 'acp-qoder', { messages: [user('崩了')], position }, { chunk: c => { chunks.push(c) } }).then(() => 'resolved'),
+        gate.answer('s1', 'acp-qoder-cn', { messages: [user('崩了')], position }, { chunk: c => { chunks.push(c) } }).then(() => 'resolved'),
         vi.advanceTimersByTimeAsync(10_000).then(() => 'still-hanging'),
       ])
       expect(outcome).toBe('resolved')
@@ -1082,7 +1082,7 @@ describe('GatewayConversations — 帧静默超时、提示与诊断包', () => 
       const gate = new GatewayConversations(async () => fake.session, undefined, undefined, undefined, () => ({ stallMs: 3_000 }))
       const chunks: GatewayChunk[] = []
       const outcome = await Promise.race([
-        gate.answer('s1', 'acp-qoder', { messages: [user('先干活后停')], position }, { chunk: c => { chunks.push(c) } }).then(() => 'resolved'),
+        gate.answer('s1', 'acp-qoder-cn', { messages: [user('先干活后停')], position }, { chunk: c => { chunks.push(c) } }).then(() => 'resolved'),
         vi.advanceTimersByTimeAsync(10_000).then(() => 'still-hanging'),
       ])
       expect(outcome).toBe('resolved')

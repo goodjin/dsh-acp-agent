@@ -469,22 +469,22 @@
                   name: MiniMax M3
                   description: MiniMax Code 登录
                   contextWindow: 512000
-    - id: acp-qoder
+    - id: acp-qoder-cn
       name: '@deepseek-ai/dsh-agent-preset'
       config:
-        id: acp-qoder
-        name: Qoder
+        id: acp-qoder-cn
+        name: Qoder CN
         order: 50
         plugins:
-          - id: acp-qoder-binding
+          - id: acp-qoder-cn-binding
             name: '@goodjin2/dsh-acp-agent'
             config:
-              presetId: acp-qoder
+              presetId: acp-qoder-cn
               agent: qoder
               hideFromRoster: true
               # Qoder 的 CLI 默认是交互式 agent；`--acp` 由共享参数表补上
               # （packages/dsh-acp-agent/src/spawn-args.ts），这里不重复。
-              # 国际站把 command 指向 `qoder`/`qodercli`；本机是 CN 版。
+              # CN 行指向 qoderclicn；国际版见下面的 acp-qoder-intl 行。
               command: /Users/good/.local/bin/qoderclicn
               # 静默看门狗的期限放宽到 5 分钟（默认 120 秒）。
               #
@@ -553,6 +553,31 @@
                 - id: mmodel
                   name: MiniMax-M3.1-Flash
                   description: Vision · New · 0.10x Credit
+
+    - id: acp-qoder-intl
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: acp-qoder-intl
+        name: Qoder
+        order: 52
+        plugins:
+          - id: acp-qoder-intl-binding
+            name: '@goodjin2/dsh-acp-agent'
+            config:
+              presetId: acp-qoder-intl
+              agent: qoder-cli
+              hideFromRoster: true
+              # 国际版 CLI（@qoder-ai/qodercli），与桌面应用同源；`--acp` 由共享参数表补上。
+              # 登录走 `qodercli login`（浏览器授权一次），凭据留在 CLI 自己的加密存储。
+              # 无头部署可改用 QODER_PERSONAL_ACCESS_TOKEN（spawn-args 白名单已放行）。
+              command: /Users/good/.qoder-intl/node_modules/.bin/qodercli
+              # 长工具执行期间 CLI 可能长时间静默，与 acp-qoder-cn 同款放宽。
+              stallMs: 300000
+              # 静默模式就是逐次询问；写出来是不让构建的默认值漂移。
+              mode: default
+              # 模型清单先留空：登录后第一次开会话，CLI 在 session/new 里自报
+              # 全量清单，运行时报告会写进目录账本，选择器随之跟上。这里不猜。
+              models: []
 
     - id: acp-doubao
       name: '@deepseek-ai/dsh-agent-preset'
