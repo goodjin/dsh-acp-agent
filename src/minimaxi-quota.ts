@@ -25,7 +25,6 @@ import {
   currentStreak,
   fetchMiniMaxQuota,
   fetchSigninPanel,
-  formatAlreadyClaimedMessage,
   formatClaimedMessage,
   formatFailureMessage,
   isMiniMaxLoginRequired,
@@ -273,22 +272,36 @@ export function startMiniMaxDailyCheckin(ctx: MiniMaxQuotaContext): void {
   }, 'acp-agent-minimaxi-quota: daily checkin')
 }
 
-/** 一轮签到的结果：日志一行 + 飞书一条。 */
+/**
+ * 这一轮签到要不要发通知、发什么。
+ *
+ * **只有真的领到才发**：今天已经领过（在 App 里自己领过、或之前那一轮已经领过）
+ * 只记日志——否则收件人每天会收到一条「今天已经领过了」，而下午重开一次桌面版
+ * 的补签还会再来一条，纯噪声（2026-11-07 现场：一天两条）。
+ *
+ * @param outcome - 一轮签到的结果。
+ * @returns 该发的消息；不该发时是 `undefined`。
+ */
+export function checkinNotificationText(outcome: MiniMaxCheckinOutcome): string | undefined {
+  if (!outcome.claimed) return undefined
+  return formatClaimedMessage(
+    outcome.points ?? 0,
+    outcome.dayNo ?? 0,
+    outcome.streakDays ?? 0,
+    outcome.expiresAtMs ?? Date.now(),
+  )
+}
+
+/** 一轮签到的结果：日志一行；有得说才发一条飞书。 */
 function reportCheckin(outcome: MiniMaxCheckinOutcome): void {
-  if (outcome.claimed) {
-    const message = formatClaimedMessage(
-      outcome.points ?? 0,
-      outcome.dayNo ?? 0,
-      outcome.streakDays ?? 0,
-      outcome.expiresAtMs ?? Date.now(),
-    )
+  const message = checkinNotificationText(outcome)
+  if (message !== undefined) {
     console.info(`[acp-agent] ${message}`)
     notifyCheckin(message)
     return
   }
   if (outcome.alreadyClaimed) {
     console.info('[acp-agent] MiniMax 每日签到：今天已经领过了')
-    notifyCheckin(formatAlreadyClaimedMessage())
     return
   }
   console.info('[acp-agent] MiniMax 每日签到：今天不可领')

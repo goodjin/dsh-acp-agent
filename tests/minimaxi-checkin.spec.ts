@@ -421,3 +421,22 @@ describe('飞书通知', () => {
     expect(seen[0]?.args).toContain('bot')
   })
 })
+
+describe('要不要发通知', () => {
+  it('真的领到了：发', async () => {
+    const { checkinNotificationText } = await import('../src/minimaxi-quota.ts')
+    const text = checkinNotificationText({ claimed: true, alreadyClaimed: false, notClaimable: false, points: 400, dayNo: 1, streakDays: 3, expiresAtMs: 1_800_000_000_000 })
+    expect(text).toContain('领到 400 积分')
+    expect(text).toContain('连续 3 天')
+  })
+
+  it('今天已经领过：不发（每天一条噪声）', async () => {
+    const { checkinNotificationText } = await import('../src/minimaxi-quota.ts')
+    expect(checkinNotificationText({ claimed: false, alreadyClaimed: true, notClaimable: false })).toBeUndefined()
+  })
+
+  it('今天不可领：不发', async () => {
+    const { checkinNotificationText } = await import('../src/minimaxi-quota.ts')
+    expect(checkinNotificationText({ claimed: false, alreadyClaimed: false, notClaimable: true })).toBeUndefined()
+  })
+})
