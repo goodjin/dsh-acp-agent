@@ -702,3 +702,25 @@
                   # 不写，切到豆包会以 "no context capacity" 失败（2026-11-07 现场）。
                   contextWindow: 256000
 
+# 压缩的摘要请求要有一条能服务后台请求的路由。
+#
+# 2026-11-06 现场（两次，11-07 一次）：会话跑在外部 agent（grok）上，用户切到
+# 别的模型，宿主压缩在切换那一步要生成摘要——而摘要请求发往会话**当前**的
+# 路由（切换前的那条）。外部 agent 只回答对话轮次，不接后台请求，于是摘要被
+# 拒（"does not serve background compaction requests"），整个切换以
+# MODEL_SWITCH_COMPACTION_FAILED 失败。
+#
+# 宿主的出口是 compaction-basic 的 summarizationProvider / summarizationModel：
+# 配了它，摘要就走那条路由；不配就继承会话目标（= 撞上外部 agent）。宿主把它
+# 配在 isolate 的 group 里，这里按 id 覆盖——行被提升到顶层，配置值落在同一行上
+# （`dsh --dump-config` 可见，装载无警告）。
+#
+# 这条路由必须是**原生**路由（宿主自己的 LLM 服务）：ACP 的模型行（zcode/minimax）
+# 只在 preset 里注册，不在宿主的 llm 注册表里，宿主按 provider 找不到它们。
+# 取 openai/gpt-6-astra——它是本机 profile 的默认模型，凭据已备，且宿主自带的
+# 模型目录里有它（窗口 272K，摘要用不着整窗）。
+- id: compaction-basic
+  name: '@deepseek-ai/dsh-compaction-basic'
+  config:
+    summarizationProvider: openai
+    summarizationModel: gpt-6-astra
