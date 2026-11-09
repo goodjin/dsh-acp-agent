@@ -4,6 +4,11 @@
 
 一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件，把外部 coding agent 接进 DSH 原生会话界面。支持 GLM（ZCode）、MiniMax、Codex、Claude、Grok、Cursor、Qoder。
 
+> **开发与排障请先查官方文档**：本插件的宿主契约（preset 挂载行、客户端行、配额路由、
+> ACP 接入层）以 DeepSeek Harness 官方文档为准。本地镜像见
+> [`../docs/official/README.md`](../docs/official/README.md)（含按场景的导航表），
+> 线上版本见 <https://deepseek-harness.github.io/deepseek-harness/>。
+
 ## 功能
 
 **宿主侧**（加载进 DSH 进程）：

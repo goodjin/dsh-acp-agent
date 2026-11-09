@@ -8,9 +8,9 @@
  * glm-5.3-flash，都是同一个错）。
  *
  * 适配器层的行为已有 catalog-context-window.spec.ts 覆盖，但那一层只证明
- * 「清单里写了就交得出去」。清单本身漏写时，没有任何测试会红——七条 ACP 行
- * （codex / claude / grok / cursor / qoder-cn / qoder-intl / doubao）就是这样
- * 漏下来的，每条都让切到该行的模型直接失败。
+ * 「清单里写了就交得出去」。清单本身漏写时，没有任何测试会红——codex / claude
+ * / grok / cursor / qoder-cn / doubao 这些 ACP 行就是这样漏下来的，每条都让
+ * 切到该行的模型直接失败。
  *
  * 所以这一层断言清单本身：每条模型行都声明了窗口，且是宿主认的正整数。
  */
@@ -86,10 +86,6 @@ function declaredModelsByRow(): Map<string, DeclaredModel[]> {
 
 /**
  * 本仓的 ACP 模型行——每一条都要服务宿主压缩。
- *
- * acp-qoder-intl 不在其中：它的清单是故意留空的（登录后由 CLI 在
- * session/new 里自报全量），运行时报告里带的窗口才是事实来源，
- * 声明层不猜。
  */
 const AGENT_ROWS = [
   'acp-codex',

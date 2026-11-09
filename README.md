@@ -4,6 +4,13 @@
 
 A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin that connects external coding agents to DSH's native session interface. Supports GLM (ZCode), MiniMax, Codex, Claude, Grok, Cursor, and Qoder.
 
+> **Developing or debugging this plugin?** The host contract (preset declaration rows,
+> client rows, quota routes, the ACP agent framework) is defined by the official DeepSeek
+> Harness documentation. A complete offline Chinese mirror lives at
+> [`../docs/official/README.md`](../docs/official/README.md) (with a task-oriented
+> navigation table); the online version is at
+> <https://deepseek-harness.github.io/deepseek-harness/>.
+
 ## What it does
 
 **Host side** (loads in the DSH process):

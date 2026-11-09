@@ -26,7 +26,6 @@ const ARGS_BY_AGENT: Readonly<Record<string, readonly string[]>> = {
   // JSON-RPC service (measured 2026-10-20 on qoder-cli-cn 1.1.6, and on the
   // international qodercli 1.1.84 — same flag, same protocol).
   qoder: ['--acp'],
-  'qoder-cli': ['--acp'],
 }
 
 /**
@@ -85,9 +84,6 @@ const SCRUBBED_ENV_PREFIXES: Readonly<Record<string, readonly RegExp[]>> = {
  */
 const KEEP_ENV_NAMES: Readonly<Record<string, readonly string[]>> = {
   qoder: ['QODERCN_PERSONAL_ACCESS_TOKEN', 'QODERCN_CONFIG_DIR', 'QODERCN_MODEL'],
-  // The international CLI keeps its own encrypted store; these let a headless
-  // deployment inject a token or pin a config dir/model without a login.
-  'qoder-cli': ['QODER_PERSONAL_ACCESS_TOKEN', 'QODER_CONFIG_DIR', 'QODER_MODEL'],
 }
 
 /**

@@ -307,7 +307,9 @@ const DISPLAY: Readonly<Record<string, string>> = {
   claude: 'Claude',
   codex: 'Codex',
   cursor: 'Cursor',
-  qoder: 'Qoder',
+  // The `qoder` agent id is the **domestic** build (acp-qoder-cn, `qoderclicn`)
+  // → "QoderCN".
+  qoder: 'QoderCN',
   zcode: 'ZCode',
   minimaxi: 'MiniMax',
   doubao: '豆包',

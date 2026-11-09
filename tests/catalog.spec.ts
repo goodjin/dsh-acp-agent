@@ -91,13 +91,14 @@ describe('catalogAdapter', () => {
   })
 
   it('names every driven agent, never the raw preset id', () => {
-    // A missing entry falls back to the preset id ("acp-qoder"), which is
-    // what then leaks into the composer's "agent · model" label.
+    // The domestic Qoder row (agent `qoder`) reads "QoderCN". A missing DISPLAY
+    // entry falls back to the raw preset id, which then leaks into the
+    // composer's "agent · model" label.
     const qoderAdapter = catalogAdapter(
       { presets: { 'acp-qoder-cn': { agent: 'qoder', command: 'qoder-acp' } } },
       { modelsOf: () => [], dialectOf: () => undefined },
     )
-    expect(qoderAdapter.providerInfo(providerRoute('acp-qoder-cn')).name).toBe('Qoder')
+    expect(qoderAdapter.providerInfo(providerRoute('acp-qoder-cn')).name).toBe('QoderCN')
   })
 
   it('先把清单准备好再回答：模型插件的清单要能主动进账本', async () => {
