@@ -1,19 +1,16 @@
 /**
- * 跨包座位与 priority 的契约。
+ * `assistant-step` 的遮蔽 wrap 已拆除（2026-11-13）：原生 AssistantNodeView
+ * 声明了子座位（conversation.chat.reasoning.body / message.message.images 等），
+ * 宿主对 renderSlot 逐 key 校验「本条目 children 表」——遮蔽 wrap 没声明的座位，
+ * 原生一调用就抛 SlotOwnershipError、错误边界卸掉整棵会话流；转发原生 children
+ * 又在 register 时抛 already declared（子座位单一存活 owner）。两条路都死。
  *
- * 两个包都包 `conversation.chat.node` 的 `assistant-step` 格子，靠 priority 决定
- * 谁在外层（数值更低=更外层：插槽按升序取每个格子的第一条）。而且座位
- * `conversation.chat.node.acp-segment-renderer` 只能有一个声明者——两边都声明时
- * 后声明的那个会抛「already-declared child key」，被各自的 try/catch 吞掉，于是
- * 结果取决于装配顺序（2026-11-03 现场：答案卡片整块消失、且没有任何可见报错）。
- *
- * 这组断言把「账」钉在本仓库这半边：
- * - 本包**不**声明座位（声明权归 chat-area）；
- * - 本包的兜底优先级是 -40，严格大于 chat-area 的 -50，也就是恒在它内层。
+ * 本包的 -40 兜底 wrap 与「ACP 段渲染器挂跨包座位」随之拆除：座位声明方
+ * （dsh-chat-power）也不再注册 assistant-step wrap，跨包座位已无人声明。
+ * `acpProcessSegment` 数据注入（视图 wrap）保留，渲染方待走合法座位重接。
  *
  * 读了源码而不是 import，是因为 acp-process-surface 依赖客户端 UI 包（primitives →
  * clsx …），在隔离工作区里解析不稳；这里要钉的是字面量与注册形状，源码即事实。
- * 对面那一半在 @goodjin2/dsh-chat-area 的 tests/wrap-priority.spec.ts 里。
  */
 
 import { readFileSync } from 'node:fs'
@@ -22,47 +19,19 @@ import { describe, expect, it } from 'vitest'
 
 const SURFACE = readFileSync(fileURLToPath(new URL('../src/client/acp-process-surface.tsx', import.meta.url)), 'utf8')
 
-/** 从源码里读出导出的常量，类型断言留给 tsc。 */
-function constantOf(name: string): number {
-  const match = new RegExp(`export const ${name} = (-?\\d+)`).exec(SURFACE)
-  expect(match, `源码里找不到 ${name}`).not.toBeNull()
-  return Number(match![1])
-}
-
-describe('assistant-step 的座位契约', () => {
-  it('本包不声明座位（一个插槽只能有一个声明者，声明权归 chat-area）', () => {
-    expect(SURFACE).not.toMatch(/children:\s*\{[\s\S]{0,120}SEGMENT_RENDERER_SLOT/)
-    expect(SURFACE).not.toContain('seatDeclared')
+describe('assistant-step 不再有遮蔽 wrap', () => {
+  it('源码不再注册 assistant-step wrap（原生带子座位授权，无法合法遮蔽）', () => {
+    expect(SURFACE).not.toContain("key: 'assistant-step'")
+    expect(SURFACE).not.toContain('ASSISTANT_STEP_FALLBACK_PRIORITY')
   })
 
-  it('本包仍然把 ACP 段渲染器注册进座位（座位存在时由 chat-area 取用）', () => {
-    expect(SURFACE).toContain('slots.inject(SEGMENT_RENDERER_SLOT')
-    expect(SURFACE).toContain('acp-agent-acp-segment-renderer')
+  it('跨包座位挂钩一并拆除（座位声明方已不在，inject 永不触发）', () => {
+    expect(SURFACE).not.toContain('slots.inject(SEGMENT_RENDERER_SLOT')
+    expect(SURFACE).not.toContain('acp-agent-acp-segment-renderer')
   })
 
-  it('注册座位时带座位名（子槽按名字声明，缺了会以 undefined 查表被拒）', () => {
-    const start = SURFACE.indexOf('slots.inject(SEGMENT_RENDERER_SLOT')
-    expect(start).toBeGreaterThan(-1)
-    const block = SURFACE.slice(start, start + 700)
-    expect(block).toContain('name: SEGMENT_RENDERER_SLOT')
-  })
-
-  it('交给宿主的回调就地吞错，不把异常抛进对方的注册流程', () => {
-    // 座位 inject 的回调
-    const seat = SURFACE.slice(SURFACE.indexOf('slots.inject(SEGMENT_RENDERER_SLOT'))
-    expect(seat).toMatch(/try\s*\{[\s\S]*catch/)
-    // 插槽订阅（attachWrap）与视图订阅（attachView）的回调
-    const wrap = SURFACE.slice(SURFACE.indexOf('const attachWrap'), SURFACE.indexOf('const unsubscribeWrap'))
-    expect(wrap).toMatch(/catch\s*\(/)
+  it('视图 wrap 的吞错纪律保留（交给宿主的回调不把异常抛进对方注册流程）', () => {
     const view = SURFACE.slice(SURFACE.indexOf('const attachView'), SURFACE.indexOf('const unsubscribeView'))
     expect(view).toMatch(/catch\s*\(/)
-  })
-
-  it('兜底优先级 -40，比 chat-area 的 -50 更内层', () => {
-    const fallback = constantOf('ASSISTANT_STEP_FALLBACK_PRIORITY')
-    expect(fallback).toBe(-40)
-    // chat-area 的测试里写着同一个数字；本包必须严格大于它（-40 > -50）才算内层。
-    expect(fallback).toBeGreaterThan(-50)
-    expect(SURFACE).toContain('priority: ASSISTANT_STEP_FALLBACK_PRIORITY')
   })
 })

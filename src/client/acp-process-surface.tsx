@@ -5,7 +5,6 @@ import type { ConversationNodeDefinition, ConversationViewDefinition } from '@de
 import type { ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { acpProcessDefinition } from './acp-process-segments.ts'
 import { wrapChatView } from './acp-process-view.ts'
-import type { SegmentChatData } from './acp-process-view.ts'
 import type { ProcessSegment } from './acp-process-segments.ts'
 import { defaultLinkOpenMode, httpLinkHref, openInBrowser } from './link-open.ts'
 import styles from './acp-process.module.css'
@@ -13,22 +12,17 @@ import styles from './acp-process.module.css'
 /**
  * ACP 进程段的宿主半边。
  *
- * 这里只做两件 ACP 专属的事：
- * 1. 把 chat 视图的 builder 包一层（`wrapChatView`），把带 ACP 段的助手步投影成
- *    带 `acpProcessSegment` 的节点；并注册 `acpProcessDefinition` 折叠 ACP 事件。
- * 2. 把进程段渲染器 `AcpProcessComponent` 注册进座位
- *    {@link SEGMENT_RENDERER_SLOT}，由 `@goodjin2/dsh-chat-area` 的
- *    `assistant-step` 包装在渲染时取用（见 conversation-surfaces.tsx 的说明）。
+ * 这里只做一件 ACP 专属的事：把 chat 视图的 builder 包一层（`wrapChatView`），
+ * 把带 ACP 段的助手步投影成带 `acpProcessSegment` 的节点；并注册
+ * `acpProcessDefinition` 折叠 ACP 事件。
  *
- * 通用的答案卡片与会话尾部文件卡片 2026-11 迁去了 chat-area；本包不再包
- * `assistant-step`、也不再管答案步。
+ * `assistant-step` 的遮蔽 wrap（本包 -40 兜底 + chat-power 的 -50 分派层）已全部
+ * 拆除（2026-11-13）：原生 AssistantNodeView 声明了子座位（reasoning.body /
+ * message.images），宿主对 renderSlot 逐 key 校验「本条目 children 表」——遮蔽
+ * wrap 没声明的座位，原生一调用就抛 SlotOwnershipError、错误边界卸掉整棵会话流；
+ * 转发原生 children 又在 register 时抛 already declared。两条路都死。ACP 段数据
+ * 注入保留，渲染方待走合法座位重接。
  */
-
-/**
- * ACP 进程段渲染器的座位名。必须与 chat-area 的 `conversation-surfaces.tsx` 里的
- * `SEGMENT_RENDERER_SLOT` 字面一致（跨包不能共享常量）。
- */
-export const SEGMENT_RENDERER_SLOT = 'conversation.chat.node.acp-segment-renderer'
 
 /**
  * 文本块渲染结果：http(s) 链接 hover 时浮出「右侧打开 / 浏览器打开」两个按钮，
@@ -159,39 +153,22 @@ type NodeSlots = {
   register(options: Record<string, unknown>, component: unknown): () => void
   inject(key: string, callback: () => unknown): unknown
 }
-type AssistantStepProps = Record<string, any>
 
 /**
- * 本包兜底 wrap 的优先级。跨包只能靠字面量对齐：chat-area 用 -50 并恒在外层，
- * 本包用 -40（数值更低=更外层，插槽取「大闸里最低优先级的渲染」）。
- * 改这里就得改 chat-area 的 `ACP_AGENT_FALLBACK_PRIORITY`，两边各有测试钉住。
- */
-export const ASSISTANT_STEP_FALLBACK_PRIORITY = -40
-
-/**
- * 注册 ACP 进程表面：包 chat 视图（注入 `acpProcessSegment`）+ 包 `assistant-step`
- * 渲染 ACP 段（独立运行时）+ 把 ACP 段渲染器挂到跨包座位。
+ * 注册 ACP 进程表面：包 chat 视图（注入 `acpProcessSegment`）+ 注册
+ * `acpProcessDefinition` 折叠 ACP 事件。
  *
- * 本函数做两件事，且**只有 chat-area 声明座位**：
- * 1. 包 `assistant-step`（priority -40），遇到 `acpProcessSegment` 渲染
- *    `AcpProcessBlock`，非 ACP 段调原生——保证只装 acp-agent 时 ACP 段完整渲染。
- * 2. 把 `AcpProcessBlock` 注册进 `SEGMENT_RENDERER_SLOT`；座位由
- *    `@goodjin2/dsh-chat-area` 声明（它包 `assistant-step` 用 -50，恒在本层之外），
- *    它渲染 ACP 段时就从这里取组件。注册必须带座位名：座位是父行 `children`
- *    表里声明的子槽，只给 id/order 会以 `name: undefined` 去查表并被拒。
+ * `assistant-step` 不再接管（2026-11-13）：原生 AssistantNodeView 声明了子座位
+ * （reasoning.body / message.images），宿主对 renderSlot 逐 key 校验「本条目
+ * children 表」——遮蔽 wrap 没声明的座位，原生一调用就抛 SlotOwnershipError、
+ * 错误边界卸掉整棵会话流；转发原生 children 又在 register 时抛 already declared
+ * （子座位单一存活 owner）。两条路都死，本包的 -40 兜底 wrap 与跨包座位挂钩
+ * （`SEGMENT_RENDERER_SLOT`，声明方 chat-power 也已拆除）一并移除。
  *
- * 错误边界：本包交给宿主的回调（座位 inject、插槽 subscribe、视图 subscribe）
- * 都在**别人的调用栈**里执行；抛出去会打断对方的注册流程，2026-11-05 就是这样
- * 把同时声明座位的 chat-area 判成 failed、整页起不来。因此这些回调与返回的
- * 卸载函数一律就地吞错、只记一条日志，本包的故障不外溢。
- *
- * 为什么本包**不**声明座位：一个插槽只能有一个声明者，后声明的会抛
- * 「already-declared child key」。两边都声明时结果取决于装配顺序——一种顺序答案
- * 卡片正常，另一种顺序它整块消失、还抛一条被 try/catch 吞掉的错误。座位是
- * chat-area 的插槽契约，声明权归它。
- *
- * 优先级约定（跨包，只能靠字面量与测试对表）：chat-area -50 < 本包 -40，
- * 「数值最低的渲染」，所以 chat-area 在外层；只装本包时座位没人声明，本层生效。
+ * 错误边界：本包交给宿主的回调（视图 subscribe 等）在**别人的调用栈**里执行；
+ * 抛出去会打断对方的注册流程，2026-11-05 就是这样把同时声明座位的 chat-area
+ * 判成 failed、整页起不来。因此这些回调与返回的卸载函数一律就地吞错、只记
+ * 一条日志，本包的故障不外溢。
  */
 export function registerAcpProcessSurface(ctx: Surface, report?: (message: string) => void): void {
   const say = (message: string): void => {
@@ -227,56 +204,11 @@ export function registerAcpProcessSurface(ctx: Surface, report?: (message: strin
     const unsubscribeView = ui.views.subscribe(attachView)
     attachView()
 
-    // 包 `assistant-step`：遇到 ACP 段渲染 `AcpProcessBlock`，非 ACP 段调原生。
-    // priority -40：chat-area 用 -50（更低=更外层）先分派，本层只在它缺席时生效。
-    let removeWrap: (() => void) | undefined
-    let originalComponent: unknown
-    let installing = false
-    const attachWrap = (): void => {
-      if (installing) return
-      try {
-        const entry = slots.entries('conversation.chat.node').find(
-          candidate => candidate.options.key === 'assistant-step' && (candidate.options.priority as number | undefined ?? 0) >= 0,
-        )
-        if (entry === undefined || entry.component === originalComponent) return
-        installing = true
-        try {
-          removeWrap?.()
-          originalComponent = entry.component
-          const Native = entry.component as ComponentType<AssistantStepProps>
-          const Renderer = (props: AssistantStepProps) => {
-            const segment = (props.node?.data as SegmentChatData | undefined)?.acpProcessSegment
-            if (segment !== undefined) return createElement(AcpProcessBlock, { segment, t: props.t })
-            return createElement(Native, props)
-          }
-          removeWrap = slots.register({
-            name: 'conversation.chat.node', key: 'assistant-step', priority: ASSISTANT_STEP_FALLBACK_PRIORITY,
-            ...(entry.locale === undefined ? {} : { locale: entry.locale }),
-            ...(entry.inject === undefined ? {} : { inject: entry.inject }),
-          }, Renderer)
-        } finally { installing = false }
-      } catch (error) {
-        say(`acp process wrap: ${error instanceof Error ? error.message : String(error)}`)
-      }
-    }
-    const unsubscribeWrap = slots.subscribe('conversation.chat.node', attachWrap)
-    attachWrap()
-
-    // 把 ACP 段渲染器挂到座位：座位由 chat-area 声明，它在外层渲染时从这里取组件。
-    // 只装本包时座位永远没人声明，这个 inject 就一直不触发——无害，本包的 wrap 兜底。
-    // 注册必须带座位名（`name`）：座位是 chat-area 声明的**子槽**，只给 id/order 时
-    // 槽位服务拿到的是 `name: undefined`，会抛「slot "undefined" is not declared」。
-    const removeHook = slots.inject(SEGMENT_RENDERER_SLOT, () => {
-      try {
-        return slots.register(
-          { name: SEGMENT_RENDERER_SLOT, id: 'acp-agent-acp-segment-renderer', order: 0 },
-          AcpProcessBlock,
-        )
-      } catch (error) {
-        say(`acp process seat: ${error instanceof Error ? error.message : String(error)}`)
-        return undefined
-      }
-    })
+    // assistant-step 不接管（2026-11-13）：原生 AssistantNodeView 声明了子座位
+    // （reasoning.body / message.images），遮蔽 wrap 两条路都死
+    // （SlotOwnershipError / already declared，见文件头说明）。本包此前的 -40
+    // 兜底 wrap 与跨包座位挂钩（SEGMENT_RENDERER_SLOT，声明方 chat-power 已拆）
+    // 一并移除；ACP 段数据注入（上面的视图 wrap）保留，渲染方待走合法座位重接。
 
     const attempt = (label: string, fn: () => void): void => {
       try { fn() } catch (error) {
@@ -285,8 +217,6 @@ export function registerAcpProcessSurface(ctx: Surface, report?: (message: strin
     }
     return () => {
       attempt('acp process view dispose', () => { unsubscribeView(); restore?.(); removeDefinition?.() })
-      attempt('acp process wrap dispose', () => { unsubscribeWrap(); removeWrap?.() })
-      attempt('acp process seat dispose', () => { if (typeof removeHook === 'function') removeHook() })
     }
   }, 'acp-agent ACP process segments')
 }
