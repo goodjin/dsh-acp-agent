@@ -124,6 +124,20 @@ export type RunnerOptions = {
    */
   readonly openTimeoutMs?: number
   /**
+   * How hard to re-read the model catalog when an open's own report cannot
+   * serve the session's configured pick.
+   *
+   * A freshly spawned agent can answer its first open from a boot-fallback
+   * catalog before the real one lands: grok agent serve, 2026-11-13 20:57,
+   * booted with no auth token yet and reported its two-model fallback for the
+   * five seconds its recovery needed — the reattach turn refused the session's
+   * pick against that report, and the recovered list arrived too late to
+   * matter. Each attempt waits `waitMs` and re-issues the same open step;
+   * when the pick is genuinely gone the reads exhaust and the turn-time gate
+   * refuses exactly as before.
+   */
+  readonly openCatalogReread?: { readonly attempts: number; readonly waitMs: number }
+  /**
    * The frame dialect of the agent this runner drives, when known.
    *
    * With it, the runner writes each tool's opening card the moment the call's
@@ -256,6 +270,15 @@ function withDelegationHint(body: string, on: boolean | undefined): string {
 
 /** Long enough for a cold process to start, short enough to not strand a turn. */
 const DEFAULT_OPEN_TIMEOUT_MS = 60_000
+
+/**
+ * Boot-fallback catalogs recover within seconds of the agent process starting;
+ * two reads five seconds apart cover the window measured on grok agent serve
+ * (2026-11-13: no auth token at boot, fallback report answered the reattach,
+ * full catalog recovered nine seconds after spawn).
+ */
+const OPEN_CATALOG_REREADS = 2
+const OPEN_CATALOG_REREAD_WAIT_MS = 5_000
 
 type UserText = { readonly role?: unknown; readonly content?: unknown }
 
@@ -2304,7 +2327,18 @@ export class AcpTurnRunner {
         this.resumedLastOpen = true
         await this.adoptSession(reattached, journaled, onStage)
         this.options.onExternalSession?.(dshSessionId, journaled)
-        return journaled
+        // The reattach can land inside the same boot window as a fresh open:
+        // a serve without its catalog answers resume with the fallback list
+        // too. Re-read on the journaled id — a fresh open here would throw
+        // away the conversation the reattach just restored.
+        return await this.settleOpenCatalog(journaled, onStage, async () => ({
+          reply: await this.client.request(reattachVia, {
+            sessionId: journaled,
+            cwd: this.options.cwd,
+            mcpServers: this.options.mcpServers ?? [],
+          }),
+          sessionId: journaled,
+        }))
       } catch {
         // The agent-side session is gone or refuses (its own retention, a CLI
         // update, another machine). Fall through: a fresh open plus the text
@@ -2331,7 +2365,71 @@ export class AcpTurnRunner {
     }
     await this.adoptSession(reply, reply.sessionId, onStage)
     if (dshSessionId !== undefined) this.options.onExternalSession?.(dshSessionId, reply.sessionId)
-    return reply.sessionId
+    // A fresh open can land inside the agent's boot window, where the reported
+    // catalog is the boot fallback and cannot serve the session's pick. The
+    // re-read takes a new session id when it fires, so the journal follows the
+    // final one and the abandoned ids are the agent's own cosmetic leftovers.
+    return await this.settleOpenCatalog(reply.sessionId, onStage, async () => {
+      const again = await openSession() as { sessionId?: unknown } | null
+      if (typeof again?.sessionId !== 'string') return undefined
+      return { reply: again, sessionId: again.sessionId }
+    })
+  }
+
+  /**
+   * Re-read the model catalog when the open's own report cannot serve the
+   * session's configured pick, a bounded number of times, then hand the
+   * session back either way.
+   *
+   * A freshly spawned agent can answer its first open from a boot-fallback
+   * catalog before its real one lands — the report and a genuinely removed
+   * model look identical in that one reply, so the judgment belongs where a
+   * second read is still cheap. Each attempt waits, re-issues the open step
+   * this session just used, and re-adopts the state, which also re-reports
+   * the list to the picker. When the pick never resolves the reads exhaust
+   * and the turn-time model gate refuses exactly as before, seconds later.
+   */
+  private async settleOpenCatalog(
+    sessionId: string,
+    onStage: (stage: string) => void,
+    reissue: () => Promise<{ reply: unknown; sessionId: string } | undefined>,
+  ): Promise<string> {
+    const attempts = this.options.openCatalogReread?.attempts ?? OPEN_CATALOG_REREADS
+    const waitMs = this.options.openCatalogReread?.waitMs ?? OPEN_CATALOG_REREAD_WAIT_MS
+    let current = sessionId
+    for (let attempt = 1; attempt <= attempts && this.configuredPickUnresolved(); attempt++) {
+      onStage(`catalog reread ${attempt}/${attempts}`)
+      await new Promise<void>(resolve => setTimeout(resolve, waitMs))
+      let next: { reply: unknown; sessionId: string } | undefined
+      try {
+        next = await reissue()
+      } catch {
+        // The re-read failing leaves the open session as it is: the
+        // conversation is valid, only its catalog report is the fallback, and
+        // the turn-time gate stays the last word.
+        break
+      }
+      if (next === undefined) break
+      await this.adoptSession(next.reply, next.sessionId, onStage)
+      const dshSessionId = this.dshSessionId
+      if (dshSessionId !== undefined) this.options.onExternalSession?.(dshSessionId, next.sessionId)
+      current = next.sessionId
+    }
+    return current
+  }
+
+  /**
+   * Whether the session's configured pick cannot be served from the catalog
+   * the latest open reported — the same judgment the turn-time model gate
+   * makes, applied at open time while a re-read is still possible. The
+   * per-turn pick can differ; the default is what an open can check, and the
+   * gate keeps its word for anything else.
+   */
+  private configuredPickUnresolved(): boolean {
+    const pick = this.options.modelId
+    if (pick === undefined || this.options.dialect?.modelVia !== 'config_option') return false
+    if (this.modelConfigId === undefined) return false
+    return resolveConfigValue(this.modelConfigValues, pick) === undefined
   }
 
   /**

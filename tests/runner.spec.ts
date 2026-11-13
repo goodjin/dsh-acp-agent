@@ -407,6 +407,128 @@ describe('AcpTurnRunner', () => {
     expect(client.calls.some(call => call.method === 'session/prompt')).toBe(false)
   })
 
+  it('re-reads the catalog after a fresh open whose list cannot serve the session pick', async () => {
+    // grok agent serve, 2026-11-13 20:57 (unified.jsonl): the serve spawned for
+    // the reattach turn booted with no auth token yet and answered session/new
+    // with its 2-model fallback (grok-4.6/grok-4.5); the turn refused the
+    // session's grok-4.7 pick at that instant, and the serve's own recovery
+    // landed nine seconds after spawn — after the runner had already judged
+    // the list. An open whose report cannot serve the configured pick is worth
+    // one more read before the gate refuses, because a boot-fallback report
+    // and a genuinely removed model look identical in that one reply.
+    const fallback = {
+      sessionId: 'boot',
+      models: { availableModels: [{ modelId: 'grok-4.6' }, { modelId: 'grok-4.5' }] },
+      configOptions: [{ id: 'model', category: 'model', currentValue: 'grok-4.6',
+        options: [{ value: 'grok-4.6', name: 'Grok 4.6' }, { value: 'grok-4.5', name: 'Grok 4.5' }] }],
+    }
+    const recovered = {
+      sessionId: 's1',
+      models: { availableModels: [{ modelId: 'grok-4.7' }, { modelId: 'grok-4.6' }] },
+      configOptions: [{ id: 'model', category: 'model', currentValue: 'grok-4.7',
+        options: [{ value: 'grok-4.7', name: 'Grok 4.7' }, { value: 'grok-4.6', name: 'Grok 4.6' }] }],
+    }
+    const client = fakeClient()
+    let news = 0
+    client.request = async (method, params) => {
+      client.calls.push({ method, params })
+      if (method === 'session/new') return ++news === 1 ? fallback : recovered
+      if (method === 'session/prompt') return { stopReason: 'end_turn' }
+      return {}
+    }
+    const runner = new AcpTurnRunner(client, {
+      cwd: '/tmp', dialect: grokDialect, modelId: 'grok-4.7',
+      openCatalogReread: { attempts: 2, waitMs: 1 },
+    })
+    const result = await runner.run(DECISION, {
+      sessionId: 'dsh-1', position: { turn: 1, step: 1 }, produce: () => [], write: () => 1, modelId: 'grok-4.7',
+    })
+
+    expect(result.end.kind).not.toBe('error')
+    expect(client.calls.filter(call => call.method === 'session/new')).toHaveLength(2)
+    const write = client.calls.find(call => call.method === 'session/set_config_option')
+    expect(write).toBeDefined()
+    expect(write!.params).toEqual({ sessionId: 's1', configId: 'model', value: 'grok-4.7' })
+    expect((client.calls.find(call => call.method === 'session/prompt')!.params as { sessionId?: string }).sessionId)
+      .toBe('s1')
+  })
+
+  it('bounds the catalog re-reads and still ends with the re-select message when the pick is gone', async () => {
+    // A genuinely removed model must not turn into an open-ended wait: the
+    // re-reads are bounded, and once they are spent the turn ends exactly as
+    // before — the same local refusal, with the picker's fresh list on screen.
+    const stale = {
+      sessionId: 'boot',
+      models: { availableModels: [{ modelId: 'grok-4.6' }, { modelId: 'grok-4.5' }] },
+      configOptions: [{ id: 'model', category: 'model', currentValue: 'grok-4.6',
+        options: [{ value: 'grok-4.6', name: 'Grok 4.6' }, { value: 'grok-4.5', name: 'Grok 4.5' }] }],
+    }
+    const client = fakeClient()
+    client.request = async (method, params) => {
+      client.calls.push({ method, params })
+      if (method === 'session/new') return { ...stale, sessionId: `boot-${client.calls.filter(c => c.method === 'session/new').length}` }
+      if (method === 'session/prompt') return { stopReason: 'end_turn' }
+      return {}
+    }
+    const runner = new AcpTurnRunner(client, {
+      cwd: '/tmp', dialect: grokDialect, modelId: 'grok-4.7',
+      openCatalogReread: { attempts: 2, waitMs: 1 },
+    })
+    const result = await runner.run(DECISION, {
+      sessionId: 'dsh-1', position: { turn: 1, step: 1 }, produce: () => [], write: () => 1, modelId: 'grok-4.7',
+    })
+
+    expect(client.calls.filter(call => call.method === 'session/new')).toHaveLength(3)
+    expect(result.end.kind).toBe('error')
+    const error = (result.end as { error: { code: string; message: string } }).error
+    expect(error.code).toBe('ACP_INTERNAL')
+    expect(error.message).toContain('grok-4.7')
+    expect(error.message).toContain('重新选择')
+    expect(client.calls.some(call => call.method === 'session/set_config_option')).toBe(false)
+    expect(client.calls.some(call => call.method === 'session/prompt')).toBe(false)
+  })
+
+  it('re-reads through the same resume when a reattached reply cannot serve the session pick', async () => {
+    // The reattach path hits the same boot window: a serve without its catalog
+    // answers session/resume with the fallback list too. Re-reading must stay
+    // on the journaled id — a fresh open here would throw away the conversation
+    // the reattach just restored.
+    const fallback = {
+      models: { availableModels: [{ modelId: 'grok-4.6' }] },
+      configOptions: [{ id: 'model', category: 'model', currentValue: 'grok-4.6',
+        options: [{ value: 'grok-4.6', name: 'Grok 4.6' }] }],
+    }
+    const recovered = {
+      models: { availableModels: [{ modelId: 'grok-4.7' }, { modelId: 'grok-4.6' }] },
+      configOptions: [{ id: 'model', category: 'model', currentValue: 'grok-4.7',
+        options: [{ value: 'grok-4.7', name: 'Grok 4.7' }, { value: 'grok-4.6', name: 'Grok 4.6' }] }],
+    }
+    const client = fakeClient()
+    let resumes = 0
+    client.request = async (method, params) => {
+      client.calls.push({ method, params })
+      if (method === 'session/resume') return ++resumes === 1 ? fallback : recovered
+      if (method === 'session/prompt') return { stopReason: 'end_turn' }
+      return {}
+    }
+    const runner = new AcpTurnRunner(client, {
+      cwd: '/tmp', dialect: grokDialect, modelId: 'grok-4.7',
+      resumeOf: dshSessionId => dshSessionId === 'dsh-1' ? 'ext-1' : undefined,
+      openCatalogReread: { attempts: 2, waitMs: 1 },
+    })
+    const result = await runner.run(DECISION, {
+      sessionId: 'dsh-1', position: { turn: 1, step: 1 }, produce: () => [], write: () => 1, modelId: 'grok-4.7',
+    })
+
+    expect(result.end.kind).not.toBe('error')
+    expect(client.calls.filter(call => call.method === 'session/resume')).toHaveLength(2)
+    expect(client.calls.filter(call => call.method === 'session/new')).toHaveLength(0)
+    expect(client.calls.find(call => call.method === 'session/set_config_option')!.params)
+      .toEqual({ sessionId: 'ext-1', configId: 'model', value: 'grok-4.7' })
+    expect((client.calls.find(call => call.method === 'session/prompt')!.params as { sessionId?: string }).sessionId)
+      .toBe('ext-1')
+  })
+
   it('applies a config-option pick once per change, not once per turn', async () => {
     // The agent keeps its selection across turns; re-sending an unchanged
     // pick before every prompt would charge the wire for nothing.
