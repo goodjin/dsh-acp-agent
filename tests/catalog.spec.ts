@@ -342,8 +342,14 @@ describe('runtimeModels holder', () => {
     expect(models.modelsOf('acp-codex')).toEqual([{ id: 'gpt-6', name: 'GPT-6' }])
     // A later session/new replaces the list wholesale — a re-opened external
     // conversation reports what it serves now, not what it served before.
+    // An EMPTY report, though, must not wipe a non-empty one: the host caches
+    // the catalog per generation, so one empty answer sticks and the picker
+    // would keep showing "select a model" (2026-11-17 field report). A later
+    // non-empty report still replaces.
     models.record('acp-grok', [])
-    expect(models.modelsOf('acp-grok')).toEqual([])
+    expect(models.modelsOf('acp-grok')).toEqual([{ id: 'grok-5', name: 'Grok 5' }])
+    models.record('acp-grok', [{ id: 'grok-6', name: 'Grok 6' }])
+    expect(models.modelsOf('acp-grok')).toEqual([{ id: 'grok-6', name: 'Grok 6' }])
   })
 
   it('keeps only model-shaped entries the agent actually named', () => {
