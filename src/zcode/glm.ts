@@ -68,9 +68,31 @@ export async function* streamGlm(request: GlmRequest): AsyncGenerator<GlmStreamC
   }
   if (!response.ok) {
     const detail = scrub(await response.text().catch(() => ''), apiKey).slice(0, 500)
-    throw new Error(`GLM request failed (${String(response.status)})${detail === '' ? '' : `: ${detail}`}`)
+    // 失败分类（2026-11-17 现场：HTTP 500 裸抛 → 宿主归类 UNKNOWN 零重试）：
+    // 5xx/429 是服务端或限流问题，交宿主的有界重试；4xx 是请求本身的问题，
+    // 重试不会变好——终局收尾，消息可见。中止在下面统一保持中止语义。
+    const code = response.status === 429
+      ? 'RATE_LIMIT'
+      : response.status >= 500 ? 'SERVER' : 'GLM_REQUEST_REJECTED'
+    yield {
+      type: 'finish',
+      reason: {
+        kind: 'error',
+        failure: {
+          message: `GLM request failed (${String(response.status)})${detail === '' ? '' : `: ${detail}`}`,
+          code,
+        },
+      },
+    }
+    return
   }
-  if (response.body === null) throw new Error('GLM request returned no body')
+  if (response.body === null) {
+    yield {
+      type: 'finish',
+      reason: { kind: 'error', failure: { message: 'GLM request returned no body', code: 'SERVER' } },
+    }
+    return
+  }
   try {
     for await (const chunk of chunksFromEvents(readSseEvents(response.body))) {
       yield scrubChunk(chunk, apiKey)
