@@ -64,7 +64,16 @@ export function runtimeModels(): RuntimeModels {
     record: (presetId, models) => {
       // Keep only entries an agent could actually serve: a model names itself
       // with a wire id, and anything else would render as a broken picker row.
-      byPreset.set(presetId, models.filter(model => typeof model?.id === 'string'))
+      const valid = models.filter(model => typeof model?.id === 'string')
+      // An empty (or all-invalid) report must not overwrite a non-empty one:
+      // the host caches the catalog per generation, so one empty answer sticks
+      // and the picker would keep showing "select a model". A truly empty
+      // answer only lands when there is no old value to protect.
+      if (valid.length === 0) {
+        const previous = byPreset.get(presetId)
+        if (previous !== undefined && previous.length > 0) return
+      }
+      byPreset.set(presetId, valid)
     },
     modelsOf: presetId => byPreset.get(presetId),
   }

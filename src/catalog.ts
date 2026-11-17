@@ -16,6 +16,7 @@ import type { AcpDialect } from './index.ts'
 import type { MiniMaxStreamChunk } from './minimaxi/index.ts'
 import type { GlmStreamChunk } from './zcode/index.ts'
 import type { PresetConfig } from './registry.ts'
+import { isModelBackedAgent } from './model-plugins.ts'
 import { baseIdOf } from './selection.ts'
 import { GatewayChunkQueue } from './gateway.ts'
 import type { GatewayChunk, GatewaySink } from './gateway.ts'
@@ -226,6 +227,9 @@ export type CatalogDeps = {
    * `undefined` while none has arrived this host generation. Present wins over
    * `modelsOf` — including present-and-empty, which is the agent saying it
    * serves nothing; the configured list must not resurrect over that answer.
+   * Exception: a model-backed row (zcode/minimaxi, answered in our own loop)
+   * falls back to the declared list on present-and-empty — its empty report
+   * can only be an anomaly, and the host caches the catalog per generation.
    */
   runtimeModelsOf?(presetId: string): readonly { readonly id: string; readonly name: string; readonly description?: string }[] | undefined
   /** The frame dialect of one preset's agent. */
@@ -352,8 +356,21 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
   // report once one has landed, the operator's configured list until then.
   // Resolving and routing must read the same list the picker advertised, or a
   // selection can advertise from one list and route against another.
-  const modelsFor = (presetId: string): readonly { readonly id: string; readonly name: string; readonly description?: string; readonly contextWindow?: number }[] =>
-    deps.runtimeModelsOf?.(presetId) ?? deps.modelsOf(presetId)
+  //
+  // Scope note on present-and-empty: for an external agent row an empty
+  // report means "this agent serves nothing" — deliberate, the configured
+  // list must not resurrect over it. For a model-backed row (zcode/minimaxi,
+  // answered in our own loop) an empty report can only be an anomaly, and the
+  // host caches the catalog per generation — one empty answer sticks and the
+  // picker keeps showing "select a model" (2026-11-17 field report). So a
+  // model-backed row falls back to the declared list instead.
+  const modelsFor = (presetId: string): readonly { readonly id: string; readonly name: string; readonly description?: string; readonly contextWindow?: number }[] => {
+    const runtimeList = deps.runtimeModelsOf?.(presetId)
+    if (runtimeList !== undefined && (runtimeList.length > 0 || !isModelBackedAgent(config.presets[presetId]?.agent))) {
+      return runtimeList
+    }
+    return deps.modelsOf(presetId)
+  }
   const adapter: CatalogAdapterLike = {
     providerInfo: (provider: string) => {
       const presetId = presetOfRoute(provider) ?? ''
@@ -365,24 +382,34 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
       const presetId = presetOfRoute(provider)
       if (presetId === undefined) return []
       if (config.presets[presetId] === undefined) return []
-      // 先让模型插件把清单备好（它自己登录、自己问上游），再回答。
-      await deps.ensureModels?.(presetId)
-      const models = modelsFor(presetId)
-      // Collapse same-base entries (one model published as base[low]…base[ultra])
-      // into a single row carrying its efforts, so the picker shows the model
-      // once and reasoning effort becomes a separate axis rather than N rows.
-      // A preset that opts out (cursor, whose ids carry a config suffix rather
-      // than an effort) gets one row per id, uncollapsed.
-      const declaredEfforts = config.presets[presetId]?.efforts
-      if (config.presets[presetId]?.collapseEfforts === false) {
-        return models.map(model => collapsedToCatalog(provider, {
-          baseId: model.id,
-          displayName: model.name,
-          ...(model.description === undefined ? {} : { description: model.description }),
-          efforts: undefined,
-        }, declaredEfforts))
+      // Whole-body guard: any failure on this chain (list preparation, ledger,
+      // collapse helpers) degrades to the declared list — a catalog group must
+      // never come back empty or failed, because the host filters empty groups
+      // and caches the result per generation (2026-11-17 field report: after
+      // one failed load the picker kept showing "select a model").
+      try {
+        // 先让模型插件把清单备好（它自己登录、自己问上游），再回答。
+        await deps.ensureModels?.(presetId)
+        const models = modelsFor(presetId)
+        // Collapse same-base entries (one model published as base[low]…base[ultra])
+        // into a single row carrying its efforts, so the picker shows the model
+        // once and reasoning effort becomes a separate axis rather than N rows.
+        // A preset that opts out (cursor, whose ids carry a config suffix rather
+        // than an effort) gets one row per id, uncollapsed.
+        const declaredEfforts = config.presets[presetId]?.efforts
+        if (config.presets[presetId]?.collapseEfforts === false) {
+          return models.map(model => collapsedToCatalog(provider, {
+            baseId: model.id,
+            displayName: model.name,
+            ...(model.description === undefined ? {} : { description: model.description }),
+            efforts: undefined,
+          }, declaredEfforts))
+        }
+        return collapseEffortModels(models).map(model => collapsedToCatalog(provider, model, declaredEfforts))
+      } catch (error) {
+        console.warn(`[catalog] ${presetId} listModels failed, falling back to the declared list:`, error instanceof Error ? error.message : error)
+        return deps.modelsOf(presetId).map(model => ({ provider, id: model.id, name: model.name }))
       }
-      return collapseEffortModels(models).map(model => collapsedToCatalog(provider, model, declaredEfforts))
     },
 
     // The catalog resolves every advertised model once at build time, and the
@@ -419,7 +446,22 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
     // An async generator rather than a synchronous throw: the switch hook is
     // async, and the generator's rejection surfaces to the loop as the turn's
     // error — loud, and never a silently empty answer.
-    providerRetryPolicy: (): undefined => undefined,
+    // The zcode route carries a bounded retry policy: SERVER/TRANSPORT/TIMEOUT/
+    // RATE_LIMIT failures retry on a 5s-start exponential backoff, 4 tries max
+    // (~90s ceiling). The GLM 500 the field hit ("retry later") lands in this
+    // window instead of ending the turn. Other routes keep the host default.
+    providerRetryPolicy: (provider: string): ModelRetryPolicy | undefined => {
+      const presetId = presetOfRoute(provider)
+      if (config.presets[presetId ?? '']?.agent !== 'zcode') return undefined
+      return {
+        mode: 'normal',
+        maxRetries: 4,
+        retryableCodes: ['SERVER', 'TRANSPORT', 'TIMEOUT', 'RATE_LIMIT'],
+        initialDelayMs: 5_000,
+        maxDelayMs: 60_000,
+        jitterRatio: 0.1,
+      }
+    },
     stream: function stream(options: CatalogTurnRequest): AsyncIterable<CatalogStreamChunk> {
       return (async function* foreignModelRequest(): AsyncIterable<CatalogStreamChunk> {
         const presetId = presetOfRoute(options.provider)
@@ -519,6 +561,16 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
 }
 
 /** The adapter surface the runtime consumes, stated here so this compiles alone. */
+/** The host's dsh-llm-retry normal-mode policy (llm-streaming.md §ResolvedRetryPolicy). */
+export type ModelRetryPolicy = {
+  readonly mode: 'normal'
+  readonly maxRetries: number
+  readonly retryableCodes: readonly string[]
+  readonly initialDelayMs: number
+  readonly maxDelayMs: number
+  readonly jitterRatio: number
+}
+
 export type CatalogAdapterLike = {
   providerInfo(provider: string): { id: string; name: string }
   listModels(provider: string): Promise<readonly CatalogModel[]>
@@ -546,7 +598,7 @@ export type CatalogAdapterLike = {
    * it exists — an adapter that omits it takes down every route, not just its
    * own. Undefined means "use the normal defaults", which is what we mean.
    */
-  providerRetryPolicy(provider: string): undefined
+  providerRetryPolicy(provider: string): ModelRetryPolicy | undefined
   /**
    * The runtime resolves a route's image pricing while it measures a session's
    * tokens, again without checking that the method exists. Undefined means

@@ -11,7 +11,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { catalogAdapter } from '../src/catalog.ts'
+import { catalogAdapter, providerRoute } from '../src/catalog.ts'
 import { grokDialect } from '../src/index.ts'
 import type { PresetConfig } from '../src/registry.ts'
 
@@ -55,5 +55,32 @@ describe('acp 目录适配器与宿主的契约', () => {
       imageRequestTarget: (p: string, m: string, image: unknown) => unknown
     }).imageRequestTarget('acp:acp-grok', 'grok-4.7', { width: 640, height: 480, bytes: 4096 })
     expect(target).toEqual({ width: 640, height: 480, maxBytes: 4096 })
+  })
+})
+
+describe('模型行的重试策略', () => {
+  const ZCODE_CONFIG: PresetConfig = {
+    presets: { 'acp-zcode': { agent: 'zcode', models: [{ id: 'glm-5.3', name: 'GLM 5.3' }] } },
+  }
+  const DEPS = { modelsOf: () => [{ id: 'glm-5.3', name: 'GLM 5.3' }], dialectOf: () => undefined }
+  const zcodeAdapter = catalogAdapter(ZCODE_CONFIG, DEPS)
+  const externalAdapter = catalogAdapter({
+    presets: { 'acp-claude': { agent: 'claude', command: 'claude-agent-acp' } },
+  }, DEPS)
+
+  it('zcode 路由交出有界策略：SERVER/TRANSPORT/TIMEOUT/RATE_LIMIT 可重试，5s 起步 4 次封顶', () => {
+    const policy = zcodeAdapter.providerRetryPolicy(providerRoute('acp-zcode'))
+    expect(policy).toEqual({
+      mode: 'normal',
+      maxRetries: 4,
+      retryableCodes: ['SERVER', 'TRANSPORT', 'TIMEOUT', 'RATE_LIMIT'],
+      initialDelayMs: 5_000,
+      maxDelayMs: 60_000,
+      jitterRatio: 0.1,
+    })
+  })
+
+  it('外部 agent 路由不交策略（undefined 即宿主默认）', () => {
+    expect(externalAdapter.providerRetryPolicy(providerRoute('acp-claude'))).toBeUndefined()
   })
 })
