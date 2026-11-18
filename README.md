@@ -133,7 +133,14 @@ re-declare them (`already declared`) nor render without them
 
 ## Install
 
-From GitHub Packages:
+Straight from GitHub (no build step, no build approval — the repo ships the compiled
+host and browser artifacts):
+
+```sh
+dsh plugin --profile web add github:goodjin/dsh-acp-agent
+```
+
+Or from GitHub Packages:
 
 ```sh
 # Set up auth (one-time)
@@ -161,6 +168,11 @@ Then add the agent presets you want to your profile's `cordis.patch.yml`. This r
 - For MiniMax: MiniMax Code installed and logged in
 
 ## Publish
+
+The package ships the compiled artifacts (`lib/src/**` for the host half, `lib/client.js`
+for the browser half), so a source install needs no build step. After changing the
+sources, run `pnpm build` and commit the artifacts; `pnpm check` verifies that the
+committed artifacts still match the sources.
 
 ```sh
 gh auth refresh -h github.com -s write:packages
