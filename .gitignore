@@ -1,5 +1,10 @@
 node_modules/
-lib/
+lib/*
+!lib/client.js
+!lib/client.js.map
+!lib/src/
+# 浏览器半边的 tsc 中间产物：打包成 lib/client.js 就够了，中间层不入库
+lib/src/client/
 *.tsbuildinfo
 
 # 本地工作树目录（agent 隔离开发用）

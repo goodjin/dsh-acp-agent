@@ -35,8 +35,14 @@ function exportTargets(): { subpath: string; target: string }[] {
   return targets
 }
 
-/** 宿主侧的入口：`.ts` 源码（浏览器那半边是构建产物，不在这条路的覆盖里）。 */
-const HOST_ENTRIES = exportTargets().filter(({ target }) => target.endsWith('.ts'))
+/**
+ * 宿主侧的入口：编译后的 `.js`（浏览器那半边 `./client` 是单文件 CJS 工厂，
+ * 由页面当普通脚本加载，不走 import() 这条路）。
+ *
+ * 入口指向编译产物而不是 `src/*.ts`：装到 node_modules 之后宿主不能再靠剥离类型
+ * 来装载源码（node_modules 下的类型剥离不被支持），所以真实安装装的就是这些 .js。
+ */
+const HOST_ENTRIES = exportTargets().filter(({ subpath, target }) => target.endsWith('.js') && subpath !== './client')
 
 /** 用真 node、按宿主的 strip-only 方式载入一个模块，返回它的报错（成功则 null）。 */
 function loadFailure(absolutePath: string): string | null {
