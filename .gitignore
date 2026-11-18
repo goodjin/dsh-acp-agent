@@ -5,6 +5,10 @@ lib/*
 !lib/src/
 # 浏览器半边的 tsc 中间产物：打包成 lib/client.js 就够了，中间层不入库
 lib/src/client/
+# 类型声明与 source map 只是本地产物，入库的是 .js
+lib/src/**/*.d.ts
+lib/src/**/*.d.ts.map
+lib/src/**/*.js.map
 *.tsbuildinfo
 
 # 本地工作树目录（agent 隔离开发用）

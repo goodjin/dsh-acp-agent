@@ -85,9 +85,10 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "clean": "node scripts/clean-build.mjs",
     "build": "npm run build:host && npm run build:client",
-    "build:host": "tsc -p tsconfig.build.json",
-    "build:client": "tsc -p tsconfig.build.json && tsdown",
+    "build:host": "npm run clean && tsc -p tsconfig.build.json",
+    "build:client": "tsdown",
     "prepack": "npm run build",
     "check": "npm run typecheck && npm test && node scripts/check-build-output.mjs"
   },
