@@ -131,9 +131,6 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
       get modelDirectories() {
         return ctx.get('modelDirectories') as QuotaPillServices['modelDirectories']
       },
-      get sessions() {
-        return ctx.get('sessions') as QuotaPillServices['sessions']
-      },
     }
     // 五套口径（GLM / MiniMax / Codex / Claude / DeepSeek）**各建一只轮询器、各挂
     // 一条 dock**：路由、出现条件、文案各归各，模型前缀互不相认。

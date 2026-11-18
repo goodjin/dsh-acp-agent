@@ -6,9 +6,11 @@
  * monitor 应答；这里只做同源 GET，密钥永不出宿主进程。轮询器由 apply 创建
  * 一份、全浏览器共享——套餐是账号级数字，不是会话级。
  *
- * 出现条件（用户 2026-10-16 拍板）：只在当前会话选的模型是 GLM（zcode 那组）
- * 时渲染；拿不到配额就整行不渲染，原因经 report 留一条日志（同一原因不重复
- * 报）。子代理会话与模型座位同判：subagentAddress 存在即隐藏。
+ * 出现条件（用户 2026-10-16 拍板；2026-11-18 修订）：只在当前会话选的模型是
+ * GLM（zcode 那组）时渲染；拿不到配额就整行不渲染，原因经 report 留一条日志
+ * （同一原因不重复报）。2026-11-18 起子代理会话不再隐藏：孩子跑哪家模型就按
+ * 同一套出现条件认哪家的胶囊——隐藏是当年与「模型座位」同判的决定，如今
+ * 子代理模型标签已单独立起来，额度跟着实际模型走更直观。
  *
  * 渲染走 session-id-bar 的既定样式：.ts + createElement + 内联样式 + 词典 t
  * （title 属于检查器盯的文案属性，必须来自 t）。颜色只用主题令牌：过八成
@@ -439,8 +441,9 @@ type SnapshotHook<T> = <S>(selector: (value: T | undefined) => S) => S
 /**
  * Render the quota pills for the composer dock.
  * @param props - the two reactive seats (framework-bound selector hooks in
- * production, plain functions in tests), the subagent visibility flag, the
- * locale seat, and the provider spec (defaults to GLM).
+ * production, plain functions in tests), the locale seat, and the provider
+ * spec (defaults to GLM). `visible` stays for tests; production no longer
+ * excludes subagent sessions (2026-11-18).
  * @returns the pills, or null whenever the row should not appear.
  */
 export function QuotaPillRow({ useQuota, useModelDirectory, useLogin, visible = true, t = fallbackT, spec = GLM_QUOTA_PILL_SPEC }: {
@@ -650,10 +653,9 @@ type DockSlotHost = {
   }, component: unknown): () => void
 }
 
-/** The two services the visibility and model checks read; both optional host services. */
+/** The host services the model check reads; optional host services. */
 export interface QuotaPillServices {
   readonly modelDirectories?: { directoryFor(sessionId: string): { readonly store: unknown } }
-  readonly sessions?: { subagentAddress(sessionId: string): unknown }
 }
 
 /**
@@ -680,9 +682,9 @@ function directoryStoreOf(
 
 /**
  * Register the quota pills into the composer dock (a list slot, session scope),
- * next to the official stats pills. The inject face hands the renderer two bare
- * observables (quota poller, model directory) plus the subagent visibility
- * flag — the renderer binds `useZcodeQuota` / `useZcodeDirectory` from them.
+ * next to the official stats pills. The inject face hands the renderer the bare
+ * observables (quota poller, model directory) — the renderer binds
+ * `useZcodeQuota` / `useZcodeDirectory` from them.
  *
  * @param slots - the slot host (`ctx.slots`).
  * @param poller - the shared quota poller (created once in apply).
@@ -708,9 +710,9 @@ export function registerQuotaDockPills(
         // 输入框下面的 dock 崩了，连带座位一起带走。取不到就当没有目录：
         // 胶囊不画，其它照常。
         const directory = directoryStoreOf(services.modelDirectories, sessionId)
-        const visible = services.sessions?.subagentAddress(sessionId) === undefined
+        // 子代理会话不再排除（2026-11-18 用户拍板）：目录快照按会话自己的模型
+        // 视图取数，孩子跑哪家模型，`mine` 就认哪家——不认的口径自然不画。
         return {
-          visible,
           hooks: {
             zcodeQuota: poller,
             // 同一只轮询器的另一半快照：登录过期时的「去授权」信息。
