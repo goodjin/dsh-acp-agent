@@ -47,6 +47,12 @@ export type AcpVisibilityBusinessProps = {
   readonly visibility: AcpVisibilityStore
   readonly catalog: AcpCatalogStore
   readonly t?: AcpVisibilityT
+  /**
+   * 刷新成功后让输入框的模型选择器失效重载（全局目录快照的 `refresh()`）。
+   * 现取 `modelDirectories` 服务是接线层的事（服务可能晚起），面板只管在成功时
+   * 调一次；缺省（老接线/测试）没有这一步，设置段自己的重读照常。
+   */
+  readonly refreshGlobalCatalog?: (() => void) | undefined
 }
 
 /** The wiring's face plus the framework's `t` seat. */
@@ -129,7 +135,7 @@ function catalogErrorLine(error: AcpCatalogError, t: AcpVisibilityT): string {
  * @param props - injected face plus the locale seat.
  */
 export function AcpVisibilityPanel(
-  { visibility, catalog, t }: AcpVisibilityPanelProps,
+  { visibility, catalog, t, refreshGlobalCatalog }: AcpVisibilityPanelProps,
 ): ReactNode {
   const say = t ?? fallbackT
   const current = useSyncExternalStore(
@@ -174,7 +180,12 @@ export function AcpVisibilityPanel(
         ...previous,
         [agent.key]: { phase: 'done', ok: reply.ok, text: refreshMessage(reply, say) },
       }))
-      if (reply.ok) void catalog.load(true)
+      if (reply.ok) {
+        // 另一半个浏览器：设置段自己的目录重读之外，还要让输入框选择器订阅的
+        // 全局目录快照失效重载——它 ready 即回缓存，不失效就永远是旧清单。
+        refreshGlobalCatalog?.()
+        void catalog.load(true)
+      }
     }).catch((error: unknown) => {
       // requestModelRefresh 从不 reject；这一层只防它日后被改坏——按钮不能把
       // 设置段整个带崩，也不能把失败静默成成功。

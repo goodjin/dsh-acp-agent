@@ -18,9 +18,10 @@ import { EXPECTED_ROWS } from '../src/health.ts'
 import { createAcpCatalogStore } from '../src/client/acp-visibility-catalog.ts'
 import { startAcpVisibility } from '../src/client/acp-visibility.ts'
 import { AcpVisibilityPanel } from '../src/client/acp-visibility-panel.tsx'
-import { refreshMessage, requestModelRefresh } from '../src/client/model-refresh.ts'
+import { refreshGlobalCatalogSnapshot, refreshMessage, requestModelRefresh } from '../src/client/model-refresh.ts'
 import { de, en, es, fr, ja, pt, ru, zh, fallbackT } from '../src/client/locales.ts'
 import type { ModelRefreshReply } from '../src/client/model-refresh.ts'
+import { apply as applyClient } from '../src/client/index.ts'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const PATCH = readFileSync(`${ROOT}/cordis.patch.yml`, 'utf8')
@@ -201,5 +202,61 @@ describe('设置段：只给 ACP 行画刷新按钮', () => {
     // 内置提供方（非 acp: 路由）没有按钮：刷新语义只对 ACP 预置成立。
     expect(html).not.toContain('aria-label="刷新 DeepSeek 的模型列表"')
     expect(html).toContain('data-agent="grok"')
+  })
+})
+
+describe('刷新成功后全局目录快照失效（输入框选择器的另一半）', () => {
+  it('调到宿主共享 catalog 的 refresh（含 cordis 代理 unwrap）', () => {
+    const calls: string[] = []
+    const service = { catalog: { refresh: () => { calls.push('refresh') } } }
+    refreshGlobalCatalogSnapshot(() => service)
+    expect(calls).toEqual(['refresh'])
+    // cordis 每次读给新代理；落到底层实例（与 acp-visibility-filter 同一套 unwrap）。
+    const original = Symbol.for('cordis.original')
+    const proxied = { [original]: service }
+    refreshGlobalCatalogSnapshot(() => proxied)
+    expect(calls).toEqual(['refresh', 'refresh'])
+  })
+
+  it('守卫降级：服务/目录/refresh 缺席、getter 抛错，都不抛、不调用', () => {
+    const never = () => { throw new Error('refresh must not be called') }
+    expect(() => refreshGlobalCatalogSnapshot(() => undefined)).not.toThrow()
+    expect(() => refreshGlobalCatalogSnapshot(() => null)).not.toThrow()
+    expect(() => refreshGlobalCatalogSnapshot(() => ({}))).not.toThrow()
+    expect(() => refreshGlobalCatalogSnapshot(() => ({ catalog: {} }))).not.toThrow()
+    expect(() => refreshGlobalCatalogSnapshot(() => ({ catalog: { refresh: never } }))).not.toThrow()
+    expect(() => refreshGlobalCatalogSnapshot(() => { throw new Error('inactive context') })).not.toThrow()
+  })
+
+  it('接线：apply 的注入面带 refreshGlobalCatalog，且调用打到 modelDirectories.catalog.refresh', async () => {
+    const refreshCalls: string[] = []
+    const directories = { catalog: { refresh: () => { refreshCalls.push('refresh') } } }
+    const store = new Map<string, string>()
+    ;(globalThis as { localStorage?: unknown }).localStorage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => { store.set(key, value) },
+    }
+    const sections: Record<string, unknown>[] = []
+    const slots = {
+      inject(_key: string, callback: () => unknown) { return callback() },
+      register(options: Record<string, unknown>) { sections.push(options); return () => {} },
+    }
+    const ctx = {
+      logger: { warn: () => {}, info: () => {}, error: () => {} },
+      effect: (callback: () => unknown) => callback(),
+      locale: { register: () => () => {} },
+      get: (name: string) => (name === 'modelDirectories' ? directories : undefined),
+      slots,
+    }
+    expect(() => applyClient(ctx, undefined, () => {})).not.toThrow()
+    const section = sections.find(entry => entry['id'] === 'acp-agent-acp-visibility')
+    expect(section, '设置段注册进 settings.section').toBeDefined()
+    const face = (section!['inject'] as () => Record<string, unknown>)()
+    expect(typeof face['refreshGlobalCatalog']).toBe('function')
+    ;(face['refreshGlobalCatalog'] as () => void)()
+    expect(refreshCalls).toEqual(['refresh'])
+    // 服务缺席的宿主：同一条路径静默降级，不抛。
+    ;(ctx as { get: (name: string) => unknown }).get = () => undefined
+    expect(() => (face['refreshGlobalCatalog'] as () => void)()).not.toThrow()
   })
 })

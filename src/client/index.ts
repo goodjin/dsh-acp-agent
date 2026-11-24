@@ -30,6 +30,7 @@ import { registerAcpVisibilitySection } from './acp-visibility-panel.tsx'
 import { startAcpVisibility } from './acp-visibility.ts'
 import type { AcpVisibilityStore } from './acp-visibility.ts'
 import { createAcpCatalogStore } from './acp-visibility-catalog.ts'
+import { refreshGlobalCatalogSnapshot } from './model-refresh.ts'
 import { installAcpVisibilityFilter } from './acp-visibility-filter.ts'
 import { AgentSwitchHandoverCard, agentSwitchHandoverDefinition, registerAgentSwitchHandoverSurface } from './handover-card.ts'
 import { registerLostInputSurface } from './lost-input.ts'
@@ -224,6 +225,9 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
     const face: Record<string, unknown> = { visibility, catalog, t }
     const reader = catalogReaderOf(ctx)
     if (reader !== undefined) face.catalogReader = reader
+    // 刷新成功后让输入框选择器的全局目录快照失效重载。服务现取（apply 时它由
+    // 别的模块提供、未必已起；取不到或形状不对由守卫助手静默降级）。
+    face.refreshGlobalCatalog = () => { refreshGlobalCatalogSnapshot(() => ctx.get('modelDirectories')) }
     registerAcpVisibilitySection(slots as never, face as never, () => t('acpVisibility.label'))
 
     return () => {}

@@ -120,3 +120,35 @@ export function refreshMessage(reply: ModelRefreshReply, say: RuntimeT): string 
 function countOf(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
 }
+
+/**
+ * 让输入框的模型选择器也失效重载（刷新成功后的另一半个浏览器）。
+ *
+ * 输入框选择器与 /model 弹窗订阅的是宿主 `modelDirectories` 服务里的**全局目录
+ * 快照**（共享 catalog 单例）：它的 `load()` 在快照 ready 且非空时直接回缓存，
+ * 只有 `refresh()`（失效 + 重载）才真的重问宿主。刷新更新的是运行期账本——宿主
+ * 下一次构建目录就是新的，但快照不失效就永远不重建；同一次浏览器连接里这份
+ * 快照是共享单例，新开会话也读到旧值，所以必须失效重载快照本身。宿主产物的
+ * `refresh()` 自带 `load().catch` 兜底，这里只管把调用安全地递进去。
+ *
+ * @param getModelDirectories - 现取 `modelDirectories` 服务的懒取器（服务由别的
+ *   模块提供，apply 时未必已起；服务缺席或形状变化都要静默降级——老宿主里
+ *   选择器至多重开一次页面后更新，刷新成功的提示不受影响）。
+ */
+export function refreshGlobalCatalogSnapshot(getModelDirectories: () => unknown): void {
+  try {
+    const service = getModelDirectories()
+    if (typeof service !== 'object' || service === null) return
+    // Cordis 每次读都给新的调用方代理；落到底层实例上找共享 catalog（与
+    // acp-visibility-filter 同一套 unwrap）。
+    const original = (service as Record<symbol, unknown>)[Symbol.for('cordis.original')]
+    const instance = typeof original === 'object' && original !== null ? original : service
+    const catalog = (instance as { catalog?: unknown }).catalog
+    if (typeof catalog !== 'object' || catalog === null) return
+    const refresh = (catalog as { refresh?: unknown }).refresh
+    if (typeof refresh !== 'function') return
+    ;(refresh as () => unknown).call(catalog)
+  } catch {
+    // 守卫降级：服务缺席 / inactive context / 形状变化都不抛错、不阻塞。
+  }
+}
