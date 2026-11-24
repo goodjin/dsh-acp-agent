@@ -39,6 +39,7 @@ import { switchShared } from './switch-shared.ts'
 import { selectionOf } from './selection.ts'
 import type { CatalogDeps } from './catalog.ts'
 import { describeClaimedModels, isModelBackedAgent, modelPluginStream } from './model-plugins.ts'
+import { registerModelRefresher, refreshPresetModels } from './model-refresh.ts'
 import type { AcpPresetBinding } from './dispatch.ts'
 import type { AcpDialect, AcpTransport } from './index.ts'
 
@@ -387,6 +388,18 @@ export function applyAcpPlugin(
   const registerExit = deps.onExit ?? ((clean: () => void) => { process.once('exit', clean) })
   registerExit(() => gateway.closeAll())
   registerCatalog(ctx, presets, catalogDeps)
+  // The settings section's "刷新模型列表" button dispatches through the shared
+  // registry to THIS row's refresher, and the ledger it records into is the
+  // same `runtimeModelReports` the picker above reads — recording anywhere
+  // else would refresh a list the catalog never serves.
+  registerModelRefresher(presetId, () => refreshPresetModels({
+    presetId,
+    ...(config.agent === undefined ? {} : { agent: config.agent }),
+    declared: pickerModels,
+    previous: runtimeModelReports.modelsOf(presetId),
+    record: models => { runtimeModelReports.record(presetId, models) },
+    ...(config.command === undefined ? {} : { command: config.command }),
+  }))
   // A session whose work was stopped — archived with its turn running, most
   // visibly — must not leave its external connection open behind it. The stop
   // request ends the session's work; this closes the socket or child process

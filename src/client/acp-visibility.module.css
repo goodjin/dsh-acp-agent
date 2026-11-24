@@ -129,6 +129,12 @@
   font-family: var(--dsw-font-family-mono, monospace);
 }
 
+/* The row's refresh button rides the head's flex line, pushed to the far end
+   so it reads as a per-row action rather than part of the label. */
+.agentHeadAction {
+  margin-left: auto;
+}
+
 .note {
   margin: 0;
   color: var(--dsw-alias-label-caption);

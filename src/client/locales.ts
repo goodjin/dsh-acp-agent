@@ -33,6 +33,10 @@ export type ClientLocaleKey =
   | 'acpVisibility.agentToggleNamed' | 'acpVisibility.modelToggleNamed'
   | 'acpVisibility.agentFailure'
   | 'acpVisibility.error.missing' | 'acpVisibility.error.shape' | 'acpVisibility.error.failed'
+  | 'acpVisibility.refresh.button' | 'acpVisibility.refresh.named' | 'acpVisibility.refresh.refreshing'
+  | 'acpVisibility.refresh.upstream' | 'acpVisibility.refresh.familyWindow' | 'acpVisibility.refresh.unverified'
+  | 'acpVisibility.refresh.reread' | 'acpVisibility.refresh.codexHint' | 'acpVisibility.refresh.busy'
+  | 'acpVisibility.refresh.failed'
   | 'progress.preparing' | 'progress.loading' | 'progress.ready'
   | 'storagePosture.local'
 
@@ -94,6 +98,16 @@ export const zh: Record<ClientLocaleKey, string> = {
   'acpVisibility.error.missing': '这台主机没有提供模型目录（remote.session.modelCatalog）。',
   'acpVisibility.error.shape': '模型目录的返回形状不符合预期。',
   'acpVisibility.error.failed': '读取模型目录失败：{detail}',
+  'acpVisibility.refresh.button': '刷新模型列表',
+  'acpVisibility.refresh.named': '刷新 {name} 的模型列表',
+  'acpVisibility.refresh.refreshing': '正在刷新模型列表……',
+  'acpVisibility.refresh.upstream': '已刷新：{total} 个模型（新增 {added} 个）。',
+  'acpVisibility.refresh.familyWindow': '{count} 个新增模型的上下文窗口沿用同族声明值。',
+  'acpVisibility.refresh.unverified': '{count} 个模型未验证上下文窗口。',
+  'acpVisibility.refresh.reread': '已重读模型目录；该提供方暂不支持从上游拉取清单。',
+  'acpVisibility.refresh.codexHint': 'Codex 的上游清单刷新在 dsh-codex 插件的设置段。',
+  'acpVisibility.refresh.busy': '刷新正在进行中，请等它完成。',
+  'acpVisibility.refresh.failed': '刷新失败：{reason}',
   'progress.preparing': '正在准备打开新会话 · {target}',
   'progress.loading': '正在读新会话的历史 · {target}',
   'progress.ready': '新会话已就绪，正在切换 · {target}',
@@ -158,10 +172,112 @@ export const en: Record<ClientLocaleKey, string> = {
   'acpVisibility.error.missing': 'This host offers no model catalog (remote.session.modelCatalog).',
   'acpVisibility.error.shape': 'The model catalog answered in an unexpected shape.',
   'acpVisibility.error.failed': 'Reading the model catalog failed: {detail}',
+  'acpVisibility.refresh.button': 'Refresh model list',
+  'acpVisibility.refresh.named': 'Refresh the model list of {name}',
+  'acpVisibility.refresh.refreshing': 'Refreshing the model list…',
+  'acpVisibility.refresh.upstream': 'Refreshed: {total} models ({added} new).',
+  'acpVisibility.refresh.familyWindow': '{count} new models use the context window declared for their family.',
+  'acpVisibility.refresh.unverified': '{count} models have no verified context window.',
+  'acpVisibility.refresh.reread': 'The model catalog was re-read; this provider cannot fetch an upstream list yet.',
+  'acpVisibility.refresh.codexHint': 'Codex’s upstream refresh lives in the dsh-codex plugin’s settings.',
+  'acpVisibility.refresh.busy': 'A refresh is already running; wait for it to finish.',
+  'acpVisibility.refresh.failed': 'Refresh failed: {reason}',
   'progress.preparing': 'Preparing to open the new session · {target}',
   'progress.loading': 'Reading the new session’s history · {target}',
   'progress.ready': 'New session ready, switching · {target}',
   'storagePosture.local': 'Settings are stored on this machine',
+}
+
+/**
+ * 其余六种界面语言。
+ *
+ * 本插件的词典历来只落 zh 与 en；新增的刷新文案按宿主的八种界面语言补全——
+ * 六种新词典以 en 为底、只覆盖新键：旧键没有现成译本，照旧回落英文（与改动前
+ * 一个非中/英用户看到的一致），新键则是各自的翻译。整本重译旧键不在这件事的
+ * 范围里，也不该顺手机器翻译。
+ */
+export const ja: Record<ClientLocaleKey, string> = {
+  ...en,
+  'acpVisibility.refresh.button': 'モデルリストを更新',
+  'acpVisibility.refresh.named': '{name} のモデルリストを更新',
+  'acpVisibility.refresh.refreshing': 'モデルリストを更新中…',
+  'acpVisibility.refresh.upstream': '更新しました：{total} 個のモデル（新規 {added} 個）。',
+  'acpVisibility.refresh.familyWindow': '新規 {count} 個のモデルは同族に宣言されたコンテキスト窓を使います。',
+  'acpVisibility.refresh.unverified': '{count} 個のモデルはコンテキスト窓が未検証です。',
+  'acpVisibility.refresh.reread': 'モデルカタログを再読み込みしました。このプロバイダーはまだ上流一覧の取得に対応していません。',
+  'acpVisibility.refresh.codexHint': 'Codex の上流更新は dsh-codex プラグインの設定にあります。',
+  'acpVisibility.refresh.busy': '更新が既に実行中です。完了をお待ちください。',
+  'acpVisibility.refresh.failed': '更新に失敗しました：{reason}',
+}
+
+export const es: Record<ClientLocaleKey, string> = {
+  ...en,
+  'acpVisibility.refresh.button': 'Actualizar lista de modelos',
+  'acpVisibility.refresh.named': 'Actualizar la lista de modelos de {name}',
+  'acpVisibility.refresh.refreshing': 'Actualizando la lista de modelos…',
+  'acpVisibility.refresh.upstream': 'Actualizado: {total} modelos ({added} nuevos).',
+  'acpVisibility.refresh.familyWindow': '{count} modelos nuevos usan la ventana de contexto declarada para su familia.',
+  'acpVisibility.refresh.unverified': '{count} modelos no tienen ventana de contexto verificada.',
+  'acpVisibility.refresh.reread': 'Se volvió a leer el catálogo de modelos; este proveedor aún no puede obtener una lista del origen.',
+  'acpVisibility.refresh.codexHint': 'La actualización de Codex está en los ajustes del complemento dsh-codex.',
+  'acpVisibility.refresh.busy': 'Ya hay una actualización en curso; espera a que termine.',
+  'acpVisibility.refresh.failed': 'Error al actualizar: {reason}',
+}
+
+export const fr: Record<ClientLocaleKey, string> = {
+  ...en,
+  'acpVisibility.refresh.button': 'Actualiser la liste des modèles',
+  'acpVisibility.refresh.named': 'Actualiser la liste des modèles de {name}',
+  'acpVisibility.refresh.refreshing': 'Actualisation de la liste des modèles…',
+  'acpVisibility.refresh.upstream': 'Actualisé : {total} modèles ({added} nouveaux).',
+  'acpVisibility.refresh.familyWindow': '{count} nouveaux modèles utilisent la fenêtre de contexte déclarée pour leur famille.',
+  'acpVisibility.refresh.unverified': '{count} modèles n’ont pas de fenêtre de contexte vérifiée.',
+  'acpVisibility.refresh.reread': 'Le catalogue de modèles a été relu ; ce fournisseur ne peut pas encore récupérer de liste amont.',
+  'acpVisibility.refresh.codexHint': 'La mise à jour amont de Codex se trouve dans les réglages du plugin dsh-codex.',
+  'acpVisibility.refresh.busy': 'Une actualisation est déjà en cours ; attendez qu’elle se termine.',
+  'acpVisibility.refresh.failed': 'Échec de l’actualisation : {reason}',
+}
+
+export const de: Record<ClientLocaleKey, string> = {
+  ...en,
+  'acpVisibility.refresh.button': 'Modelliste aktualisieren',
+  'acpVisibility.refresh.named': 'Modelliste von {name} aktualisieren',
+  'acpVisibility.refresh.refreshing': 'Modelliste wird aktualisiert…',
+  'acpVisibility.refresh.upstream': 'Aktualisiert: {total} Modelle ({added} neu).',
+  'acpVisibility.refresh.familyWindow': '{count} neue Modelle übernehmen das für ihre Familie deklarierte Kontextfenster.',
+  'acpVisibility.refresh.unverified': '{count} Modelle haben kein verifiziertes Kontextfenster.',
+  'acpVisibility.refresh.reread': 'Der Modellkatalog wurde neu gelesen; dieser Anbieter kann noch keine Upstream-Liste abrufen.',
+  'acpVisibility.refresh.codexHint': 'Die Codex-Aktualisierung befindet sich in den Einstellungen des dsh-codex-Plugins.',
+  'acpVisibility.refresh.busy': 'Eine Aktualisierung läuft bereits; warte auf ihren Abschluss.',
+  'acpVisibility.refresh.failed': 'Aktualisierung fehlgeschlagen: {reason}',
+}
+
+export const ru: Record<ClientLocaleKey, string> = {
+  ...en,
+  'acpVisibility.refresh.button': 'Обновить список моделей',
+  'acpVisibility.refresh.named': 'Обновить список моделей {name}',
+  'acpVisibility.refresh.refreshing': 'Обновление списка моделей…',
+  'acpVisibility.refresh.upstream': 'Обновлено: моделей {total} (новых {added}).',
+  'acpVisibility.refresh.familyWindow': '{count} новых моделей используют окно контекста, заявленное для их семейства.',
+  'acpVisibility.refresh.unverified': 'У {count} моделей не проверено окно контекста.',
+  'acpVisibility.refresh.reread': 'Каталог моделей перечитан; этот поставщик пока не умеет получать список у вышестоящего сервиса.',
+  'acpVisibility.refresh.codexHint': 'Обновление Codex находится в настройках плагина dsh-codex.',
+  'acpVisibility.refresh.busy': 'Обновление уже выполняется; дождитесь его завершения.',
+  'acpVisibility.refresh.failed': 'Не удалось обновить: {reason}',
+}
+
+export const pt: Record<ClientLocaleKey, string> = {
+  ...en,
+  'acpVisibility.refresh.button': 'Atualizar lista de modelos',
+  'acpVisibility.refresh.named': 'Atualizar a lista de modelos de {name}',
+  'acpVisibility.refresh.refreshing': 'Atualizando a lista de modelos…',
+  'acpVisibility.refresh.upstream': 'Atualizado: {total} modelos ({added} novos).',
+  'acpVisibility.refresh.familyWindow': '{count} modelos novos usam a janela de contexto declarada para a sua família.',
+  'acpVisibility.refresh.unverified': '{count} modelos não têm janela de contexto verificada.',
+  'acpVisibility.refresh.reread': 'O catálogo de modelos foi relido; este provedor ainda não consegue obter uma lista da origem.',
+  'acpVisibility.refresh.codexHint': 'A atualização do Codex fica nas configurações do plugin dsh-codex.',
+  'acpVisibility.refresh.busy': 'Uma atualização já está em andamento; aguarde a conclusão.',
+  'acpVisibility.refresh.failed': 'Falha ao atualizar: {reason}',
 }
 
 type Params = Readonly<Record<string, string | number>>
@@ -185,6 +301,15 @@ function makeT(locale: Record<ClientLocaleKey, string>): RuntimeT {
   }
 }
 
-export function registerClientLocales(register: (dictionaries: { zh: Record<string, string>; en: Record<string, string> }) => void): void {
-  register({ zh: { ...zh }, en: { ...en } })
+export function registerClientLocales(register: (dictionaries: Record<string, Record<string, string>>) => void): void {
+  register({
+    zh: { ...zh },
+    en: { ...en },
+    ja: { ...ja },
+    es: { ...es },
+    fr: { ...fr },
+    de: { ...de },
+    ru: { ...ru },
+    pt: { ...pt },
+  })
 }

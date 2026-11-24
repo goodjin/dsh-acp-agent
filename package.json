@@ -63,6 +63,10 @@
       "types": "./src/delegation-route.ts",
       "default": "./lib/src/delegation-route.js"
     },
+    "./model-refresh": {
+      "types": "./src/model-refresh-route.ts",
+      "default": "./lib/src/model-refresh-route.js"
+    },
     "./client": {
       "types": "./src/client/index.ts",
       "default": "./lib/client.js"

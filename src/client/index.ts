@@ -35,7 +35,7 @@ import { AgentSwitchHandoverCard, agentSwitchHandoverDefinition, registerAgentSw
 import { registerLostInputSurface } from './lost-input.ts'
 import { registerAcpProcessSurface } from './acp-process-surface.tsx'
 import { createSwitchProgressStore, startSwitchProgressSurface } from './switch-progress.ts'
-import { NAMESPACE, en, fallbackT, zh } from './locales.ts'
+import { NAMESPACE, en, fallbackT, ja, pt, ru, es, fr, de, zh } from './locales.ts'
 import type { RuntimeT } from './locales.ts'
 import { createElement } from 'react'
 
@@ -104,7 +104,17 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
     const register = propertyOf(registerLocale, 'register')
     if (typeof register === 'function') {
       try {
-        const dispose = (register as Function).call(registerLocale, NAMESPACE, { zh: { ...zh }, en: { ...en } })
+        // 八种界面语言各注册一份（zh/en 全本，其余六种以 en 为底、新键各自翻译）。
+        const dispose = (register as Function).call(registerLocale, NAMESPACE, {
+          zh: { ...zh },
+          en: { ...en },
+          ja: { ...ja },
+          es: { ...es },
+          fr: { ...fr },
+          de: { ...de },
+          ru: { ...ru },
+          pt: { ...pt },
+        })
         const effect = boundMethod(ctx, 'effect')
         if (typeof dispose === 'function' && effect !== undefined) {
           (effect as Function).call(ctx, () => dispose, 'acp-agent: locale dictionaries')

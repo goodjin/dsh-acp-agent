@@ -79,6 +79,14 @@
       name: '@goodjin2/dsh-acp-agent/delegation-route'
       config:
         token: ''
+    # 模型清单刷新路由：设置段「提供方与模型」每个提供方行的「刷新模型列表」按钮
+    # POST 到这里，宿主按 preset 转给该预置行自己登记的刷新器（同一份运行期清单
+    # 账本，选择器下次读目录就是新的）。grok 起一次短暂探针读自报清单（≤60 秒）；
+    # zcode 直问 Coding Plan 网关的 /v1/models 并按大小写无关合并进声明清单；
+    # 其余提供方如实回「已重读目录」（codex 的上游刷新归 dsh-codex 插件）。
+    # 同一提供方的并发刷新在这里折成 busy，不会起第二个探针进程或重复请求。
+    - id: acp-agent-model-refresh
+      name: '@goodjin2/dsh-acp-agent/model-refresh'
     - id: acp-codex
       name: '@deepseek-ai/dsh-agent-preset'
       config:

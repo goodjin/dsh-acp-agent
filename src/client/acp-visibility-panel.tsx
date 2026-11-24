@@ -10,13 +10,19 @@
  *
  * The official Settings → Models page stays untouched, which is what makes
  * hiding safe: the API keys live there and are never part of this choice.
+ *
+ * Each ACP provider row also carries a「刷新模型列表」button: it asks the host
+ * to fetch that provider's upstream list afresh (see `model-refresh.ts` and
+ * the host's model-refresh route) and re-reads the catalog when it succeeds,
+ * so this section and the pickers agree on what the agent serves now.
  */
 
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { NAMESPACE, fallbackT } from './locales.ts'
 import {
+  ACP_ROUTE_PREFIX,
   agentHidden,
   emptyAcpVisibility,
   modelHidden,
@@ -25,6 +31,7 @@ import {
 } from './acp-visibility.ts'
 import type { AcpVisibilityStore } from './acp-visibility.ts'
 import type { AcpCatalogAgent, AcpCatalogError, AcpCatalogStore } from './acp-visibility-catalog.ts'
+import { refreshMessage, requestModelRefresh } from './model-refresh.ts'
 import styles from './acp-visibility.module.css'
 
 /** Shared identity of the settings rail row and the body it mounts. */
@@ -87,6 +94,11 @@ export function registerAcpVisibilitySection(
 
 const NOOP = (): void => {}
 
+/** One row's refresh button state: running, or the line it last answered with. */
+type RefreshUi =
+  | { readonly phase: 'loading' }
+  | { readonly phase: 'done'; readonly ok: boolean; readonly text: string }
+
 /** The stored choice's summary, in words the dictionary owns. */
 function summaryLine(
   visibility: ReturnType<AcpVisibilityStore['get']>,
@@ -123,9 +135,11 @@ export function AcpVisibilityPanel(
   const current = useSyncExternalStore(
     useCallback((listener: () => void) => visibility.subscribe(listener), [visibility]),
     () => visibility.get(),
+    () => visibility.get(),
   )
   const listing = useSyncExternalStore(
     useCallback((listener: () => void) => catalog.subscribe(listener), [catalog]),
+    () => catalog.getSnapshot(),
     () => catalog.getSnapshot(),
   )
   const subscribePosture = NOOP
@@ -148,6 +162,39 @@ export function AcpVisibilityPanel(
     visibility.set(setModelHidden(visibility.get(), key, modelId, hidden))
   }
 
+  // 刷新模型列表：按行记录「进行中 / 上次结果」。宿主侧自己带并发锁，这里再挡
+  // 一层只是少一次明知会被拒的往返；成功后对目录 store 做 force 重读，让这一节
+  // 立刻显示刷新后的清单（选择器重开时读的就是宿主的最新目录）。
+  const [refreshes, setRefreshes] = useState<Record<string, RefreshUi>>({})
+  const startRefresh = (agent: AcpCatalogAgent): void => {
+    if (refreshes[agent.key]?.phase === 'loading') return
+    setRefreshes(previous => ({ ...previous, [agent.key]: { phase: 'loading' } }))
+    void requestModelRefresh(fetch, agent.key).then(reply => {
+      setRefreshes(previous => ({
+        ...previous,
+        [agent.key]: { phase: 'done', ok: reply.ok, text: refreshMessage(reply, say) },
+      }))
+      if (reply.ok) void catalog.load(true)
+    }).catch((error: unknown) => {
+      // requestModelRefresh 从不 reject；这一层只防它日后被改坏——按钮不能把
+      // 设置段整个带崩，也不能把失败静默成成功。
+      const text = fallbackT('acpVisibility.refresh.failed', { reason: error instanceof Error ? error.message : String(error) })
+      setRefreshes(previous => ({ ...previous, [agent.key]: { phase: 'done', ok: false, text } }))
+    })
+  }
+  const refreshLineOf = (key: string): ReactNode => {
+    const refresh = refreshes[key]
+    if (refresh === undefined) return null
+    if (refresh.phase === 'loading') {
+      return <p className={styles.note} role="status">{fallbackT('acpVisibility.refresh.refreshing')}</p>
+    }
+    return (
+      <p className={refresh.ok ? styles.note : styles.stateBad} role={refresh.ok ? 'status' : 'alert'}>
+        {refresh.text}
+      </p>
+    )
+  }
+
   const renderAgent = (agent: AcpCatalogAgent): ReactNode => {
     const wholeAgentHidden = agentHidden(current, agent.key)
     return (
@@ -163,7 +210,17 @@ export function AcpVisibilityPanel(
             <span className={styles.agentName}>{agent.name}</span>
           </label>
           <code className={styles.route}>{agent.route}</code>
+          {agent.route.startsWith(ACP_ROUTE_PREFIX) && (
+            <button
+              type="button"
+              className={`${styles.action} ${styles.agentHeadAction}`}
+              disabled={refreshes[agent.key]?.phase === 'loading'}
+              aria-label={fallbackT('acpVisibility.refresh.named', { name: agent.name })}
+              onClick={() => { startRefresh(agent) }}
+            >{fallbackT('acpVisibility.refresh.button')}</button>
+          )}
         </div>
+        {refreshLineOf(agent.key)}
         {agent.failure !== undefined && (
           <p className={styles.note}>{fallbackT('acpVisibility.agentFailure', { message: agent.failure })}</p>
         )}
