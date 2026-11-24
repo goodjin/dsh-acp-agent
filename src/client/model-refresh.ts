@@ -25,7 +25,14 @@ export type ModelRefreshReply =
     readonly unverifiedWindow: number
   }
   | { readonly ok: true; readonly kind: 'reread'; readonly hint?: 'codex' }
-  | { readonly ok: false; readonly code?: 'busy'; readonly error: string }
+  | {
+    readonly ok: false
+    /** `busy` — wait for the running refresh; `not-ours` — another plugin
+     *  mounted this provider, and `hint` names where its refresh lives. */
+    readonly code?: 'busy' | 'not-ours'
+    readonly hint?: 'codex' | 'qoder'
+    readonly error: string
+  }
 
 /**
  * Ask the host to refresh one provider's model list.
@@ -73,7 +80,9 @@ export async function requestModelRefresh(fetchImpl: typeof fetch, presetId: str
     const error = typeof record['error'] === 'string' && record['error'] !== ''
       ? record['error']
       : `HTTP ${String(response.status)}`
-    return record['code'] === 'busy' ? { ok: false, code: 'busy', error } : { ok: false, error }
+    const code = record['code'] === 'busy' || record['code'] === 'not-ours' ? record['code'] : undefined
+    const hint = record['hint'] === 'codex' || record['hint'] === 'qoder' ? record['hint'] : undefined
+    return { ok: false, ...(code === undefined ? {} : { code }), ...(hint === undefined ? {} : { hint }), error }
   }
   return { ok: false, error: `HTTP ${String(response.status)} — unrecognised answer` }
 }
@@ -85,9 +94,13 @@ export async function requestModelRefresh(fetchImpl: typeof fetch, presetId: str
  */
 export function refreshMessage(reply: ModelRefreshReply, say: RuntimeT): string {
   if (!reply.ok) {
-    return reply.code === 'busy'
-      ? say('acpVisibility.refresh.busy')
-      : say('acpVisibility.refresh.failed', { reason: reply.error })
+    if (reply.code === 'busy') return say('acpVisibility.refresh.busy')
+    if (reply.code === 'not-ours') {
+      if (reply.hint === 'codex') return say('acpVisibility.refresh.codexHint')
+      if (reply.hint === 'qoder') return say('acpVisibility.refresh.qoderHint')
+      return say('acpVisibility.refresh.anotherPlugin')
+    }
+    return say('acpVisibility.refresh.failed', { reason: reply.error })
   }
   if (reply.kind === 'reread') {
     const line = say('acpVisibility.refresh.reread')

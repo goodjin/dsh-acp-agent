@@ -40,6 +40,8 @@ const REFRESH_KEYS = [
   'acpVisibility.refresh.codexHint',
   'acpVisibility.refresh.busy',
   'acpVisibility.refresh.failed',
+  'acpVisibility.refresh.qoderHint',
+  'acpVisibility.refresh.anotherPlugin',
 ] as const
 
 describe('接线：声明行 / 导出 / 自报清单', () => {
@@ -133,6 +135,19 @@ describe('折文案：应答形状 → 一句话', () => {
       .toBe('刷新正在进行中，请等它完成。')
     expect(refreshMessage({ ok: false, error: 'serve refused to start' }, fallbackT))
       .toBe('刷新失败：serve refused to start')
+  })
+
+  it('not-ours：按 hint 指路到对应插件，未知提供方给通用文案，不透内部腔', () => {
+    expect(refreshMessage({ ok: false, code: 'not-ours', hint: 'codex', error: 'internal detail' }, fallbackT))
+      .toContain('dsh-codex 插件的设置段')
+    expect(refreshMessage({ ok: false, code: 'not-ours', hint: 'qoder', error: 'internal detail' }, fallbackT))
+      .toContain('dsh-qoder 插件的设置段')
+    const generic = refreshMessage({ ok: false, code: 'not-ours', error: 'internal detail' }, fallbackT)
+    expect(generic).toContain('这个提供方由另一个插件挂载')
+    // 内部错误腔绝不进文案
+    expect(generic).not.toContain('internal detail')
+    expect(refreshMessage({ ok: false, code: 'not-ours', hint: 'codex', error: 'internal detail' }, fallbackT))
+      .not.toContain('internal detail')
   })
 })
 

@@ -36,7 +36,7 @@ export type ClientLocaleKey =
   | 'acpVisibility.refresh.button' | 'acpVisibility.refresh.named' | 'acpVisibility.refresh.refreshing'
   | 'acpVisibility.refresh.upstream' | 'acpVisibility.refresh.familyWindow' | 'acpVisibility.refresh.unverified'
   | 'acpVisibility.refresh.reread' | 'acpVisibility.refresh.codexHint' | 'acpVisibility.refresh.busy'
-  | 'acpVisibility.refresh.failed'
+  | 'acpVisibility.refresh.failed' | 'acpVisibility.refresh.qoderHint' | 'acpVisibility.refresh.anotherPlugin'
   | 'progress.preparing' | 'progress.loading' | 'progress.ready'
   | 'storagePosture.local'
 
@@ -108,6 +108,8 @@ export const zh: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.codexHint': 'Codex 的上游清单刷新在 dsh-codex 插件的设置段。',
   'acpVisibility.refresh.busy': '刷新正在进行中，请等它完成。',
   'acpVisibility.refresh.failed': '刷新失败：{reason}',
+  'acpVisibility.refresh.qoderHint': 'Qoder 的上游清单刷新在 dsh-qoder 插件的设置段。',
+  'acpVisibility.refresh.anotherPlugin': '这个提供方由另一个插件挂载，请到对应插件的设置段刷新。',
   'progress.preparing': '正在准备打开新会话 · {target}',
   'progress.loading': '正在读新会话的历史 · {target}',
   'progress.ready': '新会话已就绪，正在切换 · {target}',
@@ -182,6 +184,8 @@ export const en: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.codexHint': 'Codex’s upstream refresh lives in the dsh-codex plugin’s settings.',
   'acpVisibility.refresh.busy': 'A refresh is already running; wait for it to finish.',
   'acpVisibility.refresh.failed': 'Refresh failed: {reason}',
+  'acpVisibility.refresh.qoderHint': 'Qoder’s upstream refresh lives in the dsh-qoder plugin’s settings.',
+  'acpVisibility.refresh.anotherPlugin': 'This provider is mounted by another plugin — refresh it from that plugin’s settings.',
   'progress.preparing': 'Preparing to open the new session · {target}',
   'progress.loading': 'Reading the new session’s history · {target}',
   'progress.ready': 'New session ready, switching · {target}',
@@ -208,6 +212,8 @@ export const ja: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.codexHint': 'Codex の上流更新は dsh-codex プラグインの設定にあります。',
   'acpVisibility.refresh.busy': '更新が既に実行中です。完了をお待ちください。',
   'acpVisibility.refresh.failed': '更新に失敗しました：{reason}',
+  'acpVisibility.refresh.qoderHint': 'Qoder の上流更新は dsh-qoder プラグインの設定にあります。',
+  'acpVisibility.refresh.anotherPlugin': 'このプロバイダーは別のプラグインがマウントしています。そのプラグインの設定から更新してください。',
 }
 
 export const es: Record<ClientLocaleKey, string> = {
@@ -222,6 +228,8 @@ export const es: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.codexHint': 'La actualización de Codex está en los ajustes del complemento dsh-codex.',
   'acpVisibility.refresh.busy': 'Ya hay una actualización en curso; espera a que termine.',
   'acpVisibility.refresh.failed': 'Error al actualizar: {reason}',
+  'acpVisibility.refresh.qoderHint': 'La actualización de Qoder está en los ajustes del complemento dsh-qoder.',
+  'acpVisibility.refresh.anotherPlugin': 'Este proveedor lo monta otro complemento; actualízalo desde los ajustes de ese complemento.',
 }
 
 export const fr: Record<ClientLocaleKey, string> = {
@@ -236,6 +244,8 @@ export const fr: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.codexHint': 'La mise à jour amont de Codex se trouve dans les réglages du plugin dsh-codex.',
   'acpVisibility.refresh.busy': 'Une actualisation est déjà en cours ; attendez qu’elle se termine.',
   'acpVisibility.refresh.failed': 'Échec de l’actualisation : {reason}',
+  'acpVisibility.refresh.qoderHint': 'La mise à jour amont de Qoder se trouve dans les réglages du plugin dsh-qoder.',
+  'acpVisibility.refresh.anotherPlugin': 'Ce fournisseur est monté par un autre plugin — actualisez-le depuis les réglages de ce plugin.',
 }
 
 export const de: Record<ClientLocaleKey, string> = {
@@ -250,6 +260,8 @@ export const de: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.codexHint': 'Die Codex-Aktualisierung befindet sich in den Einstellungen des dsh-codex-Plugins.',
   'acpVisibility.refresh.busy': 'Eine Aktualisierung läuft bereits; warte auf ihren Abschluss.',
   'acpVisibility.refresh.failed': 'Aktualisierung fehlgeschlagen: {reason}',
+  'acpVisibility.refresh.qoderHint': 'Die Qoder-Aktualisierung befindet sich in den Einstellungen des dsh-qoder-Plugins.',
+  'acpVisibility.refresh.anotherPlugin': 'Dieser Anbieter wird von einem anderen Plugin bereitgestellt — aktualisieren Sie ihn in dessen Einstellungen.',
 }
 
 export const ru: Record<ClientLocaleKey, string> = {
@@ -264,6 +276,8 @@ export const ru: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.codexHint': 'Обновление Codex находится в настройках плагина dsh-codex.',
   'acpVisibility.refresh.busy': 'Обновление уже выполняется; дождитесь его завершения.',
   'acpVisibility.refresh.failed': 'Не удалось обновить: {reason}',
+  'acpVisibility.refresh.qoderHint': 'Обновление Qoder находится в настройках плагина dsh-qoder.',
+  'acpVisibility.refresh.anotherPlugin': 'Этот поставщик подключён другим плагином — обновите его в настройках этого плагина.',
 }
 
 export const pt: Record<ClientLocaleKey, string> = {
@@ -278,6 +292,8 @@ export const pt: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.codexHint': 'A atualização do Codex fica nas configurações do plugin dsh-codex.',
   'acpVisibility.refresh.busy': 'Uma atualização já está em andamento; aguarde a conclusão.',
   'acpVisibility.refresh.failed': 'Falha ao atualizar: {reason}',
+  'acpVisibility.refresh.qoderHint': 'A atualização do Qoder fica nas configurações do plugin dsh-qoder.',
+  'acpVisibility.refresh.anotherPlugin': 'Este provedor é montado por outro plugin — atualize-o nas configurações desse plugin.',
 }
 
 type Params = Readonly<Record<string, string | number>>

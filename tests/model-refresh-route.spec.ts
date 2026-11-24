@@ -9,7 +9,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { describe, expect, it } from 'vitest'
-import { apply, MODEL_REFRESH_ROUTE_PATH, registerModelRefreshRoute } from '../src/model-refresh-route.ts'
+import { apply, MODEL_REFRESH_ROUTE_PATH, notMountedOutcome, registerModelRefreshRoute } from '../src/model-refresh-route.ts'
 import type { ModelRefreshContext, ModelRefreshRouteDeps } from '../src/model-refresh-route.ts'
 import type { ModelRefreshOutcome } from '../src/model-refresh.ts'
 
@@ -132,12 +132,25 @@ describe('刷新路由（/acp-agent/models/refresh）', () => {
     expect(answer.body).toEqual({ ok: true, kind: 'reread', agent: 'claude' })
   })
 
-  it('没挂载的提供方折成 ok:false，不 500', async () => {
+  it('别的插件挂的 provider 回结构化 not-ours，不透内部腔', async () => {
     const { route } = rig(refresherOfOf({}))
     const answer = await callRoute(route, { cookie: 'dsh-session=good' })
     expect(answer.status).toBe(200)
-    expect((answer.body as { ok: boolean }).ok).toBe(false)
-    expect((answer.body as { error: string }).error).toContain('no ACP provider named acp-grok')
+    expect(answer.body).toEqual({
+      ok: false,
+      code: 'not-ours',
+      error: 'acp-grok is mounted by another plugin — refresh it from that plugin\'s settings section',
+    })
+  })
+
+  it('codex-global / qoder-global 按后缀指路到对应插件的设置段', async () => {
+    const codex = notMountedOutcome('acp-codex-global')
+    expect(codex).toMatchObject({ ok: false, code: 'not-ours', hint: 'codex' })
+    const qoder = notMountedOutcome('acp-qoder-global')
+    expect(qoder).toMatchObject({ ok: false, code: 'not-ours', hint: 'qoder' })
+    const unknown = notMountedOutcome('deepseek-account')
+    expect(unknown).toMatchObject({ ok: false, code: 'not-ours' })
+    expect((unknown as { hint?: string }).hint).toBeUndefined()
   })
 
   it('缺 preset 字段折成 ok:false', async () => {

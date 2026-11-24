@@ -55,7 +55,16 @@ export type ModelRefreshOutcome =
     readonly unverifiedWindow: number
   }
   | { readonly ok: true; readonly kind: 'reread'; readonly agent: string }
-  | { readonly ok: false; readonly code?: 'busy'; readonly error: string }
+  | {
+    readonly ok: false
+    /** `busy` — a refresh for this preset is already running; `not-ours` —
+     *  the preset is mounted by another plugin and cannot be refreshed here. */
+    readonly code?: 'busy' | 'not-ours'
+    /** Where the browser should point the user when `code` is `not-ours`
+     *  (`codex-global` → the dsh-codex settings, `qoder-global` → dsh-qoder). */
+    readonly hint?: 'codex' | 'qoder'
+    readonly error: string
+  }
 
 /** The per-preset refresh entry the route dispatches to. */
 export type ModelRefresher = () => Promise<ModelRefreshOutcome>
