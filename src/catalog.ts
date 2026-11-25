@@ -311,8 +311,10 @@ const DISPLAY: Readonly<Record<string, string>> = {
   claude: 'Claude',
   codex: 'Codex',
   cursor: 'Cursor',
-  // The `qoder` agent id is the **domestic** build (acp-qoder-cn, `qoderclicn`)
-  // → "QoderCN".
+  // The `qoder` agent id is the **domestic** build (`qoderclicn`) → "QoderCN".
+  // The `acp-qoder-cn` preset row was retired (dsh-qodercn direct-signing row
+  // replaced it); the qoder dialect stays registered in this plugin, so this
+  // DISPLAY label is kept for the dialect's provider name.
   qoder: 'QoderCN',
   zcode: 'ZCode',
   minimaxi: 'MiniMax',

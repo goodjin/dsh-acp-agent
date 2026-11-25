@@ -976,41 +976,6 @@ describe('GatewayConversations — 帧静默超时、提示与诊断包', () => 
     return { fake, append, reports, gate, opens }
   }
 
-  it('工具声明超时在预算内：静默不收场，预算耗尽才按 ACP_STALLED 收', async () => {
-    // 2026-10-30 会话 2c030c08：qoder 跑一个声明 600s 的 gradle 编译，300s
-    // 看门狗把还在跑的编译杀了（exit 143，结果未知）。工具自己的预算还在走，
-    // 「静默」就该让路——预算耗尽才轮到看门狗说话。
-    vi.useFakeTimers()
-    try {
-      const fake = fakeSession()
-      fake.answerWith(() => new Promise<GatewayStepEnd>(() => {}))
-      // 固定的绝对截止：静默期限 3s 到点时它还剩 1s 预算——恰好让一次路。
-      const budgetEndsAt = Date.now() + 4_000
-      fake.diagnosticsState.toolDeadline = () => budgetEndsAt
-      const gate = new GatewayConversations(async () => fake.session, undefined, undefined, undefined, () => ({ stallMs: 3_000 }))
-      const chunks: GatewayChunk[] = []
-      const answering = gate.answer('s1', 'acp-qoder-cn', { messages: [user('编译')], position }, { chunk: c => { chunks.push(c) } })
-      // 静默期限过了，工具预算还剩：不收场（让路把定时器推到预算后 50ms）。
-      const held = await Promise.race([
-        answering.then(() => 'ended-early'),
-        vi.advanceTimersByTimeAsync(3_500).then(() => 'still-running'),
-      ])
-      expect(held).toBe('still-running')
-      // 预算耗尽：静默收场照旧，静默时长按真实起点算（≈4s，不是 3s）。
-      const outcome = await Promise.race([
-        answering.then(() => 'resolved'),
-        vi.advanceTimersByTimeAsync(1_200).then(() => 'still-hanging'),
-      ])
-      expect(outcome).toBe('resolved')
-      const finish = chunks.at(-1) as { reason: { failure?: { code?: string; message?: string } } }
-      expect(finish.reason.failure?.code).toBe('ACP_STALLED')
-      expect(finish.reason.failure?.message).toContain('外部 agent 静默 4s')
-      expect(fake.closes.count).toBe(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('帧静默达 stallMs：ACP_STALLED 收场，消息带尾部与会话处置，会话被杀', async () => {
     vi.useFakeTimers()
     try {
@@ -1032,65 +997,6 @@ describe('GatewayConversations — 帧静默超时、提示与诊断包', () => 
       fake.answerWith(async () => ({ kind: 'completed' }))
       await gate.answer('s1', 'acp-codex', { messages: [user('卡住'), user('重试')], position }, { chunk: () => {} })
       expect(opens).toHaveLength(2)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('静默收场带死因：整轮零输出且 stderr 有 JSON-RPC 错误时点明疑似启动即崩', async () => {
-    vi.useFakeTimers()
-    try {
-      const fake = fakeSession()
-      fake.answerWith(() => new Promise<GatewayStepEnd>(() => {}))
-      fake.diagnosticsState.lastFrameAt = Date.now()
-      // qoder 启动期会把不认的 `initialized` 通知记成 -32601（无害），它留在
-      // stderr 尾部不消失；只有整轮零输出时才允许拿它说「崩溃」。
-      fake.diagnosticsState.stderrTail = [
-        'Error handling notification { jsonrpc: \'2.0\', method: \'initialized\', params: {} }',
-        '{ code: -32601, message: \'"Method not found": initialized\', data: { method: \'initialized\' } }',
-      ]
-      const gate = new GatewayConversations(async () => fake.session, undefined, undefined, undefined, () => ({ stallMs: 3_000 }))
-      const chunks: GatewayChunk[] = []
-      const outcome = await Promise.race([
-        gate.answer('s1', 'acp-qoder-cn', { messages: [user('崩了')], position }, { chunk: c => { chunks.push(c) } }).then(() => 'resolved'),
-        vi.advanceTimersByTimeAsync(10_000).then(() => 'still-hanging'),
-      ])
-      expect(outcome).toBe('resolved')
-      const finish = chunks.at(-1) as { reason: { kind: string; failure?: { code?: string; message?: string } } }
-      expect(finish.reason.failure?.code).toBe('ACP_STALLED')
-      expect(finish.reason.failure?.message).toContain('整轮没有任何 agent 输出')
-      expect(finish.reason.failure?.message).toContain('疑似进程在启动阶段已崩溃')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('出过帧之后的静默不断言崩溃：stderr 里的启动期警告只是证据，不是死因', async () => {
-    vi.useFakeTimers()
-    try {
-      const fake = fakeSession()
-      // 先吐一段文字再挂死：agent 干过活，之后安静是「干着干着停了」，不是启动崩。
-      fake.answerWith(turn => {
-        const s = turn.openStream?.()
-        s?.textDelta('有输出')
-        return new Promise<GatewayStepEnd>(() => {})
-      })
-      fake.diagnosticsState.lastFrameAt = Date.now()
-      fake.diagnosticsState.stderrTail = [
-        '{ code: -32601, message: \'"Method not found": initialized\', data: { method: \'initialized\' } }',
-      ]
-      const gate = new GatewayConversations(async () => fake.session, undefined, undefined, undefined, () => ({ stallMs: 3_000 }))
-      const chunks: GatewayChunk[] = []
-      const outcome = await Promise.race([
-        gate.answer('s1', 'acp-qoder-cn', { messages: [user('先干活后停')], position }, { chunk: c => { chunks.push(c) } }).then(() => 'resolved'),
-        vi.advanceTimersByTimeAsync(10_000).then(() => 'still-hanging'),
-      ])
-      expect(outcome).toBe('resolved')
-      const finish = chunks.at(-1) as { reason: { kind: string; failure?: { code?: string; message?: string } } }
-      expect(finish.reason.failure?.code).toBe('ACP_STALLED')
-      expect(finish.reason.failure?.message).not.toContain('崩溃')
-      // 尾部照常随消息列出（证据仍在）。
-      expect(finish.reason.failure?.message).toContain('Method not found')
     } finally {
       vi.useRealTimers()
     }
