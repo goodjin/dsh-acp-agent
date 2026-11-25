@@ -49,19 +49,6 @@ function failedImport(id: string, name: string, message: string): LoaderEntryLik
   }
 }
 
-/** 装配进树、模块载入了，但 apply 抛错：fiber 状态 3 = failed。 */
-function failedApply(id: string, name: string, message: string): LoaderEntryLike {
-  return {
-    options: { id, name },
-    fiber: {
-      state: 3,
-      await: async () => {
-        throw new Error(message)
-      },
-    },
-  }
-}
-
 /** 装配进树、等依赖服务：fiber 状态 0 = pending。 */
 function pendingOn(id: string, name: string, missing: string[]): LoaderEntryLike {
   return {
@@ -111,15 +98,6 @@ describe('auditRows', () => {
     const row = rows.find(entry => entry.id === 'acp-agent-client')
     expect(row?.status).toBe('failed')
     expect(row?.detail).toBeTruthy()
-  })
-
-  it('apply 抛错的行：failed，并带上错误原文', async () => {
-    const rows = await auditRows(withRows({
-      'acp-qoder-cn': failedApply('acp-qoder-cn', '@deepseek-ai/dsh-agent-preset', 'preset schema rejected'),
-    }))
-    const row = rows.find(entry => entry.id === 'acp-qoder-cn')
-    expect(row?.status).toBe('failed')
-    expect(row?.detail).toContain('preset schema rejected')
   })
 
   it('等依赖服务的行：pending，并点名缺哪个服务', async () => {

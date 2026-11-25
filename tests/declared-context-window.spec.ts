@@ -94,7 +94,6 @@ const AGENT_ROWS = [
   'acp-cursor',
   'acp-zcode',
   'acp-minimax',
-  'acp-qoder-cn',
   'acp-doubao',
 ] as const
 
