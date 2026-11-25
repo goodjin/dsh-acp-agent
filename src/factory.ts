@@ -12,15 +12,11 @@ import {
   StdioAcpTransport,
   TerminalService,
   WebSocketAcpTransport,
-  claudeDialect,
-  codexDialect,
-  cursorDialect,
-  doubaoDialect,
   grokDialect,
-  qoderDialect,
   stdioArgsFor as acpStdioArgsFor,
   stdioEnvFor as acpStdioEnvFor,
 } from './index.ts'
+import { DIALECTS } from './dialect-registry.ts'
 import type {
   AcpDialect,
   AcpFrame,
@@ -169,16 +165,6 @@ function delegationMcpServers(
       { name: 'DSH_DELEGATION_TOKEN', value: token },
     ],
   }]
-}
-
-/** Which frame dialect an agent speaks. Unknown agents are not ours. */
-const DIALECTS: Readonly<Record<string, AcpDialect>> = {
-  grok: grokDialect,
-  claude: claudeDialect,
-  codex: codexDialect,
-  cursor: cursorDialect,
-  doubao: doubaoDialect,
-  qoder: qoderDialect,
 }
 
 /**

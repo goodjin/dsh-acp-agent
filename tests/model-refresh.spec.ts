@@ -19,6 +19,7 @@ import {
 } from '../src/model-refresh.ts'
 import type { ReportedModel } from '../src/catalog-registration.ts'
 import { grokDialect } from '../src/dialects/grok.ts'
+import { AcpProbeError } from '../src/model-probe.ts'
 
 /** 声明清单（cordis.patch.yml acp-zcode 的三条）。 */
 const DECLARED: readonly ReportedModel[] = [
@@ -254,6 +255,84 @@ describe('refreshPresetModels（按 kind 分派）', () => {
       })
       expect(outcome).toEqual({ ok: true, kind: 'reread', agent })
     }
+    expect(recorded).toHaveLength(0)
+  })
+})
+
+describe('refreshPresetModels（ACP 行的通用探针）', () => {
+  it('qoder：探针读到的清单入账本，计数说清新增与未验证窗口', async () => {
+    const recorded: ReportedModel[][] = []
+    const probes: { agent: string; command: string; args?: readonly string[] }[] = []
+    const outcome = await refreshPresetModels({
+      presetId: 'acp-qoder-cn',
+      agent: 'qoder',
+      declared: [{ id: 'auto', name: 'Auto (default)', contextWindow: 1100000 }],
+      previous: undefined,
+      record: models => { recorded.push([...models]) },
+      command: '/Users/good/.local/bin/qoderclicn',
+      deps: {
+        probeAcp: async options => {
+          probes.push({ agent: options.agent, command: options.command })
+          return [
+            { id: 'auto', name: 'Auto (default)' },
+            { id: 'qmodel_38max', name: 'Qwen3.8-Max' },
+          ]
+        },
+      },
+    })
+    expect(probes).toEqual([{ agent: 'qoder', command: '/Users/good/.local/bin/qoderclicn' }])
+    expect(recorded[0]?.map(model => model.id)).toEqual(['auto', 'qmodel_38max'])
+    expect(outcome).toEqual({
+      ok: true, kind: 'upstream', agent: 'qoder', total: 2, added: 1, familyWindow: 0, unverifiedWindow: 1,
+    })
+  })
+
+  it('qoder：探针失败给出原因与登录命令，账本不写', async () => {
+    const recorded: ReportedModel[][] = []
+    const outcome = await refreshPresetModels({
+      presetId: 'acp-qoder-cn',
+      agent: 'qoder',
+      declared: [],
+      previous: undefined,
+      record: models => { recorded.push([...models]) },
+      command: '/Users/good/.local/bin/qoderclicn',
+      deps: {
+        probeAcp: async () => {
+          throw new AcpProbeError('not-logged-in', 'the qoder agent refused the session', 'qoderclicn login')
+        },
+      },
+    })
+    expect(recorded).toHaveLength(0)
+    expect(outcome).toEqual({
+      ok: false,
+      reason: 'not-logged-in',
+      login: 'qoderclicn login',
+      error: 'the qoder agent refused the session',
+    })
+  })
+
+  it('探针抛的不是探针错误：照旧向上抛（路由折成通用失败）', async () => {
+    await expect(refreshPresetModels({
+      presetId: 'acp-qoder-cn',
+      agent: 'qoder',
+      declared: [],
+      previous: undefined,
+      record: () => {},
+      command: '/Users/good/.local/bin/qoderclicn',
+      deps: { probeAcp: async () => { throw new Error('boom') } },
+    })).rejects.toThrow('boom')
+  })
+
+  it('没有本地命令的 ACP 行：如实回「已重读」（没什么可拉起）', async () => {
+    const recorded: ReportedModel[][] = []
+    const outcome = await refreshPresetModels({
+      presetId: 'acp-claude',
+      agent: 'claude',
+      declared: [],
+      previous: undefined,
+      record: models => { recorded.push([...models]) },
+    })
+    expect(outcome).toEqual({ ok: true, kind: 'reread', agent: 'claude' })
     expect(recorded).toHaveLength(0)
   })
 })

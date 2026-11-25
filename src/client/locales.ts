@@ -37,6 +37,9 @@ export type ClientLocaleKey =
   | 'acpVisibility.refresh.upstream' | 'acpVisibility.refresh.familyWindow' | 'acpVisibility.refresh.unverified'
   | 'acpVisibility.refresh.reread' | 'acpVisibility.refresh.codexHint' | 'acpVisibility.refresh.busy'
   | 'acpVisibility.refresh.failed' | 'acpVisibility.refresh.qoderHint' | 'acpVisibility.refresh.anotherPlugin'
+  | 'acpVisibility.refresh.notLoggedIn' | 'acpVisibility.refresh.authFailed' | 'acpVisibility.refresh.emptyList'
+  | 'acpVisibility.refresh.timeout' | 'acpVisibility.refresh.spawnFailed' | 'acpVisibility.refresh.sessionFailed'
+  | 'acpVisibility.refresh.loginHint'
   | 'progress.preparing' | 'progress.loading' | 'progress.ready'
   | 'storagePosture.local'
 
@@ -110,6 +113,13 @@ export const zh: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.failed': '刷新失败：{reason}',
   'acpVisibility.refresh.qoderHint': 'Qoder 的上游清单刷新在 dsh-qoder 插件的设置段。',
   'acpVisibility.refresh.anotherPlugin': '这个提供方由另一个插件挂载，请到对应插件的设置段刷新。',
+  'acpVisibility.refresh.notLoggedIn': '外部 agent 没有登录，读不到模型清单：{reason}',
+  'acpVisibility.refresh.authFailed': '外部 agent 的登录校验没通过，读不到模型清单：{reason}',
+  'acpVisibility.refresh.emptyList': '外部 agent 回应了，但清单是空的（可能是账号没有可用模型，或登录已失效）。',
+  'acpVisibility.refresh.timeout': '读取模型清单超时：外部 agent 没有在期限内回答。',
+  'acpVisibility.refresh.spawnFailed': '拉起外部 agent 失败：{reason}',
+  'acpVisibility.refresh.sessionFailed': '外部 agent 没有给出模型清单：{reason}',
+  'acpVisibility.refresh.loginHint': '请先在终端运行 {command}，然后再刷新。',
   'progress.preparing': '正在准备打开新会话 · {target}',
   'progress.loading': '正在读新会话的历史 · {target}',
   'progress.ready': '新会话已就绪，正在切换 · {target}',
@@ -186,6 +196,13 @@ export const en: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.failed': 'Refresh failed: {reason}',
   'acpVisibility.refresh.qoderHint': 'Qoder’s upstream refresh lives in the dsh-qoder plugin’s settings.',
   'acpVisibility.refresh.anotherPlugin': 'This provider is mounted by another plugin — refresh it from that plugin’s settings.',
+  'acpVisibility.refresh.notLoggedIn': 'The external agent is not logged in, so its model list cannot be read: {reason}',
+  'acpVisibility.refresh.authFailed': 'The external agent refused the login step, so its model list cannot be read: {reason}',
+  'acpVisibility.refresh.emptyList': 'The external agent answered, but the list is empty (the account may have no models available, or the login is no longer valid).',
+  'acpVisibility.refresh.timeout': 'Reading the model list timed out — the external agent did not answer in time.',
+  'acpVisibility.refresh.spawnFailed': 'Could not start the external agent: {reason}',
+  'acpVisibility.refresh.sessionFailed': 'The external agent did not publish a model list: {reason}',
+  'acpVisibility.refresh.loginHint': 'Run {command} in a terminal first, then refresh again.',
   'progress.preparing': 'Preparing to open the new session · {target}',
   'progress.loading': 'Reading the new session’s history · {target}',
   'progress.ready': 'New session ready, switching · {target}',
@@ -214,6 +231,13 @@ export const ja: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.failed': '更新に失敗しました：{reason}',
   'acpVisibility.refresh.qoderHint': 'Qoder の上流更新は dsh-qoder プラグインの設定にあります。',
   'acpVisibility.refresh.anotherPlugin': 'このプロバイダーは別のプラグインがマウントしています。そのプラグインの設定から更新してください。',
+  'acpVisibility.refresh.notLoggedIn': '外部エージェントがログインしていないため、モデル一覧を読み取れません: {reason}',
+  'acpVisibility.refresh.authFailed': '外部エージェントのログイン確認が失敗したため、モデル一覧を読み取れません: {reason}',
+  'acpVisibility.refresh.emptyList': '外部エージェントは応答しましたが、一覧が空です（アカウントで利用できるモデルがない、またはログインが失効している可能性があります）。',
+  'acpVisibility.refresh.timeout': 'モデル一覧の取得がタイムアウトしました（外部エージェントが時間内に応答しませんでした）。',
+  'acpVisibility.refresh.spawnFailed': '外部エージェントを起動できませんでした: {reason}',
+  'acpVisibility.refresh.sessionFailed': '外部エージェントはモデル一覧を返しませんでした: {reason}',
+  'acpVisibility.refresh.loginHint': 'まずターミナルで {command} を実行してから、もう一度更新してください。',
 }
 
 export const es: Record<ClientLocaleKey, string> = {
@@ -230,6 +254,13 @@ export const es: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.failed': 'Error al actualizar: {reason}',
   'acpVisibility.refresh.qoderHint': 'La actualización de Qoder está en los ajustes del complemento dsh-qoder.',
   'acpVisibility.refresh.anotherPlugin': 'Este proveedor lo monta otro complemento; actualízalo desde los ajustes de ese complemento.',
+  'acpVisibility.refresh.notLoggedIn': 'El agente externo no ha iniciado sesión, así que no se puede leer su lista de modelos: {reason}',
+  'acpVisibility.refresh.authFailed': 'El agente externo rechazó el paso de inicio de sesión, así que no se puede leer su lista de modelos: {reason}',
+  'acpVisibility.refresh.emptyList': 'El agente externo respondió, pero la lista está vacía (puede que la cuenta no tenga modelos disponibles o que el inicio de sesión ya no sea válido).',
+  'acpVisibility.refresh.timeout': 'La lectura de la lista de modelos agotó el tiempo: el agente externo no respondió a tiempo.',
+  'acpVisibility.refresh.spawnFailed': 'No se pudo iniciar el agente externo: {reason}',
+  'acpVisibility.refresh.sessionFailed': 'El agente externo no publicó una lista de modelos: {reason}',
+  'acpVisibility.refresh.loginHint': 'Ejecuta {command} en una terminal primero y vuelve a actualizar.',
 }
 
 export const fr: Record<ClientLocaleKey, string> = {
@@ -246,6 +277,13 @@ export const fr: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.failed': 'Échec de l’actualisation : {reason}',
   'acpVisibility.refresh.qoderHint': 'La mise à jour amont de Qoder se trouve dans les réglages du plugin dsh-qoder.',
   'acpVisibility.refresh.anotherPlugin': 'Ce fournisseur est monté par un autre plugin — actualisez-le depuis les réglages de ce plugin.',
+  'acpVisibility.refresh.notLoggedIn': 'L\'agent externe n\'est pas connecté, sa liste de modèles est donc illisible : {reason}',
+  'acpVisibility.refresh.authFailed': 'L\'agent externe a refusé l\'étape de connexion, sa liste de modèles est donc illisible : {reason}',
+  'acpVisibility.refresh.emptyList': 'L\'agent externe a répondu, mais la liste est vide (le compte n\'a peut-être aucun modèle disponible, ou la connexion n\'est plus valide).',
+  'acpVisibility.refresh.timeout': 'La lecture de la liste de modèles a expiré : l\'agent externe n\'a pas répondu à temps.',
+  'acpVisibility.refresh.spawnFailed': 'Impossible de lancer l\'agent externe : {reason}',
+  'acpVisibility.refresh.sessionFailed': 'L\'agent externe n\'a pas publié de liste de modèles : {reason}',
+  'acpVisibility.refresh.loginHint': 'Lancez d\'abord {command} dans un terminal, puis actualisez à nouveau.',
 }
 
 export const de: Record<ClientLocaleKey, string> = {
@@ -262,6 +300,13 @@ export const de: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.failed': 'Aktualisierung fehlgeschlagen: {reason}',
   'acpVisibility.refresh.qoderHint': 'Die Qoder-Aktualisierung befindet sich in den Einstellungen des dsh-qoder-Plugins.',
   'acpVisibility.refresh.anotherPlugin': 'Dieser Anbieter wird von einem anderen Plugin bereitgestellt — aktualisieren Sie ihn in dessen Einstellungen.',
+  'acpVisibility.refresh.notLoggedIn': 'Der externe Agent ist nicht angemeldet, daher lässt sich seine Modellliste nicht lesen: {reason}',
+  'acpVisibility.refresh.authFailed': 'Der externe Agent hat den Anmeldeschritt abgelehnt, daher lässt sich seine Modellliste nicht lesen: {reason}',
+  'acpVisibility.refresh.emptyList': 'Der externe Agent hat geantwortet, die Liste ist aber leer (das Konto hat vielleicht keine Modelle verfügbar, oder die Anmeldung ist nicht mehr gültig).',
+  'acpVisibility.refresh.timeout': 'Das Lesen der Modellliste hat zu lange gedauert – der externe Agent hat nicht rechtzeitig geantwortet.',
+  'acpVisibility.refresh.spawnFailed': 'Der externe Agent konnte nicht gestartet werden: {reason}',
+  'acpVisibility.refresh.sessionFailed': 'Der externe Agent hat keine Modellliste veröffentlicht: {reason}',
+  'acpVisibility.refresh.loginHint': 'Führe zuerst {command} in einem Terminal aus und aktualisiere danach erneut.',
 }
 
 export const ru: Record<ClientLocaleKey, string> = {
@@ -278,6 +323,13 @@ export const ru: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.failed': 'Не удалось обновить: {reason}',
   'acpVisibility.refresh.qoderHint': 'Обновление Qoder находится в настройках плагина dsh-qoder.',
   'acpVisibility.refresh.anotherPlugin': 'Этот поставщик подключён другим плагином — обновите его в настройках этого плагина.',
+  'acpVisibility.refresh.notLoggedIn': 'Внешний агент не авторизован, поэтому его список моделей прочитать нельзя: {reason}',
+  'acpVisibility.refresh.authFailed': 'Внешний агент отклонил шаг авторизации, поэтому его список моделей прочитать нельзя: {reason}',
+  'acpVisibility.refresh.emptyList': 'Внешний агент ответил, но список пуст (у аккаунта может не быть доступных моделей, или вход больше недействителен).',
+  'acpVisibility.refresh.timeout': 'Чтение списка моделей истекло по времени — внешний агент не ответил вовремя.',
+  'acpVisibility.refresh.spawnFailed': 'Не удалось запустить внешнего агента: {reason}',
+  'acpVisibility.refresh.sessionFailed': 'Внешний агент не опубликовал список моделей: {reason}',
+  'acpVisibility.refresh.loginHint': 'Сначала выполните {command} в терминале, затем обновите снова.',
 }
 
 export const pt: Record<ClientLocaleKey, string> = {
@@ -294,6 +346,13 @@ export const pt: Record<ClientLocaleKey, string> = {
   'acpVisibility.refresh.failed': 'Falha ao atualizar: {reason}',
   'acpVisibility.refresh.qoderHint': 'A atualização do Qoder fica nas configurações do plugin dsh-qoder.',
   'acpVisibility.refresh.anotherPlugin': 'Este provedor é montado por outro plugin — atualize-o nas configurações desse plugin.',
+  'acpVisibility.refresh.notLoggedIn': 'O agente externo não está com login feito, então a lista de modelos não pode ser lida: {reason}',
+  'acpVisibility.refresh.authFailed': 'O agente externo recusou a etapa de login, então a lista de modelos não pode ser lida: {reason}',
+  'acpVisibility.refresh.emptyList': 'O agente externo respondeu, mas a lista está vazia (a conta pode não ter modelos disponíveis, ou o login não é mais válido).',
+  'acpVisibility.refresh.timeout': 'A leitura da lista de modelos expirou — o agente externo não respondeu a tempo.',
+  'acpVisibility.refresh.spawnFailed': 'Não foi possível iniciar o agente externo: {reason}',
+  'acpVisibility.refresh.sessionFailed': 'O agente externo não publicou uma lista de modelos: {reason}',
+  'acpVisibility.refresh.loginHint': 'Execute {command} em um terminal primeiro e atualize de novo.',
 }
 
 type Params = Readonly<Record<string, string | number>>

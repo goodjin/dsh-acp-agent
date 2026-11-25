@@ -43,6 +43,13 @@ const REFRESH_KEYS = [
   'acpVisibility.refresh.failed',
   'acpVisibility.refresh.qoderHint',
   'acpVisibility.refresh.anotherPlugin',
+  'acpVisibility.refresh.notLoggedIn',
+  'acpVisibility.refresh.authFailed',
+  'acpVisibility.refresh.emptyList',
+  'acpVisibility.refresh.timeout',
+  'acpVisibility.refresh.spawnFailed',
+  'acpVisibility.refresh.sessionFailed',
+  'acpVisibility.refresh.loginHint',
 ] as const
 
 describe('接线：声明行 / 导出 / 自报清单', () => {
@@ -136,6 +143,22 @@ describe('折文案：应答形状 → 一句话', () => {
       .toBe('刷新正在进行中，请等它完成。')
     expect(refreshMessage({ ok: false, error: 'serve refused to start' }, fallbackT))
       .toBe('刷新失败：serve refused to start')
+  })
+
+  it('探针的失败原因各有各的说法，没登录时带登录命令', () => {
+    const notLoggedIn = refreshMessage({
+      ok: false, reason: 'not-logged-in', login: 'qoderclicn login', error: 'the qoder agent refused the session',
+    }, fallbackT)
+    expect(notLoggedIn).toContain('没有登录')
+    expect(notLoggedIn).toContain('qoderclicn login')
+    expect(refreshMessage({ ok: false, reason: 'empty-list', error: 'reported no models' }, fallbackT))
+      .toContain('清单是空的')
+    expect(refreshMessage({ ok: false, reason: 'timeout', error: 'did not answer' }, fallbackT))
+      .toContain('超时')
+    expect(refreshMessage({ ok: false, reason: 'spawn-failed', error: 'spawn ENOENT' }, fallbackT))
+      .toContain('拉起外部 agent 失败')
+    expect(refreshMessage({ ok: false, reason: 'auth-failed', error: 'login step failed' }, fallbackT))
+      .toContain('登录校验没通过')
   })
 
   it('not-ours：按 hint 指路到对应插件，未知提供方给通用文案，不透内部腔', () => {

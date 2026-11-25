@@ -109,6 +109,18 @@ export type StdioTransportOptions = {
   readonly env?: NodeJS.ProcessEnv
   /** Agent diagnostics land here; they are never part of the protocol. */
   readonly onDiagnostic?: (line: string) => void
+  /**
+   * Spawn the child in a process group of its own.
+   *
+   * Some agents start a helper of their own (cursor runs a worker server), and
+   * killing the agent alone leaves that helper running — a refresh that
+   * promises "nothing is left behind" would be lying. A group of its own can
+   * be killed as a whole.
+   *
+   * Off by default: a session's agent is meant to live as long as the host
+   * does, and a group kill there would reach further than the agent.
+   */
+  readonly detached?: boolean
 }
 
 /** ACP over a child process's stdin/stdout, as codex and claude both speak it. */
@@ -118,6 +130,8 @@ export class StdioAcpTransport implements AcpTransport {
   private readonly beacon = new ActivityBeacon()
   private handler: (line: string) => void = () => {}
   private death: (reason: string) => void = () => {}
+  /** Resolves once the child is really gone (its `close` event, or a failed spawn). */
+  private readonly gone: Promise<void>
 
   private readonly options: StdioTransportOptions
 
@@ -130,6 +144,9 @@ export class StdioAcpTransport implements AcpTransport {
       ...(this.options.cwd === undefined ? {} : { cwd: this.options.cwd }),
       stdio: ['pipe', 'pipe', 'pipe'],
       ...(this.options.env === undefined ? {} : { env: this.options.env }),
+      // Its own process group, so the whole tree can be signalled at once
+      // (see `detached` in StdioTransportOptions).
+      ...(this.options.detached === true ? { detached: true } : {}),
     })
     // Typed as possibly-null because spawn's stdio is a union; asking for
     // pipes above is what makes them present.
@@ -161,6 +178,13 @@ export class StdioAcpTransport implements AcpTransport {
       this.death(`acp agent ${this.options.command} exited (code=${code ?? 'none'} signal=${signal ?? 'none'})`
         + (said.length === 0 ? '' : `: ${said}`))
     })
+    // The child's last word: it is gone when its streams close. `close` also
+    // fires for a spawn that never started (ENOENT), so a failed start does
+    // not leave a waiter hanging.
+    this.gone = new Promise<void>(resolve => {
+      this.child.once('close', () => { resolve() })
+      this.child.once('error', () => { resolve() })
+    })
   }
 
   lastFrameAt(): number {
@@ -188,8 +212,58 @@ export class StdioAcpTransport implements AcpTransport {
   }
 
   close(): void {
-    this.child.kill('SIGTERM')
+    this.signalTree('SIGTERM')
   }
+
+  /**
+   * Signal the child — and the helpers it started, when it has a group of
+   * its own.
+   *
+   * Killing the agent alone is not enough for the agents that run a helper
+   * (cursor's worker server): the helper outlives it and stays behind. With a
+   * group of its own, the whole tree gets the signal.
+   *
+   * @param signal - the signal to send.
+   */
+  private signalTree(signal: NodeJS.Signals): void {
+    if (this.options.detached === true && this.child.pid !== undefined) {
+      try {
+        process.kill(-this.child.pid, signal)
+        return
+      } catch {
+        // The group is gone (or we may not signal it): fall through to the
+        // child itself, which is the next best thing.
+      }
+    }
+    this.child.kill(signal)
+  }
+
+  /**
+   * Stop the child and wait until it is really gone.
+   *
+   * `close()` only asks: SIGTERM, and the process may ignore it, take its
+   * time, or be a supervisor that outlives its child. A caller that has to
+   * promise "no process is left behind" needs the second half — so this asks
+   * politely, waits, and then insists.
+   *
+   * @param graceMs - how long the child may take to exit on SIGTERM.
+   */
+  async shutdown(graceMs = 2_000): Promise<void> {
+    if (this.child.exitCode !== null || this.child.signalCode !== null) return
+    this.signalTree('SIGTERM')
+    const exited = await Promise.race([this.gone.then(() => true), delay(graceMs).then(() => false)])
+    if (exited) return
+    this.signalTree('SIGKILL')
+    await Promise.race([this.gone, delay(graceMs)])
+  }
+}
+
+/** Wait a while; the timer does not keep the process alive on its own. */
+function delay(ms: number): Promise<false> {
+  return new Promise<false>(resolve => {
+    const timer = setTimeout(() => { resolve(false) }, ms)
+    timer.unref?.()
+  })
 }
 
 /** The part of a WebSocket this transport needs, so tests can stand one in. */
@@ -410,11 +484,17 @@ export class GrokServeTransport implements AcpTransport {
   private handler: (line: string) => void = () => {}
   private death: (reason: string) => void = () => {}
   private closed = false
+  /** Resolves once the serve process is really gone. */
+  private readonly gone: Promise<void>
 
   private constructor(child: GrokServeChild, inner: WebSocketAcpTransport, beacon: ActivityBeacon) {
     this.child = child
     this.inner = inner
     this.beacon = beacon
+    this.gone = new Promise<void>(resolve => {
+      child.on('exit', () => { resolve() })
+      child.on('error', () => { resolve() })
+    })
     child.on('error', error => this.die(`acp agent grok could not run: ${error.message}`))
     child.on('exit', (code, signal) => this.die(
       `acp agent grok exited (code=${code ?? 'none'} signal=${signal ?? 'none'})`
@@ -494,5 +574,22 @@ export class GrokServeTransport implements AcpTransport {
     this.closed = true
     this.inner.close()
     this.child.kill('SIGTERM')
+  }
+
+  /**
+   * Stop the serve process and wait until it is really gone.
+   *
+   * Same contract as the stdio transport's `shutdown`: asking is not the same
+   * as the process being gone, and a caller promising "nothing is left
+   * behind" needs the difference.
+   *
+   * @param graceMs - how long the process may take to exit on SIGTERM.
+   */
+  async shutdown(graceMs = 2_000): Promise<void> {
+    this.close()
+    const exited = await Promise.race([this.gone.then(() => true), delay(graceMs).then(() => false)])
+    if (exited) return
+    this.child.kill('SIGKILL')
+    await Promise.race([this.gone, delay(graceMs)])
   }
 }

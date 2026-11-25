@@ -399,6 +399,7 @@ export function applyAcpPlugin(
     previous: runtimeModelReports.modelsOf(presetId),
     record: models => { runtimeModelReports.record(presetId, models) },
     ...(config.command === undefined ? {} : { command: config.command }),
+    ...(config.args === undefined ? {} : { args: config.args }),
   }))
   // A session whose work was stopped — archived with its turn running, most
   // visibly — must not leave its external connection open behind it. The stop

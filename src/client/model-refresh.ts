@@ -14,6 +14,21 @@ import type { RuntimeT } from './locales.ts'
 /** The exact route the refresh buttons POST to (mirrors the host row). */
 export const MODEL_REFRESH_ROUTE_PATH = '/acp-agent/models/refresh'
 
+/**
+ * Why the host could not fetch a list.
+ *
+ * The same codes the host uses (`model-probe.ts`), written out here because
+ * the browser half must not import host modules: the codes are the contract
+ * between the two halves, not a detail of either.
+ */
+export type ModelRefreshReason =
+  | 'not-logged-in'
+  | 'auth-failed'
+  | 'empty-list'
+  | 'timeout'
+  | 'spawn-failed'
+  | 'session-failed'
+
 /** What the host answers with (the wire form of ModelRefreshOutcome). */
 export type ModelRefreshReply =
   | {
@@ -31,6 +46,10 @@ export type ModelRefreshReply =
      *  mounted this provider, and `hint` names where its refresh lives. */
     readonly code?: 'busy' | 'not-ours'
     readonly hint?: 'codex' | 'qoder'
+    /** Why the refresh could not fetch a list, when the host knows. */
+    readonly reason?: ModelRefreshReason
+    /** The command that logs the agent in, when the host knows one. */
+    readonly login?: string
     readonly error: string
   }
 
@@ -82,9 +101,30 @@ export async function requestModelRefresh(fetchImpl: typeof fetch, presetId: str
       : `HTTP ${String(response.status)}`
     const code = record['code'] === 'busy' || record['code'] === 'not-ours' ? record['code'] : undefined
     const hint = record['hint'] === 'codex' || record['hint'] === 'qoder' ? record['hint'] : undefined
-    return { ok: false, ...(code === undefined ? {} : { code }), ...(hint === undefined ? {} : { hint }), error }
+    const reason = reasonOf(record['reason'])
+    const login = typeof record['login'] === 'string' && record['login'] !== '' ? record['login'] : undefined
+    return {
+      ok: false,
+      ...(code === undefined ? {} : { code }),
+      ...(hint === undefined ? {} : { hint }),
+      ...(reason === undefined ? {} : { reason }),
+      ...(login === undefined ? {} : { login }),
+      error,
+    }
   }
   return { ok: false, error: `HTTP ${String(response.status)} — unrecognised answer` }
+}
+
+/** The reason code, when the host named one we know. */
+function reasonOf(value: unknown): ModelRefreshReason | undefined {
+  return value === 'not-logged-in'
+    || value === 'auth-failed'
+    || value === 'empty-list'
+    || value === 'timeout'
+    || value === 'spawn-failed'
+    || value === 'session-failed'
+    ? value
+    : undefined
 }
 
 /**
@@ -99,6 +139,15 @@ export function refreshMessage(reply: ModelRefreshReply, say: RuntimeT): string 
       if (reply.hint === 'codex') return say('acpVisibility.refresh.codexHint')
       if (reply.hint === 'qoder') return say('acpVisibility.refresh.qoderHint')
       return say('acpVisibility.refresh.anotherPlugin')
+    }
+    // The host named a reason: say that, in words, and add the login command
+    // when there is one. "The agent is not logged in — run `qoderclicn login`"
+    // is an answer; the raw error text on its own is not.
+    if (reply.reason !== undefined) {
+      const line = say(reasonKeyOf(reply.reason), { reason: reply.error })
+      return reply.login === undefined
+        ? line
+        : `${line} ${say('acpVisibility.refresh.loginHint', { command: reply.login })}`
     }
     return say('acpVisibility.refresh.failed', { reason: reply.error })
   }
@@ -115,6 +164,18 @@ export function refreshMessage(reply: ModelRefreshReply, say: RuntimeT): string 
     notes.push(say('acpVisibility.refresh.unverified', { count: reply.unverifiedWindow }))
   }
   return notes.length === 0 ? line : `${line} ${notes.join(' ')}`
+}
+
+/** The dictionary key one reason code is written under. */
+function reasonKeyOf(reason: ModelRefreshReason): string {
+  switch (reason) {
+    case 'not-logged-in': return 'acpVisibility.refresh.notLoggedIn'
+    case 'auth-failed': return 'acpVisibility.refresh.authFailed'
+    case 'empty-list': return 'acpVisibility.refresh.emptyList'
+    case 'timeout': return 'acpVisibility.refresh.timeout'
+    case 'spawn-failed': return 'acpVisibility.refresh.spawnFailed'
+    case 'session-failed': return 'acpVisibility.refresh.sessionFailed'
+  }
 }
 
 function countOf(value: unknown): number {
