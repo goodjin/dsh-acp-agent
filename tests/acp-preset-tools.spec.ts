@@ -73,9 +73,10 @@ function pluginRows(body: string): { id: string; name: string }[] {
 describe('ACP 预设的 plugins 清单', () => {
   it('现算出来的 ACP 预置名单不为空，且与已知的那几个对得上', () => {
     // 名单为空会让下面的 each 一条都不跑——「全绿」其实什么都没检查。
-    // acp-qoder-cn 下线后（dsh-qodercn 直连行取代），ACP 预设从 6 条减到 5 条。
-    expect(ACP_PRESETS.length).toBeGreaterThanOrEqual(5)
-    expect(ACP_PRESETS).toEqual(expect.arrayContaining(['acp-codex', 'acp-claude', 'acp-doubao']))
+    // acp-qoder-cn 下线后（dsh-qodercn 直连行取代），ACP 预设从 6 条减到 5 条；
+    // 豆包（acp-doubao）下线后再减到 4 条（codex/claude/grok/cursor）。
+    expect(ACP_PRESETS.length).toBeGreaterThanOrEqual(4)
+    expect(ACP_PRESETS).toEqual(expect.arrayContaining(['acp-codex', 'acp-claude']))
   })
 
   it.each(ACP_PRESETS)('%s 除了自己的绑定行不再挂别的插件', preset => {

@@ -13,6 +13,7 @@ import type { CatalogDeps } from './catalog.ts'
 import type { AcpDialect } from './index.ts'
 import { isModelBackedAgent } from './model-plugins.ts'
 import type { AcpPresetConfig, PresetConfig } from './registry.ts'
+import { loadAllSelections } from './selection.ts'
 
 /**
  * One model as a live `session/new` reply reported it.
@@ -142,12 +143,22 @@ export function modelsOfPreset(
 /**
  * Register the ACP routes with the host's model registry.
  *
+ * Reads every built-in preset's positive whitelist off disk first, so the
+ * catalog's `modelsFor` filters against the in-memory snapshot from the very
+ * first publish — the picker never advertises a model the user has unchecked.
+ * The read is best-effort: a host that cannot read the file (no DSH_HOME, a
+ * permission edge) just keeps the default "everything is on", which is the
+ * pre-existing behavior and never breaks a session.
+ *
  * Silently does nothing when the host has no registry: dispatch still works
  * without it, and failing the whole attach over a missing catalog would take
  * the sessions down with it. Registers nothing when there are no presets,
  * because an empty registration is rejected by the runtime.
  */
-export function registerCatalog(ctx: unknown, config: PresetConfig, deps: CatalogDeps): void {
+export async function registerCatalog(ctx: unknown, config: PresetConfig, deps: CatalogDeps): Promise<void> {
+  // Best-effort: a read failure must not fail the attach. The snapshot stays
+  // empty (every preset = "no file = everything on"), which is the safe default.
+  await loadAllSelections().catch(() => {})
   const routes = catalogRoutes(config)
   if (routes.length === 0) return
   const registry = registryOf(ctx)

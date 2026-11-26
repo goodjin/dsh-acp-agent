@@ -36,7 +36,7 @@ import { GatewayConversations } from './gateway.ts'
 import type { GatewaySessionAppend } from './gateway.ts'
 import { followModelSelection, followPresetSelection } from './follow.ts'
 import { switchShared } from './switch-shared.ts'
-import { selectionOf } from './selection.ts'
+import { selectionOf } from './model-selection.ts'
 import type { CatalogDeps } from './catalog.ts'
 import { describeClaimedModels, isModelBackedAgent, modelPluginStream } from './model-plugins.ts'
 import { registerModelRefresher, refreshPresetModels } from './model-refresh.ts'
@@ -201,12 +201,12 @@ function projectDirectory(ctx: object, sessionId: string): string | undefined {
  * before the agent reaches the loop, so a throw here would strand that one
  * session with no step at all.
  */
-export function applyAcpPlugin(
+export async function applyAcpPlugin(
   ctx: AcpPluginContext,
   presetId: string,
   config: AcpPresetConfig,
   deps: AcpPluginDeps,
-): void {
+): Promise<void> {
   // Old rows still name a cwd. Say so once and then ignore it: using it
   // would put every project's new conversation in that one folder.
   if (config.cwd !== undefined) {
@@ -387,20 +387,6 @@ export function applyAcpPlugin(
   // mounted once per process, so exactly one cleaner owns every conversation.
   const registerExit = deps.onExit ?? ((clean: () => void) => { process.once('exit', clean) })
   registerExit(() => gateway.closeAll())
-  registerCatalog(ctx, presets, catalogDeps)
-  // The settings section's "刷新模型列表" button dispatches through the shared
-  // registry to THIS row's refresher, and the ledger it records into is the
-  // same `runtimeModelReports` the picker above reads — recording anywhere
-  // else would refresh a list the catalog never serves.
-  registerModelRefresher(presetId, () => refreshPresetModels({
-    presetId,
-    ...(config.agent === undefined ? {} : { agent: config.agent }),
-    declared: pickerModels,
-    previous: runtimeModelReports.modelsOf(presetId),
-    record: models => { runtimeModelReports.record(presetId, models) },
-    ...(config.command === undefined ? {} : { command: config.command }),
-    ...(config.args === undefined ? {} : { args: config.args }),
-  }))
   // A session whose work was stopped — archived with its turn running, most
   // visibly — must not leave its external connection open behind it. The stop
   // request ends the session's work; this closes the socket or child process
@@ -531,6 +517,28 @@ export function applyAcpPlugin(
       deps.report?.(`acp takeover failed: ${String(error)}`)
     }
   })
+
+  // Register the catalog and the model-list refresher LAST, after every event
+  // listener is wired. registerCatalog is async now (it reads each preset's
+  // positive whitelist off disk before the first publish); the takeover and
+  // switch listeners above cannot wait on that read — a session created the
+  // moment this row mounts must still be taken over — so the read runs here,
+  // after the listeners are in place, and a whitelist read that fails keeps the
+  // safe default (every model on) and never breaks the attach.
+  await registerCatalog(ctx, presets, catalogDeps)
+  // The settings section's "刷新模型列表" button dispatches through the shared
+  // registry to THIS row's refresher, and the ledger it records into is the
+  // same `runtimeModelReports` the picker above reads — recording anywhere
+  // else would refresh a list the catalog never serves.
+  registerModelRefresher(presetId, () => refreshPresetModels({
+    presetId,
+    ...(config.agent === undefined ? {} : { agent: config.agent }),
+    declared: pickerModels,
+    previous: runtimeModelReports.modelsOf(presetId),
+    record: models => { runtimeModelReports.record(presetId, models) },
+    ...(config.command === undefined ? {} : { command: config.command }),
+    ...(config.args === undefined ? {} : { args: config.args }),
+  }))
 }
 
 /** The report port, defaulting to nowhere. */

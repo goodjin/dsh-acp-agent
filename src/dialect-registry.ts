@@ -14,7 +14,6 @@
 import { claudeDialect } from './dialects/claude.ts'
 import { codexDialect } from './dialects/codex.ts'
 import { cursorDialect } from './dialects/cursor.ts'
-import { doubaoDialect } from './dialects/doubao.ts'
 import { grokDialect } from './dialects/grok.ts'
 import { qoderDialect } from './dialects/qoder.ts'
 import type { AcpDialect } from './dialects/types.ts'
@@ -25,7 +24,6 @@ export const DIALECTS: Readonly<Record<string, AcpDialect>> = {
   claude: claudeDialect,
   codex: codexDialect,
   cursor: cursorDialect,
-  doubao: doubaoDialect,
   qoder: qoderDialect,
 }
 

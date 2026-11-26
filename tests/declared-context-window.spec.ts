@@ -94,7 +94,6 @@ const AGENT_ROWS = [
   'acp-cursor',
   'acp-zcode',
   'acp-minimax',
-  'acp-doubao',
 ] as const
 
 describe('声明清单的上下文窗口', () => {

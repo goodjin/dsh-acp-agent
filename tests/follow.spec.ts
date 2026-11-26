@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest'
 import { decideModelFollow, decidePresetFollow, followModelSelection, followPresetSelection } from '../src/follow.ts'
 import type { FollowServices } from '../src/follow.ts'
-import type { SelectionLike } from '../src/selection.ts'
+import type { SelectionLike } from '../src/model-selection.ts'
 
 const GROK = { presetId: 'acp-grok', models: [{ id: 'grok-4.7' }, { id: 'grok-4.6' }] }
 

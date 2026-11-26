@@ -30,8 +30,8 @@
  */
 
 import { presetOfState } from './dispatch.ts'
-import { baseIdOf, pendingSelectionOf, selectionOf } from './selection.ts'
-import type { SelectionLike } from './selection.ts'
+import { baseIdOf, pendingSelectionOf, selectionOf } from './model-selection.ts'
+import type { SelectionLike } from './model-selection.ts'
 import { servicesOf, startedOf } from './switch-mount.ts'
 import type { HostServices } from './switch-mount.ts'
 

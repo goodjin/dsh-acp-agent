@@ -200,8 +200,7 @@ export function refreshGlobalCatalogSnapshot(getModelDirectories: () => unknown)
   try {
     const service = getModelDirectories()
     if (typeof service !== 'object' || service === null) return
-    // Cordis 每次读都给新的调用方代理；落到底层实例上找共享 catalog（与
-    // acp-visibility-filter 同一套 unwrap）。
+    // Cordis 每次读都给新的调用方代理；落到底层实例上找共享 catalog。
     const original = (service as Record<symbol, unknown>)[Symbol.for('cordis.original')]
     const instance = typeof original === 'object' && original !== null ? original : service
     const catalog = (instance as { catalog?: unknown }).catalog

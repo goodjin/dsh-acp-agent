@@ -7,10 +7,13 @@
  * agent but the model list stays native-only.
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { attachAcpDispatch } from '../src/service.ts'
 import { providerRoute } from '../src/catalog.ts'
+import { catalogAdapter } from '../src/catalog.ts'
 import { catalogRoutes, modelsOfPreset } from '../src/catalog-registration.ts'
+import { setCurrentSelection } from '../src/selection.ts'
+import { grokDialect } from '../src/dialects/grok.ts'
 import type { PresetConfig } from '../src/registry.ts'
 
 const CONFIG: PresetConfig = {
@@ -98,24 +101,24 @@ describe('a preset that opts out of effort collapse', () => {
 import { catalogAdapter as catalogAdapterFactory } from '../src/catalog.ts'
 
 describe('attachAcpDispatch catalog wiring', () => {
-  it('registers one adapter covering every preset route', () => {
+  it('registers one adapter covering every preset route', async () => {
     const llmPort = llm()
-    attachAcpDispatch(ctxWith(llmPort), CONFIG, { answerPermission: async () => ({ outcome: 'reject' }), positionOf: () => ({ turn: 1, step: 1 }) })
+    await attachAcpDispatch(ctxWith(llmPort), CONFIG, { answerPermission: async () => ({ outcome: 'reject' }), positionOf: () => ({ turn: 1, step: 1 }) })
     expect(llmPort.registrations).toHaveLength(1)
     expect(llmPort.registrations[0]!.providers.sort()).toEqual(['acp:acp-claude', 'acp:acp-codex', 'acp:acp-grok'])
   })
 
-  it('registers nothing when there are no presets', () => {
+  it('registers nothing when there are no presets', async () => {
     // An empty registration is rejected by the runtime, so it must not be made.
     const llmPort = llm()
-    attachAcpDispatch(ctxWith(llmPort), { presets: {} }, { answerPermission: async () => ({ outcome: 'reject' }), positionOf: () => ({ turn: 1, step: 1 }) })
+    await attachAcpDispatch(ctxWith(llmPort), { presets: {} }, { answerPermission: async () => ({ outcome: 'reject' }), positionOf: () => ({ turn: 1, step: 1 }) })
     expect(llmPort.registrations).toEqual([])
   })
 
-  it('registers nothing when the host has no model registry', () => {
+  it('registers nothing when the host has no model registry', async () => {
     // A host without one is not ours to fail over: the dispatch still runs.
     const ctx = { on: () => {} } as never
-    expect(() => { attachAcpDispatch(ctx, CONFIG, { answerPermission: async () => ({ outcome: 'reject' }), positionOf: () => ({ turn: 1, step: 1 }) }) }).not.toThrow()
+    await expect(attachAcpDispatch(ctx, CONFIG, { answerPermission: async () => ({ outcome: 'reject' }), positionOf: () => ({ turn: 1, step: 1 }) })).resolves.toBeUndefined()
   })
 })
 
@@ -142,5 +145,44 @@ describe('没有传输方言的模型行', () => {
       presets: { 'acp-grok': { agent: 'grok', models: [{ id: 'grok-4', name: 'grok' }] } },
     }
     expect(modelsOfPreset(config, noDialect, 'acp-grok')).toEqual([])
+  })
+})
+
+describe('正向白名单：modelsFor 按勾选过滤', () => {
+  const CONFIG: PresetConfig = {
+    presets: {
+      'acp-grok': { agent: 'grok', models: [{ id: 'grok-4.7', name: 'Grok 4.7' }, { id: 'grok-4.7-fast', name: 'Grok 4.7 Fast' }] },
+    },
+  }
+  const grokDialectInstance = grokDialect
+  const deps = {
+    modelsOf: (presetId: string) => modelsOfPreset(CONFIG, { dialectFor: () => grokDialectInstance }, presetId),
+    dialectOf: () => grokDialectInstance,
+  }
+
+  afterEach(() => {
+    // 清掉内存快照，别污染下一个用例。
+    setCurrentSelection('acp-grok', undefined)
+  })
+
+  it('没勾过（undefined）→ 全在，默认行为', async () => {
+    setCurrentSelection('acp-grok', undefined)
+    const adapter = catalogAdapter(CONFIG, deps)
+    const models = await adapter.listModels(providerRoute('acp-grok'))
+    expect(models.map(m => m.id)).toEqual(['grok-4.7', 'grok-4.7-fast'])
+  })
+
+  it('勾了一部分 → 只留勾中的，未勾的不出现', async () => {
+    setCurrentSelection('acp-grok', ['grok-4.7'])
+    const adapter = catalogAdapter(CONFIG, deps)
+    const models = await adapter.listModels(providerRoute('acp-grok'))
+    expect(models.map(m => m.id)).toEqual(['grok-4.7'])
+  })
+
+  it('空数组（一个都不勾）→ 当作没勾过，全在，防零模型', async () => {
+    setCurrentSelection('acp-grok', [])
+    const adapter = catalogAdapter(CONFIG, deps)
+    const models = await adapter.listModels(providerRoute('acp-grok'))
+    expect(models.map(m => m.id)).toEqual(['grok-4.7', 'grok-4.7-fast'])
   })
 })

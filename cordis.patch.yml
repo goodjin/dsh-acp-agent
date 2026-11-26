@@ -87,6 +87,12 @@
     # 同一提供方的并发刷新在这里折成 busy，不会起第二个探针进程或重复请求。
     - id: acp-agent-model-refresh
       name: '@goodjin2/dsh-acp-agent/model-refresh'
+    # 模型选择「正向白名单」的读写路由：设置段按 preset GET 各预设 RAW 模型清单 +
+    # 用户勾了哪些，POST 把某预设的勾选落盘到 ${DSH_HOME}/acp-<preset>/selection.json，
+    # 宿主发布模型行清单时按它过滤（勾选 = 进选择器，未勾 = 不展示）。与 model-refresh
+    # 同款准入（connection.admit）、同款 200+JSON 信封。
+    - id: acp-agent-selection
+      name: '@goodjin2/dsh-acp-agent/selection'
     - id: acp-codex
       name: '@deepseek-ai/dsh-agent-preset'
       config:
@@ -545,43 +551,6 @@
                   name: MiniMax M3
                   description: MiniMax Code 登录
                   contextWindow: 512000
-    - id: acp-doubao
-      name: '@deepseek-ai/dsh-agent-preset'
-      config:
-        id: acp-doubao
-        name: Doubao
-        order: 57
-        plugins:
-          - id: acp-doubao-binding
-            name: '@goodjin2/dsh-acp-agent'
-            config:
-              presetId: acp-doubao
-              agent: doubao
-              hideFromRoster: true
-              # 我们自己的 ACP 服务（src/doubao/）：它驱动豆包桌面端那个
-              # Chromium 外壳的网页，把回答从页面上读回来。豆包的模型请求由它
-              # 自己发出（浏览器端签名），我们不直连接口。
-              #
-              # command 指向 node，args 指向本插件构建出的服务入口
-              # （package.json 的 bin: doubao-acp）。路径按本机 profile 的
-              # link 安装写死，与其它几行 agent 一样的做法。
-              command: /Users/good/bin/node
-              args:
-                - /Users/good/.dsh/profiles/desktop/node_modules/@goodjin2/dsh-acp-agent/lib/src/doubao/main.js
-              # 驱动浏览器的一轮比本地 CLI 慢：页面轮询 + 豆包自己的工具，
-              # 120 秒的默认静默看门狗会误杀，放宽到 5 分钟。
-              stallMs: 300000
-              # 豆包没有可切换的模型清单，选择器只给一项。
-              mode: default
-              models:
-                - id: doubao-default
-                  name: 豆包
-                  description: 豆包桌面端 · 网页版模型
-                  # 窗口取 256K：豆包网页版默认模型属 Seed 系列（实测请求里的
-                  # model_config 是 model_item_key:"0"，即默认那一档），字节官方
-                  # 公布 Seed1.6 系列支持 256K 上下文（seed.bytedance.com）。
-                  # 不写，切到豆包会以 "no context capacity" 失败（2026-11-07 现场）。
-                  contextWindow: 1100000
 
 # 压缩的摘要请求要有一条能服务后台请求的路由。
 #

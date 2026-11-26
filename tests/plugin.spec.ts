@@ -181,7 +181,7 @@ describe('applyAcpPlugin', () => {
     expect(calls).toBe(2)
   })
 
-  it('leaves a zcode session on the native loop and still registers its models', () => {
+  it('leaves a zcode session on the native loop and still registers its models', async () => {
     const registered: { routes: string[] }[] = []
     const context = {
       ...ctx(),
@@ -190,7 +190,7 @@ describe('applyAcpPlugin', () => {
         : undefined,
     }
     const patched: unknown[] = []
-    applyAcpPlugin(context, 'acp-zcode', {
+    await applyAcpPlugin(context, 'acp-zcode', {
       agent: 'zcode',
       models: [{ id: 'GLM-5.3', name: 'GLM 5.3' }],
     }, { install: agent => { patched.push(agent) } })
@@ -199,9 +199,11 @@ describe('applyAcpPlugin', () => {
     expect(registered[0]?.routes).toEqual(['acp:acp-zcode'])
   })
 
-  it('registers its model route with the host catalog', () => {
+  it('registers its model route with the host catalog', async () => {
     // The catalogue is what makes the agent's models appear in the picker;
     // mounted here because this is the function the loaded entry calls.
+    // registerCatalog is async now (it reads the per-preset whitelist off
+    // disk first), so the registration lands after a microtask.
     const registered: { routes: string[] }[] = []
     const context = {
       ...ctx(),
@@ -209,7 +211,7 @@ describe('applyAcpPlugin', () => {
         ? { registerAdapter: (routes: string[]) => { registered.push({ routes }) } }
         : undefined,
     }
-    applyAcpPlugin(context, 'acp-grok', {
+    await applyAcpPlugin(context, 'acp-grok', {
       agent: 'grok',
       url: 'ws://127.0.0.1:2419',
       models: [{ id: 'grok-4.7', name: 'Grok 4.7' }],
@@ -574,7 +576,7 @@ describe('加载路径的模型报告真的进目录（applyAcpPlugin 端到端�
       },
     }
     const scripted = scriptedTransport()
-    applyAcpPlugin(context, 'acp-codex', { agent: 'codex', command: 'codex-acp', cwd: pinned }, {
+    await applyAcpPlugin(context, 'acp-codex', { agent: 'codex', command: 'codex-acp', cwd: pinned }, {
       install: () => {},
       transport: () => scripted,
     })
@@ -619,7 +621,7 @@ describe('加载路径的模型报告真的进目录（applyAcpPlugin 端到端�
     }
     const scripted = scriptedTransport()
     const reports: string[] = []
-    applyAcpPlugin(context, 'acp-codex', { agent: 'codex', command: 'codex-acp', cwd: '/Users/good/Documents/deepseek-harness' }, {
+    await applyAcpPlugin(context, 'acp-codex', { agent: 'codex', command: 'codex-acp', cwd: '/Users/good/Documents/deepseek-harness' }, {
       install: () => {},
       transport: () => scripted,
       report: message => { reports.push(message) },
@@ -654,7 +656,7 @@ describe('加载路径的模型报告真的进目录（applyAcpPlugin 端到端�
       },
     }
     const scripted = scriptedTransport()
-    applyAcpPlugin(context, 'acp-codex', { agent: 'codex', command: 'codex-acp' }, {
+    await applyAcpPlugin(context, 'acp-codex', { agent: 'codex', command: 'codex-acp' }, {
       install: () => {},
       sessionAppend: (sessionId: string) => (sessionId === 's1'
         ? ((type: string, payload: unknown) => { written.push({ type, payload }); return { seq: written.length } }) as never
@@ -748,7 +750,9 @@ describe('加载路径的模型报告真的进目录（applyAcpPlugin 端到端�
     // The same ledger the standalone entry's per-turn gate reads: the report
     // must land HERE, or the picker and the gate would judge different lists.
     const reports = runtimeModels()
-    applyAcpPlugin(withRegistry, 'acp-grok', {
+    // registerCatalog is async now (reads the whitelist off disk first), so
+    // await the mount before driving a turn — otherwise `adapter` is unset.
+    await applyAcpPlugin(withRegistry, 'acp-grok', {
       agent: 'grok',
       url: 'ws://127.0.0.1:2419',
       // A configured guess the report must replace once it lands.
@@ -798,13 +802,13 @@ describe('加载路径的模型报告真的进目录（applyAcpPlugin 端到端�
 })
 
 describe('一行没有传输方言的模型', () => {
-  it('照样注册进切换网，模型才出现在模型列表里', () => {
+  it('照样注册进切换网，模型才出现在模型列表里', async () => {
     // minimaxi 这类行没有子进程也没有 WebSocket 方言：它由 DSH 自己的循环
     // 应答。曾经这里只认 zcode，于是这一行挂上了却什么都不注册，界面上的
     // 表现是「模型在列表里选了却没人应答」。
     switchShared.registerPreset('acp-test-unmount', { agent: 'grok' }, [])
     const context = ctx()
-    applyAcpPlugin(context, 'acp-minimaxi', { agent: 'minimaxi' }, { install: () => {} })
+    await applyAcpPlugin(context, 'acp-minimaxi', { agent: 'minimaxi' }, { install: () => {} })
     expect(switchShared.config().presets['acp-minimaxi']?.agent).toBe('minimaxi')
   })
 })

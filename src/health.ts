@@ -61,13 +61,13 @@ export const EXPECTED_ROWS: readonly RowExpectation[] = [
   { id: 'acp-agent-grok-quota', what: 'Grok 额度接口' },
   { id: 'acp-agent-delegation-route', what: '外部 agent 委派回调路由（superpowers 委派服务的宿主入口）' },
   { id: 'acp-agent-model-refresh', what: '模型清单刷新路由（设置段「刷新模型列表」按钮的宿主入口）' },
+  { id: 'acp-agent-selection', what: '模型选择白名单读写路由（设置段勾选的宿主入口）' },
   { id: 'acp-codex', what: 'Codex 预置' },
   { id: 'acp-claude', what: 'Claude 预置' },
   { id: 'acp-grok', what: 'Grok 预置' },
   { id: 'acp-cursor', what: 'Cursor 预置' },
   { id: 'acp-zcode', what: 'ZCode 预置' },
   { id: 'acp-minimax', what: 'MiniMax 预置' },
-  { id: 'acp-doubao', what: '豆包桌面端预置' },
 ]
 
 /** 一行的核对结果。 */

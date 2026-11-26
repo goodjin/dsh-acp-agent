@@ -1,10 +1,10 @@
 /*
- * The ACP visibility settings section.
+ * The ACP model-selection settings section.
  *
- * Same shell-derived rules as panel.module.css: only --dsw-* tokens, so the
- * section follows the active theme. It sits in the settings dialog beside the
- * hosts section and reads as a plain form: one card per agent, its models in
- * a compact list.
+ * Same shell-derived rules as the other section css: only --dsw-* tokens, so
+ * the section follows the active theme. One card per preset, each listing its
+ * models as checkboxes (checked = in the picker). Unchecked models never appear
+ * in the model selector; an empty selection falls back to "all on".
  */
 
 .root {
@@ -84,13 +84,13 @@
   flex-wrap: wrap;
 }
 
-.agents {
+.presets {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.agent {
+.preset {
   border: 1px solid var(--dsw-alias-settings-card-stroke);
   border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-settings-card-fill);
@@ -100,25 +100,14 @@
   gap: 6px;
 }
 
-.agentHead {
+.presetHead {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  cursor: pointer;
-}
-
-.toggle input:disabled {
-  cursor: default;
-}
-
-.agentName {
+.presetName {
   font-weight: 600;
   font-size: 13px;
 }
@@ -127,12 +116,6 @@
   color: var(--dsw-alias-label-caption);
   font-size: 12px;
   font-family: var(--dsw-font-family-mono, monospace);
-}
-
-/* The row's refresh button rides the head's flex line, pushed to the far end
-   so it reads as a per-row action rather than part of the label. */
-.agentHeadAction {
-  margin-left: auto;
 }
 
 .note {

@@ -40,6 +40,10 @@ export type ClientLocaleKey =
   | 'acpVisibility.refresh.notLoggedIn' | 'acpVisibility.refresh.authFailed' | 'acpVisibility.refresh.emptyList'
   | 'acpVisibility.refresh.timeout' | 'acpVisibility.refresh.spawnFailed' | 'acpVisibility.refresh.sessionFailed'
   | 'acpVisibility.refresh.loginHint'
+  | 'acpSelection.label' | 'acpSelection.title' | 'acpSelection.intro'
+  | 'acpSelection.summary' | 'acpSelection.reload' | 'acpSelection.retry'
+  | 'acpSelection.loading' | 'acpSelection.empty' | 'acpSelection.noModels' | 'acpSelection.error'
+  | 'acpSelection.modelToggleNamed' | 'acpSelection.allOn' | 'acpSelection.custom'
   | 'progress.preparing' | 'progress.loading' | 'progress.ready'
   | 'storagePosture.local'
 
@@ -83,6 +87,19 @@ export const zh: Record<ClientLocaleKey, string> = {
   'quota.login.title': '登录过期或没有登录：点开授权链接重新登录，授权完成后这一行会自动恢复',
   'recovery.interrupted.note': '本轮被中断，{steps} 项过程内容已折叠',
   'recovery.interrupted.expand': '展开本轮过程',
+  'acpSelection.label': 'acp-agent',
+  'acpSelection.title': '选择可用模型',
+  'acpSelection.intro': '选择各 ACP 预设下可用的模型。未勾选的模型不会出现在模型选择器里。每个预设的勾选独立保存。宿主自带提供方与其他插件的设置不受影响。',
+  'acpSelection.summary': '共 {presets} 个预设、{models} 个模型。',
+  'acpSelection.reload': '重新读取',
+  'acpSelection.retry': '重试',
+  'acpSelection.loading': '正在读取各预设的模型清单……',
+  'acpSelection.empty': '这台主机没有列出任何 ACP 预设。',
+  'acpSelection.noModels': '这个预设没有可列出的模型。',
+  'acpSelection.error': '读取模型清单失败，请重试。',
+  'acpSelection.modelToggleNamed': '{name}（{preset}）',
+  'acpSelection.allOn': '当前用的是默认那一份（全部模型都在）。',
+  'acpSelection.custom': '当前用的是你自己勾选的那一份。',
   'acpVisibility.label': '提供方与模型',
   'acpVisibility.title': '屏蔽提供方与模型',
   'acpVisibility.intro': '被屏蔽的提供方不会出现在模型选择里（输入框的模型入口与 /model 弹窗）；提供方未被屏蔽时，也可以只屏蔽它下面的个别模型。屏蔽只作用于选择列表：官方设置里的「模型」照旧列出全部、密钥不受影响，随时可以恢复。选择保存在这台机器上，换浏览器不会丢。',
@@ -166,6 +183,19 @@ export const en: Record<ClientLocaleKey, string> = {
   'quota.login.title': 'Login expired or missing: open the authorization link to sign in again; this row comes back on its own once you have',
   'recovery.interrupted.note': 'This turn was interrupted; {steps} process items are folded',
   'recovery.interrupted.expand': 'Show this turn’s process',
+  'acpSelection.label': 'acp-agent',
+  'acpSelection.title': 'Choose available models',
+  'acpSelection.intro': 'Pick which models each ACP preset may offer. Unchecked models never appear in the model picker. Each preset’s selection is saved independently. The host’s built-in providers and other plugins’ settings are unaffected.',
+  'acpSelection.summary': '{presets} presets, {models} models.',
+  'acpSelection.reload': 'Reload',
+  'acpSelection.retry': 'Retry',
+  'acpSelection.loading': 'Reading each preset’s model list…',
+  'acpSelection.empty': 'This host lists no ACP presets.',
+  'acpSelection.noModels': 'This preset lists no models.',
+  'acpSelection.error': 'Reading the model list failed. Please retry.',
+  'acpSelection.modelToggleNamed': '{name} ({preset})',
+  'acpSelection.allOn': 'Currently using the default set (all models on).',
+  'acpSelection.custom': 'Currently using your own selection.',
   'acpVisibility.label': 'Providers & models',
   'acpVisibility.title': 'Hide providers and models',
   'acpVisibility.intro': 'A hidden provider disappears from the model pickers (the composer model menu and the /model popup); while a provider stays listed, individual models can be hidden too. Hiding only affects the pickers: the official Models settings keep listing everything and no key is touched, so restoring never asks for a key again. This choice is stored on this machine and survives a browser switch.',

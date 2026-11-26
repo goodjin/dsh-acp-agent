@@ -54,11 +54,11 @@ export type AttachOptions = FactoryDeps & {
   positionOf(agent: AgentLike): { readonly turn: number; readonly step: number } | undefined
 }
 
-export function attachAcpDispatch(
+export async function attachAcpDispatch(
   ctx: ContextLike,
   config: PresetConfig,
   options: AttachOptions,
-): void {
+): Promise<void> {
   // The agent's own `session/new` reports, per preset, shared by the factory
   // seam and the catalog registration below, so the picker and the sessions
   // read the same source.
@@ -77,17 +77,9 @@ export function attachAcpDispatch(
 
   // What makes the external agent's models appear in DSH's own model picker:
   // the catalog is global to this Host generation and already read by it. The
-  // list reads the agent's own report once a session has opened, and degrades
-  // to the configured list until then.
-  registerCatalog(ctx, config, {
-    modelsOf: presetId => modelsOfPreset(config, factory, presetId),
-    runtimeModelsOf: presetId => runtimeModelReports.modelsOf(presetId),
-    dialectOf: presetId => table.get(presetId)?.dialect,
-    modelStream: modelPluginStream(config, {
-      onRuntimeModels: (presetId, models) => { runtimeModelReports.record(presetId, models) },
-    }),
-  })
-
+  // The takeover listener is registered synchronously, before the catalog read:
+  // a session created the moment this row mounts must still be taken over, and
+  // the listener cannot wait on the whitelist disk read below.
   ctx.on('agent/created', payload => {
     const agent = payload.agent
     const binding = resolvePreset(agent as AgentLike, table, options.presetOf)
@@ -103,5 +95,20 @@ export function attachAcpDispatch(
         projectStepContent(result.frames, { turn: position.turn, step: position.step, dialect: binding.dialect }),
       write: events => options.write?.(agent, events),
     })
+  })
+
+  // The catalog is global to this Host generation and already read by it. The
+  // list reads the agent's own report once a session has opened, and degrades
+  // to the configured list until then. registerCatalog is async now (it reads
+  // each preset's positive whitelist off disk first), but the picker does not
+  // need the takeover — it only needs the models eventually, so the read runs
+  // here without blocking the listener above.
+  await registerCatalog(ctx, config, {
+    modelsOf: presetId => modelsOfPreset(config, factory, presetId),
+    runtimeModelsOf: presetId => runtimeModelReports.modelsOf(presetId),
+    dialectOf: presetId => table.get(presetId)?.dialect,
+    modelStream: modelPluginStream(config, {
+      onRuntimeModels: (presetId, models) => { runtimeModelReports.record(presetId, models) },
+    }),
   })
 }

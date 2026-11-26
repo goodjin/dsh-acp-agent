@@ -25,20 +25,16 @@ import type { PropsRuntime, SlotCore, SlotMap } from '@deepseek-ai/dsh-client-ui
 import { registerModelLabel } from './model-label.tsx'
 import { createQuotaPoller, QUOTA_PILL_SPECS, registerQuotaDockPills, remoteBalanceFetcher, routeQuotaFetcher } from './quota-pill.ts'
 import type { QuotaPillServices } from './quota-pill.ts'
-import { registerInterruptedTurnRecovery } from './interrupted-turn-recovery.ts'
-import { registerAcpVisibilitySection } from './acp-visibility-panel.tsx'
-import { startAcpVisibility } from './acp-visibility.ts'
-import type { AcpVisibilityStore } from './acp-visibility.ts'
-import { createAcpCatalogStore } from './acp-visibility-catalog.ts'
 import { refreshGlobalCatalogSnapshot } from './model-refresh.ts'
-import { installAcpVisibilityFilter } from './acp-visibility-filter.ts'
+import { registerInterruptedTurnRecovery } from './interrupted-turn-recovery.ts'
+import { SELECTION_ROUTE_PATH, registerAcpSelectionSection } from './acp-selection-section.tsx'
+import { createElement } from 'react'
 import { AgentSwitchHandoverCard, agentSwitchHandoverDefinition, registerAgentSwitchHandoverSurface } from './handover-card.ts'
 import { registerLostInputSurface } from './lost-input.ts'
 import { registerAcpProcessSurface } from './acp-process-surface.tsx'
 import { createSwitchProgressStore, startSwitchProgressSurface } from './switch-progress.ts'
 import { NAMESPACE, en, fallbackT, ja, pt, ru, es, fr, de, zh } from './locales.ts'
 import type { RuntimeT } from './locales.ts'
-import { createElement } from 'react'
 
 export type ClientPanelContext = ClientContext & {
   readonly locale?: {
@@ -207,28 +203,19 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
     return () => {}
   }, say)
 
-  // ACP visibility: store + catalog + filter + settings section
-  safeRegister('acp visibility', () => {
-    const storage = { getItem: (k: string) => localStorage.getItem(k), setItem: (k: string, v: string) => localStorage.setItem(k, v) }
-    const visibility = startAcpVisibility(storage, (msg) => say(`acp visibility: ${msg}`))
-    // 目录 store 要的是「读一次目录」的函数，不是 ctx：早先这里传了 ctx，于是
-    // store 里 `read()` 调的是那个对象 → TypeError，设置页永远显示
-    // 「读取模型目录失败：e is not a function」（2026-11-03 现场，压缩后的名字）。
-    const catalog = createAcpCatalogStore(catalogReaderOf(ctx))
-    const report: Log = (msg) => say(`acp visibility: ${msg}`)
-
-    // Install picker filter
-    mountAcpVisibilityFilter(ctx, visibility, report)
-
-    // Register settings section
+  // ACP model-selection settings section: per-preset positive whitelist
+  safeRegister('acp selection section', () => {
     const slots = (ctx as { slots: unknown }).slots
-    const face: Record<string, unknown> = { visibility, catalog, t }
     const reader = catalogReaderOf(ctx)
+    const face: Record<string, unknown> = { t }
     if (reader !== undefined) face.catalogReader = reader
-    // 刷新成功后让输入框选择器的全局目录快照失效重载。服务现取（apply 时它由
+    // 勾选落盘后让输入框选择器的全局目录快照失效重载——它 ready 即回缓存，
+    // 不失效就永远是旧清单（白名单改动要当场生效）。服务现取（apply 时它由
     // 别的模块提供、未必已起；取不到或形状不对由守卫助手静默降级）。
     face.refreshGlobalCatalog = () => { refreshGlobalCatalogSnapshot(() => ctx.get('modelDirectories')) }
-    registerAcpVisibilitySection(slots as never, face as never, () => t('acpVisibility.label'))
+    face.readSelections = readSelectionsOf
+    face.saveSelection = saveSelectionOf
+    registerAcpSelectionSection(slots as never, face as never, () => t('acpSelection.label'))
 
     return () => {}
   }, say)
@@ -236,35 +223,27 @@ export function apply(ctx: any, _config: unknown, log?: Log): () => void {
   return () => {}
 }
 
-function mountAcpVisibilityFilter(
-  ctx: any,
-  visibility: AcpVisibilityStore,
-  report: Log,
-): void {
-  const attach = (service: unknown, effect: (dispose: () => void) => void): void => {
-    const dispose = installAcpVisibilityFilter(service, visibility, report)
-    if (dispose !== undefined) effect(dispose)
-  }
-  const injector = (ctx as any).inject
-  if (typeof injector === 'function') {
-    (injector as Function).call(ctx, ['modelDirectories'], (child: unknown) => {
-      const childEffect = boundMethod(child, 'effect')
-      attach(propertyOf(child, 'modelDirectories'), dispose => {
-        if (childEffect !== undefined) childEffect(() => dispose)
-        else (ctx as any).effect(() => dispose, 'acp-agent: acp visibility picker filter')
-      })
-    })
-    return
-  }
-  let service: unknown
-  try {
-    service = ctx.get('modelDirectories')
-  } catch {
-    service = undefined
-  }
-  attach(service, dispose => {
-    (ctx as any).effect(() => dispose, 'acp-agent: acp visibility picker filter')
+/**
+ * 读 `/acp-agent/selection`（GET）：列出各 preset 的 RAW 模型 + 用户勾了哪些。
+ * 坏情况都折成 reject（section 接住显示重试行），从不让设置段整个崩。
+ */
+async function readSelectionsOf(): Promise<unknown> {
+  const res = await fetch(SELECTION_ROUTE_PATH, { headers: { accept: 'application/json' } })
+  return await res.json()
+}
+
+/**
+ * POST `/acp-agent/selection`：保存某 preset 的勾选（`ids` 缺省 = 回到默认全在）。
+ */
+async function saveSelectionOf(preset: string, ids: readonly string[] | undefined): Promise<void> {
+  const body: Record<string, unknown> = { preset }
+  if (ids !== undefined) body['ids'] = [...ids]
+  const res = await fetch(SELECTION_ROUTE_PATH, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
   })
+  if (!res.ok) throw new Error(`保存失败（${String(res.status)}）`)
 }
 
 function catalogReaderOf(ctx: ClientPanelContext): (() => Promise<unknown>) | undefined {

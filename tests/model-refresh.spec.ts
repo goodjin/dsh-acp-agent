@@ -244,7 +244,7 @@ describe('refreshPresetModels（按 kind 分派）', () => {
 
   it('其余 kind：如实回「已重读」，账本不写', async () => {
     const recorded: ReportedModel[][] = []
-    for (const agent of ['claude', 'codex', 'cursor', 'qoder', 'minimaxi', 'doubao']) {
+    for (const agent of ['claude', 'codex', 'cursor', 'qoder', 'minimaxi']) {
       const outcome = await refreshPresetModels({
         presetId: `acp-${agent}`,
         agent,

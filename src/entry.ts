@@ -37,9 +37,9 @@ import { markRosterHidden } from './roster-marks.ts'
 import { makeContentWriter } from './content-writer.ts'
 import type { SessionAppend } from './content-writer.ts'
 import type { GatewaySessionAppend } from './gateway.ts'
-import { decideSelection, pendingSelectionOf, selectionModelsOf, selectionOf } from './selection.ts'
+import { decideSelection, pendingSelectionOf, selectionModelsOf, selectionOf } from './model-selection.ts'
 import { runtimeModels, runtimeModelsWithDeclaredWindows } from './catalog-registration.ts'
-import type { SelectionSource } from './selection.ts'
+import type { SelectionSource } from './model-selection.ts'
 import { switchDrivenSession } from './switch-mount.ts'
 import { switchShared } from './switch-shared.ts'
 import type { AcpPresetConfig } from './registry.ts'
@@ -458,7 +458,13 @@ export function apply(ctx: unknown, config: Config): void {
   // in place for, and the gateway needs a position to write tool cards.
   const sessionPositionOf = readSessionPosition(host)
 
-  applyAcpPlugin(host, config.presetId, preset, {
+  // applyAcpPlugin reads the per-preset whitelist off disk before it registers
+  // the catalog — async. The host calls this row's `apply` synchronously, so
+  // the read runs in the background and registers the catalog when it lands.
+  // A whitelist read that fails keeps the safe default (every model on) and
+  // never breaks the attach, so the unawaited promise needs only a catch that
+  // names the failure, never a rethrow.
+  void applyAcpPlugin(host, config.presetId, preset, {
     runtimeModels: runtimeModelReports,
     delegation: delegationMountSurface(host),
     ...(readProjection(host) === undefined ? {} : { presetOf: readProjection(host) }),
@@ -509,6 +515,8 @@ export function apply(ctx: unknown, config: Config): void {
       })
       if (!installed) host.logger?.warn(`acp takeover: ${line} could not be installed`)
     },
+  }).catch(error => {
+    host.logger?.warn(`acp-agent: catalog registration failed: ${error instanceof Error ? error.message : String(error)}`)
   })
 }
 

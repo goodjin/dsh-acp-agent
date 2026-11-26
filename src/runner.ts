@@ -9,7 +9,7 @@
 
 import type { AcpStepResult, StepDecisionLike, StepEndReason, TurnContext, TurnStreamHandle } from './dispatch.ts'
 import { RAW_OUTPUT, UNDELIVERED } from './content-writer.ts'
-import { baseIdOf } from './selection.ts'
+import { baseIdOf } from './model-selection.ts'
 import { RawOutputAggregator } from './index.ts'
 import type { RawOutputBlock } from './index.ts'
 import type { UndeliveredAttachment } from './content-writer.ts'

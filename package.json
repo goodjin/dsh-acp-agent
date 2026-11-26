@@ -67,6 +67,10 @@
       "types": "./src/model-refresh-route.ts",
       "default": "./lib/src/model-refresh-route.js"
     },
+    "./selection": {
+      "types": "./src/selection-route.ts",
+      "default": "./lib/src/selection-route.js"
+    },
     "./client": {
       "types": "./src/client/index.ts",
       "default": "./lib/client.js"

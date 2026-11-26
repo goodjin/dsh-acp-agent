@@ -17,7 +17,8 @@ import type { MiniMaxStreamChunk } from './minimaxi/index.ts'
 import type { GlmStreamChunk } from './zcode/index.ts'
 import type { PresetConfig } from './registry.ts'
 import { isModelBackedAgent } from './model-plugins.ts'
-import { baseIdOf } from './selection.ts'
+import { baseIdOf } from './model-selection.ts'
+import { applySelection, currentSelection } from './selection.ts'
 import { GatewayChunkQueue } from './gateway.ts'
 import type { GatewayChunk, GatewaySink } from './gateway.ts'
 
@@ -318,7 +319,6 @@ const DISPLAY: Readonly<Record<string, string>> = {
   qoder: 'QoderCN',
   zcode: 'ZCode',
   minimaxi: 'MiniMax',
-  doubao: '豆包',
 }
 
 /**
@@ -368,10 +368,14 @@ export function catalogAdapter(config: PresetConfig, deps: CatalogDeps): Catalog
   // model-backed row falls back to the declared list instead.
   const modelsFor = (presetId: string): readonly { readonly id: string; readonly name: string; readonly description?: string; readonly contextWindow?: number }[] => {
     const runtimeList = deps.runtimeModelsOf?.(presetId)
-    if (runtimeList !== undefined && (runtimeList.length > 0 || !isModelBackedAgent(config.presets[presetId]?.agent))) {
-      return runtimeList
-    }
-    return deps.modelsOf(presetId)
+    const base = runtimeList !== undefined && (runtimeList.length > 0 || !isModelBackedAgent(config.presets[presetId]?.agent))
+      ? runtimeList
+      : deps.modelsOf(presetId)
+    // 正向白名单：用户在设置里勾了哪些模型就只留哪些。scope 就是 preset id
+    // （acp-codex / acp-grok…），与 cordis.patch.yml 里的预设行、以及落盘的
+    // ${DSH_HOME}/<presetId>/selection.json 一一对应。没勾过（undefined）原样
+    // 返回——默认全在，升级不破坏现状。勾过 → 只留勾中的那几个，未勾的完全不出现。
+    return applySelection(base, currentSelection(presetId))
   }
   const adapter: CatalogAdapterLike = {
     providerInfo: (provider: string) => {

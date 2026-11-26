@@ -3,25 +3,18 @@
  * - 声明行真的在 cordis.patch.yml 里、package.json 真的导出那个子路径、health
  *   自报清单真的期望它——三处少一处都是「装上但不存在」的静默失败；
  * - applyAcpPlugin 真的把自己的刷新器登记进共享表（claude 那条还能直接调通）；
- * - locales 的八种界面语言都带全刷新文案；
- * - 浏览器半边：折文案的口径 + 设置段只给 ACP 行画按钮。
+ * - locales 的八种界面语言都带全刷新文案。
  */
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { renderToString } from 'react-dom/server'
-import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { applyAcpPlugin, type AcpPluginContext } from '../src/plugin.ts'
 import { clearModelRefreshers, modelRefresherOf } from '../src/model-refresh.ts'
 import { EXPECTED_ROWS } from '../src/health.ts'
-import { createAcpCatalogStore } from '../src/client/acp-visibility-catalog.ts'
-import { startAcpVisibility } from '../src/client/acp-visibility.ts'
-import { AcpVisibilityPanel } from '../src/client/acp-visibility-panel.tsx'
-import { refreshGlobalCatalogSnapshot, refreshMessage, requestModelRefresh } from '../src/client/model-refresh.ts'
+import { refreshMessage, requestModelRefresh } from '../src/client/model-refresh.ts'
 import { de, en, es, fr, ja, pt, ru, zh, fallbackT } from '../src/client/locales.ts'
 import type { ModelRefreshReply } from '../src/client/model-refresh.ts'
-import { apply as applyClient } from '../src/client/index.ts'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const PATCH = readFileSync(`${ROOT}/cordis.patch.yml`, 'utf8')
@@ -69,12 +62,12 @@ describe('接线：声明行 / 导出 / 自报清单', () => {
 })
 
 describe('接线：applyAcpPlugin 登记刷新器', () => {
-  it('挂载后共享表里查得到该预置的刷新器', () => {
+  it('挂载后共享表里查得到该预置的刷新器', async () => {
     clearModelRefreshers()
     const context = {
       on: () => { return () => {} },
     } as unknown as AcpPluginContext
-    applyAcpPlugin(context, 'acp-grok', {
+    await applyAcpPlugin(context, 'acp-grok', {
       agent: 'grok',
       command: '/Users/good/.local/bin/grok',
       models: [{ id: 'grok-4.7', name: 'Grok 4.7', contextWindow: 1100000 }],
@@ -87,7 +80,7 @@ describe('接线：applyAcpPlugin 登记刷新器', () => {
     const context = {
       on: () => { return () => {} },
     } as unknown as AcpPluginContext
-    applyAcpPlugin(context, 'acp-claude', {
+    await applyAcpPlugin(context, 'acp-claude', {
       agent: 'claude',
       url: 'ws://127.0.0.1:2419',
       models: [{ id: 'claude-opus', name: 'Opus' }],
@@ -203,83 +196,3 @@ describe('浏览器取数：坏情况都折成 ok:false，从不 reject', () => 
   })
 })
 
-describe('设置段：只给 ACP 行画刷新按钮', () => {
-  it('ACP 行有按钮，内置提供方没有；成功与失败行反馈占位可用', async () => {
-    const CATALOG = {
-      groups: [
-        { id: 'acp:grok', name: 'Grok', models: [{ id: 'grok-4.7', name: 'Grok 4.7' }] },
-        { id: 'deepseek-account', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] },
-      ],
-      failures: [],
-    }
-    const storage = {
-      getItem: () => null,
-      setItem: () => {},
-    }
-    const visibility = startAcpVisibility(storage)
-    const catalog = createAcpCatalogStore(async () => ({ ok: true, value: CATALOG }))
-    await catalog.load(true)
-    const html = renderToString(createElement(AcpVisibilityPanel, { visibility, catalog }))
-    expect(html).toContain('刷新模型列表')
-    expect(html).toContain('aria-label="刷新 Grok 的模型列表"')
-    // 内置提供方（非 acp: 路由）没有按钮：刷新语义只对 ACP 预置成立。
-    expect(html).not.toContain('aria-label="刷新 DeepSeek 的模型列表"')
-    expect(html).toContain('data-agent="grok"')
-  })
-})
-
-describe('刷新成功后全局目录快照失效（输入框选择器的另一半）', () => {
-  it('调到宿主共享 catalog 的 refresh（含 cordis 代理 unwrap）', () => {
-    const calls: string[] = []
-    const service = { catalog: { refresh: () => { calls.push('refresh') } } }
-    refreshGlobalCatalogSnapshot(() => service)
-    expect(calls).toEqual(['refresh'])
-    // cordis 每次读给新代理；落到底层实例（与 acp-visibility-filter 同一套 unwrap）。
-    const original = Symbol.for('cordis.original')
-    const proxied = { [original]: service }
-    refreshGlobalCatalogSnapshot(() => proxied)
-    expect(calls).toEqual(['refresh', 'refresh'])
-  })
-
-  it('守卫降级：服务/目录/refresh 缺席、getter 抛错，都不抛、不调用', () => {
-    const never = () => { throw new Error('refresh must not be called') }
-    expect(() => refreshGlobalCatalogSnapshot(() => undefined)).not.toThrow()
-    expect(() => refreshGlobalCatalogSnapshot(() => null)).not.toThrow()
-    expect(() => refreshGlobalCatalogSnapshot(() => ({}))).not.toThrow()
-    expect(() => refreshGlobalCatalogSnapshot(() => ({ catalog: {} }))).not.toThrow()
-    expect(() => refreshGlobalCatalogSnapshot(() => ({ catalog: { refresh: never } }))).not.toThrow()
-    expect(() => refreshGlobalCatalogSnapshot(() => { throw new Error('inactive context') })).not.toThrow()
-  })
-
-  it('接线：apply 的注入面带 refreshGlobalCatalog，且调用打到 modelDirectories.catalog.refresh', async () => {
-    const refreshCalls: string[] = []
-    const directories = { catalog: { refresh: () => { refreshCalls.push('refresh') } } }
-    const store = new Map<string, string>()
-    ;(globalThis as { localStorage?: unknown }).localStorage = {
-      getItem: (key: string) => store.get(key) ?? null,
-      setItem: (key: string, value: string) => { store.set(key, value) },
-    }
-    const sections: Record<string, unknown>[] = []
-    const slots = {
-      inject(_key: string, callback: () => unknown) { return callback() },
-      register(options: Record<string, unknown>) { sections.push(options); return () => {} },
-    }
-    const ctx = {
-      logger: { warn: () => {}, info: () => {}, error: () => {} },
-      effect: (callback: () => unknown) => callback(),
-      locale: { register: () => () => {} },
-      get: (name: string) => (name === 'modelDirectories' ? directories : undefined),
-      slots,
-    }
-    expect(() => applyClient(ctx, undefined, () => {})).not.toThrow()
-    const section = sections.find(entry => entry['id'] === 'acp-agent-acp-visibility')
-    expect(section, '设置段注册进 settings.section').toBeDefined()
-    const face = (section!['inject'] as () => Record<string, unknown>)()
-    expect(typeof face['refreshGlobalCatalog']).toBe('function')
-    ;(face['refreshGlobalCatalog'] as () => void)()
-    expect(refreshCalls).toEqual(['refresh'])
-    // 服务缺席的宿主：同一条路径静默降级，不抛。
-    ;(ctx as { get: (name: string) => unknown }).get = () => undefined
-    expect(() => (face['refreshGlobalCatalog'] as () => void)()).not.toThrow()
-  })
-})

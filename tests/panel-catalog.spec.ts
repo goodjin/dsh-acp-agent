@@ -1,23 +1,17 @@
 /**
- * 设置页「提供方与模型」读目录这条链：用**构建产物**跑一遍真实客户端路径。
+ * 设置段「选择可用模型」用**构建产物**跑一遍真实客户端路径。
  *
- * 现场报错是「读取模型目录失败：e is not a function」——一个被压缩过的 TypeError。
- * 宿主侧的 RPC 本身是好的（直接 POST `/api/session/modelCatalog` 能拿到完整目录），
- * 所以问题在浏览器半边：读目录、解析、发布快照这一段里有个调用在运行时不是函数。
- * 这份测试按页面的方式执行 `lib/client.js`（模拟 `window.__ModuleLoader__`、用页面
- * 给的 require 取 react / primitives），再驱动设置栏目的 catalog store，把真实目录
- * 喂进去——压缩后的名字藏不住问题，它照样会在这里炸。
+ * 这条测试按页面的方式执行 `lib/client.js`（模拟 `window.__ModuleLoader__`、用页面
+ * 给的 require 取 react / primitives），再把宿主 `/acp-agent/selection` 路由的读写
+ * 接进去，确认设置段真的注册进 settings.section、能按 preset 读到 RAW 清单、勾选
+ * 真的 POST 到宿主路由。压缩后的名字藏不住问题，它照样会在这里炸。
  */
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const BUNDLE = fileURLToPath(new URL('../lib/client.js', import.meta.url))
-const CATALOG = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/model-catalog.json', import.meta.url)), 'utf8')) as {
-  groups: { id: string; name: string; models: { id: string; name: string }[] }[]
-  failures?: unknown[]
-}
 
 type LoadedRow = { id: string; factory: (require: (specifier: string) => unknown) => Record<string, unknown> }
 
@@ -43,7 +37,7 @@ async function loadPlugin(): Promise<Record<string, unknown>> {
 }
 
 /** 一个记录注册项的假 slots：settings.section 的注册项能取回它的 inject face。 */
-function fakeSlots(): { inject(key: string, callback: () => unknown): unknown; register(options: Record<string, unknown>, component: unknown): () => void; entries(key: string): unknown[]; subscribe(key: string, fn: () => void): () => void; sections: Record<string, unknown>[] } {
+function fakeSlots(): { inject(key: string, callback: () => unknown): unknown; register(options: Record<string, unknown>, component: unknown): () => void; sections: Record<string, unknown>[] } {
   const sections: Record<string, unknown>[] = []
   return {
     sections,
@@ -54,8 +48,6 @@ function fakeSlots(): { inject(key: string, callback: () => unknown): unknown; r
       sections.push(options)
       return () => {}
     },
-    entries() { return [] },
-    subscribe() { return () => {} },
   }
 }
 
@@ -63,14 +55,33 @@ function fakeSlots(): { inject(key: string, callback: () => unknown): unknown; r
 // 这条测试跑的是产物本身，缺产物时明确跳过而不是红：本地先 `npm run build:client`。
 const hasBundle = existsSync(BUNDLE)
 
-describe.skipIf(!hasBundle)('设置页读模型目录（真实产物 + 真实目录数据）', () => {
-  it('catalog store 能把目录读成 ready，ACP 分组与失败项都在', async () => {
+describe.skipIf(!hasBundle)('设置段「选择可用模型」（真实产物 + 真实路由接线）', () => {
+  it('设置段注册进 settings.section，读 RAW 清单、勾选 POST 到宿主路由', async () => {
     const plugin = await loadPlugin()
-    // localStorage：真实的可见性选择存在这里，node 里没有就补一个最小实现。
-    const store = new Map<string, string>()
-    ;(globalThis as { localStorage?: unknown }).localStorage = {
-      getItem: (key: string) => store.get(key) ?? null,
-      setItem: (key: string, value: string) => { store.set(key, value) },
+
+    // 宿主 `/acp-agent/selection` 路由的内存模型：GET 回各 preset 的 RAW 清单 + 勾选，
+    // POST 落盘（这里只记最后一次）。
+    const stored = new Map<string, readonly string[]>()
+    const rawModels: Record<string, { id: string; name: string }[]> = {
+      'acp-codex': [{ id: 'gpt-6.1-sol[low]', name: '6.1 Sol (low)' }, { id: 'gpt-6.1-sol[high]', name: '6.1 Sol (high)' }],
+      'acp-grok': [{ id: 'grok-4.7', name: 'Grok 4.7' }],
+    }
+    let lastPost: { preset: string; ids: string[] | undefined } | undefined
+    const readSelections = async () => ({
+      ok: true,
+      presets: Object.entries(rawModels).map(([preset, models]) => ({
+        preset,
+        scope: preset,
+        name: preset,
+        models,
+        selected: stored.get(preset),
+        custom: stored.has(preset),
+      })),
+    })
+    const saveSelection = async (preset: string, ids: readonly string[] | undefined) => {
+      lastPost = { preset, ids: ids === undefined ? undefined : [...ids] }
+      if (ids === undefined) stored.delete(preset)
+      else stored.set(preset, [...ids])
     }
 
     const slots = fakeSlots()
@@ -78,26 +89,47 @@ describe.skipIf(!hasBundle)('设置页读模型目录（真实产物 + 真实目
       logger: () => ({ info: () => {}, warn: () => {}, error: () => {} }),
       effect: (callback: () => unknown) => callback(),
       locale: { register: () => () => {} },
-      get: (name: string) => (name === 'remote.session'
-        ? {
-          modelCatalog: async () => ({ ok: true, value: CATALOG }),
-        }
-        : name === 'remote'
-          ? { session: { modelCatalog: async () => ({ ok: true, value: CATALOG }) } }
-          : undefined),
+      get: () => undefined,
       slots,
     }
 
-    const apply = plugin['apply'] as (ctx: unknown, config: unknown, log?: unknown) => void
-    expect(() => apply(ctx, undefined, () => {})).not.toThrow()
+    // 浏览器用相对路径 fetch；node 的 fetch 需要绝对 URL，这里桩一个把路径原样
+    // 接到内存路由上的 fetch（页面里宿主的服务 worker / origin 会做等价的事）。
+    const previousFetch = (globalThis as { fetch?: unknown }).fetch
+    ;(globalThis as { fetch?: unknown }).fetch = (async (url: string | URL, init?: RequestInit) => {
+      const path = String(url)
+      if (init?.method === 'POST') {
+        const body = JSON.parse(String(init.body ?? '{}')) as { preset?: string; ids?: string[] }
+        const preset = body.preset ?? ''
+        if (body.ids === undefined) stored.delete(preset)
+        else stored.set(preset, [...body.ids])
+        lastPost = { preset, ids: body.ids === undefined ? undefined : [...body.ids] }
+        return new Response(JSON.stringify({ ok: true, scope: preset }), { status: 200 })
+      }
+      return new Response(JSON.stringify(await readSelections()), { status: 200 })
+    }) as typeof fetch
 
-    const section = slots.sections.find(entry => entry['id'] === 'acp-agent-acp-visibility')
-    expect(section, '设置里的「提供方与模型」应当注册进 settings.section').toBeDefined()
-    const face = (section!['inject'] as () => { catalog: { load(): Promise<void>; getSnapshot(): { status: string; agents: { key: string; models: unknown[] }[]; error: unknown } } })()
-    await face.catalog.load()
-    const snapshot = face.catalog.getSnapshot()
-    expect(snapshot.status, `目录读取失败：${JSON.stringify(snapshot.error)}`).toBe('ready')
-    expect(snapshot.agents.map(agent => agent.key)).toContain('acp-codex')
-    expect(snapshot.error).toBeNull()
+    try {
+      const apply = plugin['apply'] as (ctx: unknown, config: unknown, log?: unknown) => void
+      expect(() => apply(ctx, undefined, () => {})).not.toThrow()
+
+      const section = slots.sections.find(entry => entry['id'] === 'acp-agent-acp-selection')
+      expect(section, '设置段「选择可用模型」应当注册进 settings.section').toBeDefined()
+      const face = (section!['inject'] as () => Record<string, unknown>)()
+      expect(typeof face['readSelections']).toBe('function')
+      expect(typeof face['saveSelection']).toBe('function')
+
+      const reply = await (face['readSelections'] as () => Promise<unknown>)()
+      const parsed = reply as { ok: boolean; presets: { preset: string; models: { id: string }[] }[] }
+      expect(parsed.ok).toBe(true)
+      expect(parsed.presets.map(p => p.preset)).toEqual(['acp-codex', 'acp-grok'])
+      expect(parsed.presets[0]?.models.map(m => m.id)).toEqual(['gpt-6.1-sol[low]', 'gpt-6.1-sol[high]'])
+
+      // 模拟勾选落盘：保存 codex 的一个子集。
+      await (face['saveSelection'] as (p: string, ids: readonly string[] | undefined) => Promise<void>)('acp-codex', ['gpt-6.1-sol[low]'])
+      expect(lastPost).toEqual({ preset: 'acp-codex', ids: ['gpt-6.1-sol[low]'] })
+    } finally {
+      ;(globalThis as { fetch?: unknown }).fetch = previousFetch
+    }
   })
 })

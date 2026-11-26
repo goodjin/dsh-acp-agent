@@ -242,8 +242,8 @@ export type RefreshRequest = {
  * The agents whose model list can be read by asking the agent itself.
  *
  * grok is not in here: it has its own probe entry (a WebSocket server the
- * probe owns), and doubao is our own browser agent — starting it to read a
- * one-item list would open a browser window for nothing.
+ * probe owns). (The old doubao browser agent was removed; nothing here reads
+ * a one-item list by opening a browser window.)
  */
 const PROBED_AGENTS: ReadonlySet<string> = new Set(['qoder', 'claude', 'codex', 'cursor'])
 
