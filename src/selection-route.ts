@@ -176,21 +176,25 @@ export function registerSelectionRoute(ctx: SelectionContext, deps: SelectionRou
               respondJson(res, notOurs(preset))
               return
             }
-            // 空 ids / 无 ids 字段 = 回到默认那一份（全在）：删掉落盘文件。
+            // 回到默认那一份（全在）= 删掉落盘文件。两条路都触发它，和 UI
+            // 对齐：无 ids 字段（restore-default），或 ids 是空数组（用户把
+            // 最后一个模型也取消勾选，UI 本就发 undefined，但路由层也防御性
+            // 把空数组当「清空」——applySelection([]) 与 applySelection(undefined)
+            // 行为虽一致，落盘语义却不同：写 [] 是「用户勾了零个」的留痕，
+            // 删文件是「从没勾过」的默认态，后者才是诚实的「回到默认」）。
             const ids = body['ids']
-            if (ids === undefined) {
+            const clean = ids === undefined
+              ? []
+              : (Array.isArray(ids)
+                  ? ids.filter((id): id is string => typeof id === 'string' && id !== '')
+                  : [])
+            if (clean.length === 0) {
               await persist.clear(preset)
+              respondJson(res, { ok: true, scope: preset })
             } else {
-              const clean = Array.isArray(ids)
-                ? ids.filter((id): id is string => typeof id === 'string' && id !== '')
-                : []
               await persist.write(preset, clean)
+              respondJson(res, { ok: true, scope: preset, selected: clean })
             }
-            respondJson(res, {
-              ok: true,
-              scope: preset,
-              ...(ids === undefined ? {} : { selected: cleanIds(ids) }),
-            })
           } catch (error) {
             respondJson(res, { ok: false, error: error instanceof Error ? error.message : String(error) })
           }
@@ -235,17 +239,6 @@ export function notOurs(preset: string): SelectionNotOursReply {
     code: 'not-ours',
     error: `${preset} is not mounted by this plugin — manage its model selection from its own settings section`,
   }
-}
-
-/** 去重、去空、保序（落盘前的归一）。 */
-function cleanIds(ids: unknown): string[] {
-  if (!Array.isArray(ids)) return []
-  const seen = new Set<string>()
-  for (const id of ids) {
-    if (typeof id !== 'string' || id === '') continue
-    seen.add(id)
-  }
-  return [...seen]
 }
 
 /** 读请求体；超过 64 KiB 当作没有（本路由只收一个 preset 字符串 + ids 数组）。 */

@@ -172,8 +172,5 @@
     "@deepseek-ai/dsh-client-ui-conversation": ">=0.2.0-rc.2 <0.3",
     "@deepseek-ai/dsh-client-ui-chat": ">=0.2.0-rc.2 <0.3",
     "@deepseek-ai/dsh-client-ui-model-selection": ">=0.2.0-rc.2 <0.3"
-  },
-  "bin": {
-    "doubao-acp": "./lib/src/doubao/main.js"
   }
 }

@@ -158,7 +158,13 @@ export function modelsOfPreset(
 export async function registerCatalog(ctx: unknown, config: PresetConfig, deps: CatalogDeps): Promise<void> {
   // Best-effort: a read failure must not fail the attach. The snapshot stays
   // empty (every preset = "no file = everything on"), which is the safe default.
-  await loadAllSelections().catch(() => {})
+  // The failure is named, not swallowed: a persistently unreadable DSH_HOME
+  // (permissions, a half-written file) would otherwise leave every preset on
+  // "all models" with no signal as to why the user's saved selections are
+  // being ignored (2026-11-26 review, P1).
+  await loadAllSelections().catch(error => {
+    console.warn(`[acp-agent] whitelist read failed, every preset shows all models: ${error instanceof Error ? error.message : String(error)}`)
+  })
   const routes = catalogRoutes(config)
   if (routes.length === 0) return
   const registry = registryOf(ctx)
