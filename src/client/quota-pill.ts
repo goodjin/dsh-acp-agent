@@ -56,8 +56,8 @@ const GLM_MODEL_PREFIX = 'GLM-'
 export interface QuotaPillSpec {
   /** 取值口径来源：决定文案命名空间与变色方向。 */
   readonly provider: 'zcode' | 'minimaxi' | 'claude' | 'codex' | 'deepseek' | 'grok'
-  /** 当前会话目录里的 provider id（如 `acp:acp-claude`）与此相等才渲染。 */
-  readonly providerId?: string
+  /** 当前会话目录里的 provider id 在此列表内才渲染（如 `acp:acp-claude`；DeepSeek 同时认账号与 API Key 两条渠道）。 */
+  readonly providerId?: readonly string[]
   /** 模型 id 前缀匹配；providerId 已给时可以不填（Claude 的模型 id 是通用别名）。 */
   readonly prefix?: string
   /** 是否渲染积分胶囊（MiniMax/Codex/Claude/DeepSeek 有，GLM 无）。 */
@@ -92,7 +92,7 @@ export const MINIMAX_QUOTA_PILL_SPEC: QuotaPillSpec = {
 /** Codex 那套：按目录里的 provider id 认（gpt-* 这类 id 太通用，不按前缀）。 */
 export const CODEX_QUOTA_PILL_SPEC: QuotaPillSpec = {
   provider: 'codex',
-  providerId: 'acp:acp-codex',
+  providerId: ['acp:acp-codex'],
   showCredit: true,
   routePath: CODEX_QUOTA_ROUTE_PATH,
   dockId: 'acp-agent-codex-quota',
@@ -102,7 +102,7 @@ export const CODEX_QUOTA_PILL_SPEC: QuotaPillSpec = {
 /** Claude 那套：同按 provider id 认（模型 id 是 default/opus 这类通用别名）。 */
 export const CLAUDE_QUOTA_PILL_SPEC: QuotaPillSpec = {
   provider: 'claude',
-  providerId: 'acp:acp-claude',
+  providerId: ['acp:acp-claude'],
   showCredit: true,
   routePath: CLAUDE_QUOTA_ROUTE_PATH,
   dockId: 'acp-agent-claude-quota',
@@ -110,15 +110,15 @@ export const CLAUDE_QUOTA_PILL_SPEC: QuotaPillSpec = {
 }
 
 /**
- * DeepSeek 官方账号那套：按目录里的 provider id 精确认（`deepseek-account` 是
- * 账号渠道自己的 id，不会误伤 API key 渠道）。余额不走宿主路由——设置页的余额
+ * DeepSeek 官方那套：按目录里的 provider id 认——`deepseek-account`（账号渠道）与
+ * `deepseek-official`（API Key 渠道）都出胶囊。余额不走宿主路由——设置页的余额
  * 是浏览器直接调 `remote.account.getBalance(...)` 拿的，本包客户端注入的是同一个
  * `@deepseek-ai/dsh-api-remotes`，所以胶囊读同一个源：同一个数、不碰令牌、
  * 不用新开后端。
  */
 export const DEEPSEEK_QUOTA_PILL_SPEC: QuotaPillSpec = {
   provider: 'deepseek',
-  providerId: 'deepseek-account',
+  providerId: ['deepseek-account', 'deepseek-official'],
   showCredit: true,
   dockId: 'acp-agent-deepseek-quota',
   dockOrder: 14,
@@ -131,7 +131,7 @@ export const DEEPSEEK_QUOTA_PILL_SPEC: QuotaPillSpec = {
  */
 export const GROK_QUOTA_PILL_SPEC: QuotaPillSpec = {
   provider: 'grok',
-  providerId: 'acp:acp-grok',
+  providerId: ['acp:acp-grok'],
   showCredit: false,
   routePath: '/acp-agent/grok/quota',
   dockId: 'acp-agent-grok-quota',
@@ -468,7 +468,7 @@ export function QuotaPillRow({ useQuota, useModelDirectory, useLogin, visible = 
   // 模型 id 是 default/opus 这类通用别名，按前缀认会误伤别家）；没给 providerId
   // 的口径（GLM/MiniMax）按模型 id 前缀认。
   const mine = spec.providerId !== undefined
-    ? providerId === spec.providerId
+    ? providerId !== undefined && spec.providerId.includes(providerId)
     : model !== undefined && model.startsWith(spec.prefix ?? '')
   if (!mine) return null
   // 登录过期：这一行不再画数字，改画一枚能点开的授权链接（授权完成后自动恢复）。

@@ -12,8 +12,8 @@
  * 2. 失败折叠：没登录（远端回 null）、远端说失败、形状不认识、钱包列表为空——
  *    全部折成 ok:false，胶囊安静地不出现（DeepSeek 的登录在应用设置里完成，
  *    没有可点开的授权链接，所以这 家不出「去授权」chip）；
- * 3. 精确认：providerId 是 `deepseek-account`（同 Codex/Claude 的认法），不按模型
- *    前缀猜，免得误伤别的渠道；
+ * 3. 精确认：providerId 列表含 `deepseek-account` 与 `deepseek-official`（同 Codex/Claude
+ *    的认法，但两条渠道都出），不按模型前缀猜，免得误伤别的渠道；
  * 4. 画出来的那枚：标签「余额」、数字带 ¥、悬停给充值/赠送明细。
  */
 
@@ -130,9 +130,9 @@ describe('remote 余额取数器的折算口径', () => {
 })
 
 describe('口径与画法', () => {
-  it('口径表里第五张是 DeepSeek：providerId 精确到 deepseek-account，不问路由', () => {
+  it('口径表里第五张是 DeepSeek：providerId 认 deepseek-account 与 deepseek-official，不问路由', () => {
     const spec = QUOTA_PILL_SPECS.find(entry => entry.provider === 'deepseek')
-    expect(spec?.providerId).toBe('deepseek-account')
+    expect(spec?.providerId).toEqual(['deepseek-account', 'deepseek-official'])
     expect(spec?.routePath).toBeUndefined()
     expect(spec?.showCredit).toBe(true)
   })
